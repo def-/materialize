@@ -134,9 +134,9 @@ def main() -> int:
             return build_retcode
 
         if args.release:
-            path = ROOT / "target" / "release" / args.program
+            path = ROOT / "target" / "x86_64-unknown-linux-gnu" / "release" / args.program
         else:
-            path = ROOT / "target" / "debug" / args.program
+            path = ROOT / "target" / "x86_64-unknown-linux-gnu" / "debug" / args.program
 
         if args.disable_mac_codesigning:
             if sys.platform != "darwin":
@@ -266,6 +266,7 @@ def _build(args: argparse.Namespace, extra_programs: list[str] = []) -> int:
     env = dict(os.environ)
     command = _cargo_command(args, "build")
     features = []
+    env["CARGO_PROFILE_DEV_DEBUG_ASSERTIONS"] = "false"
     if args.tokio_console:
         features += ["tokio-console"]
         env["RUSTFLAGS"] = env.get("RUSTFLAGS", "") + " --cfg=tokio_unstable"
@@ -310,6 +311,7 @@ def _cargo_command(args: argparse.Namespace, subcommand: str) -> list[str]:
         command += ["--timings"]
     if args.no_default_features:
         command += ["--no-default-features"]
+    command += ["-Zbuild-std", "--target", "x86_64-unknown-linux-gnu"]
     return command
 
 
