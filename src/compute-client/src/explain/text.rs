@@ -20,6 +20,7 @@
 //!    pairs on the same line or as lowercase `$key` fields on indented lines.
 //! 5. A single non-recursive parameter can be written just as `$val`.
 
+use itertools::{izip, Itertools};
 use std::{collections::BTreeMap, fmt, ops::Deref};
 
 use mz_expr::{Id, MirScalarExpr};
@@ -129,16 +130,25 @@ impl DisplayText<PlanRenderingContext<'_, Plan>> for Plan {
                     Ok(())
                 })?;
             }
-            LetRec { ids, values, body } => {
-                let bindings = ids.iter().zip(values).collect::<Vec<_>>();
+            LetRec {
+                ids,
+                values,
+                max_iters,
+                body,
+            } => {
+                let bindings = izip!(ids.iter(), values, max_iters).collect_vec();
                 let head = body.as_ref();
 
                 writeln!(f, "{}Return", ctx.indent)?;
                 ctx.indented(|ctx| head.fmt_text(f, ctx))?;
                 writeln!(f, "{}With Mutually Recursive", ctx.indent)?;
                 ctx.indented(|ctx| {
-                    for (id, value) in bindings.iter().rev() {
-                        writeln!(f, "{}cte {} =", ctx.indent, *id)?;
+                    for (id, value, max_iter) in bindings.iter().rev() {
+                        writeln!(
+                            f,
+                            "{}cte [MaxIterations {:?}] {} =",
+                            ctx.indent, max_iter, *id
+                        )?;
                         ctx.indented(|ctx| value.fmt_text(f, ctx))?;
                     }
                     Ok(())

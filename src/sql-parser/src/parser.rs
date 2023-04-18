@@ -4620,7 +4620,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a query expression, i.e. a `SELECT` statement optionally
-    /// preceeded with some `WITH` CTE declarations and optionally followed
+    /// preceded with some `WITH` CTE declarations and optionally followed
     /// by `ORDER BY`. Unlike some other parse_... methods, this one doesn't
     /// expect the initial keyword to be already consumed
     fn parse_query(&mut self) -> Result<Query<Raw>, ParserError> {
@@ -4628,9 +4628,23 @@ impl<'a> Parser<'a> {
             let cte_block = if parser.parse_keyword(WITH) {
                 if parser.parse_keyword(MUTUALLY) {
                     parser.expect_keyword(RECURSIVE)?;
-                    CteBlock::MutuallyRecursive(
-                        parser.parse_comma_separated(Parser::parse_cte_mut_rec)?,
-                    )
+                    let max_iterations = if parser.parse_keyword(MAXITERATIONS) {
+                        let parsed = parser.parse_literal_uint()?;
+                        if parsed == 0 {
+                            return parser_err!(
+                                parser,
+                                parser.peek_prev_pos(),
+                                "MAXITERATIONS has to be greater than 0"
+                            );
+                        }
+                        Some(parsed)
+                    } else {
+                        None
+                    };
+                    CteBlock::MutuallyRecursive(MutRecBlock {
+                        max_iterations,
+                        ctes: parser.parse_comma_separated(Parser::parse_cte_mut_rec)?,
+                    })
                 } else {
                     // TODO: optional RECURSIVE
                     CteBlock::Simple(parser.parse_comma_separated(Parser::parse_cte)?)
