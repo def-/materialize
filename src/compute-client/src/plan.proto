@@ -76,6 +76,8 @@ message ProtoPlan {
    message ProtoPlanLetRec {
         repeated mz_expr.id.ProtoLocalId ids = 1;
         repeated ProtoPlan values = 2;
+        repeated uint64 max_iters = 4;
+        repeated bool max_iters_present = 5;
         ProtoPlan body  = 3;
    }
 

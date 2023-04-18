@@ -103,6 +103,9 @@ pub enum HirRelationExpr {
     },
     /// Mutually recursive CTE
     LetRec {
+        /// Maximum number of iterations to evaluate. We don't throw an error when reaching this
+        /// limit. Instead, we simply use the current contents of each Id as the final result.
+        max_iter: Option<u64>,
         /// List of bindings all of which are in scope of each other.
         bindings: Vec<(String, mz_expr::LocalId, HirRelationExpr, RelationType)>,
         /// Result of the AST node.
@@ -1337,7 +1340,11 @@ impl HirRelationExpr {
                 f(value, depth)?;
                 f(body, depth)?;
             }
-            HirRelationExpr::LetRec { bindings, body } => {
+            HirRelationExpr::LetRec {
+                max_iter: _,
+                bindings,
+                body,
+            } => {
                 for (_, _, value, _) in bindings.iter() {
                     f(value, depth)?;
                 }
@@ -1420,7 +1427,11 @@ impl HirRelationExpr {
                 f(value, depth)?;
                 f(body, depth)?;
             }
-            HirRelationExpr::LetRec { bindings, body } => {
+            HirRelationExpr::LetRec {
+                max_iter: _,
+                bindings,
+                body,
+            } => {
                 for (_, _, value, _) in bindings.iter_mut() {
                     f(value, depth)?;
                 }
@@ -1680,7 +1691,11 @@ impl VisitChildren<Self> for HirRelationExpr {
                 f(value);
                 f(body);
             }
-            LetRec { bindings, body } => {
+            LetRec {
+                max_iter: _,
+                bindings,
+                body,
+            } => {
                 for (_, _, value, _) in bindings.iter() {
                     f(value);
                 }
@@ -1763,7 +1778,11 @@ impl VisitChildren<Self> for HirRelationExpr {
                 f(value);
                 f(body);
             }
-            LetRec { bindings, body } => {
+            LetRec {
+                max_iter: _,
+                bindings,
+                body,
+            } => {
                 for (_, _, value, _) in bindings.iter_mut() {
                     f(value);
                 }
@@ -1846,7 +1865,11 @@ impl VisitChildren<Self> for HirRelationExpr {
                 f(value)?;
                 f(body)?;
             }
-            LetRec { bindings, body } => {
+            LetRec {
+                max_iter: _,
+                bindings,
+                body,
+            } => {
                 for (_, _, value, _) in bindings.iter() {
                     f(value)?;
                 }
@@ -1930,7 +1953,11 @@ impl VisitChildren<Self> for HirRelationExpr {
                 f(value)?;
                 f(body)?;
             }
-            LetRec { bindings, body } => {
+            LetRec {
+                max_iter: _,
+                bindings,
+                body,
+            } => {
                 for (_, _, value, _) in bindings.iter_mut() {
                     f(value)?;
                 }
@@ -2004,6 +2031,7 @@ impl VisitChildren<HirScalarExpr> for HirRelationExpr {
                 body: _,
             }
             | LetRec {
+                max_iter: _,
                 bindings: _,
                 body: _,
             }
@@ -2075,6 +2103,7 @@ impl VisitChildren<HirScalarExpr> for HirRelationExpr {
                 body: _,
             }
             | LetRec {
+                max_iter: _,
                 bindings: _,
                 body: _,
             }
@@ -2147,6 +2176,7 @@ impl VisitChildren<HirScalarExpr> for HirRelationExpr {
                 body: _,
             }
             | LetRec {
+                max_iter: _,
                 bindings: _,
                 body: _,
             }
@@ -2220,6 +2250,7 @@ impl VisitChildren<HirScalarExpr> for HirRelationExpr {
                 body: _,
             }
             | LetRec {
+                max_iter: _,
                 bindings: _,
                 body: _,
             }

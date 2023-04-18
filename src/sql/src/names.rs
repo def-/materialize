@@ -24,6 +24,7 @@ use mz_ore::cast::CastFrom;
 use mz_ore::str::StrExt;
 use mz_repr::role_id::RoleId;
 use mz_repr::GlobalId;
+use mz_sql_parser::ast::MutRecBlock;
 use mz_sql_parser::ast::UnresolvedObjectName;
 
 use crate::ast::display::{AstDisplay, AstFormatter};
@@ -1065,7 +1066,10 @@ impl<'a> Fold<Raw, Aug> for NameResolver<'a> {
                 }
                 CteBlock::Simple(result_ctes)
             }
-            CteBlock::MutuallyRecursive(ctes) => {
+            CteBlock::MutuallyRecursive(MutRecBlock {
+                max_iterations,
+                ctes,
+            }) => {
                 let mut result_ctes = Vec::<CteMutRec<Aug>>::new();
 
                 let initial_id = self.ctes.len();
@@ -1094,7 +1098,10 @@ impl<'a> Fold<Raw, Aug> for NameResolver<'a> {
                         query,
                     });
                 }
-                CteBlock::MutuallyRecursive(result_ctes)
+                CteBlock::MutuallyRecursive(MutRecBlock {
+                    max_iterations,
+                    ctes: result_ctes,
+                })
             }
         };
 
