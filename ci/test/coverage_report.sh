@@ -27,5 +27,4 @@ REPORT=coverage_"$BUILDKITE_BUILD_ID"
 # This can probably be removed if I can figure out the tag issue:
 find coverage -name '*.lcov' -exec sed -i "s#SF:/var/lib/buildkite-agent/builds/buildkite-.*/materialize/coverage/#SF:#" {} +
 find coverage -name '*.lcov' -exec genhtml -o "$REPORT" {} +
-tar cfJ "$REPORT".tar.xz "$REPORT"
-buildkite-agent artifact upload "$REPORT".tar.xz
+buildkite-agent artifact upload "$REPORT/**/*"
