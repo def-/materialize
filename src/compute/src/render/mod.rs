@@ -271,67 +271,59 @@ pub fn build_compute_dataflow<A: Allocate>(
         // If there exists a recursive expression, we'll need to use a non-region scope,
         // in order to support additional timestamp coordinates for iteration.
         if recursive {
-            scope
-                .clone()
-                .iterative::<PointStamp<u64>, _, _>(|region| {
-                    let mut context =
-                        crate::render::context::Context::for_dataflow_in(&dataflow, region.clone());
+            scope.clone().iterative::<PointStamp<u64>, _, _>(|region| {
+                let mut context =
+                    crate::render::context::Context::for_dataflow_in(&dataflow, region.clone());
 
-                    for (id, (oks, errs)) in imported_sources.into_iter() {
-                        let bundle = crate::render::CollectionBundle::from_collections(
-                            oks.enter(region),
-                            errs.enter(region),
-                        );
-                        // Associate collection bundle with the source identifier.
-                        context.insert_id(id, bundle);
-                    }
+                for (id, (oks, errs)) in imported_sources.into_iter() {
+                    let bundle = crate::render::CollectionBundle::from_collections(
+                        oks.enter(region),
+                        errs.enter(region),
+                    );
+                    // Associate collection bundle with the source identifier.
+                    context.insert_id(id, bundle);
+                }
 
-                    // Import declared indexes into the rendering context.
-                    for (idx_id, idx) in &dataflow.index_imports {
-                        let export_ids = dataflow.export_ids().collect();
-                        context.import_index(
-                            compute_state,
-                            &mut tokens,
-                            export_ids,
-                            *idx_id,
-                            &idx.0,
-                        );
-                    }
+                // Import declared indexes into the rendering context.
+                for (idx_id, idx) in &dataflow.index_imports {
+                    let export_ids = dataflow.export_ids().collect();
+                    context.import_index(compute_state, &mut tokens, export_ids, *idx_id, &idx.0);
+                }
 
-                    // Build declared objects.
-                    for object in dataflow.objects_to_build {
-                        let object_token = Rc::new(());
-                        context.shutdown_token = ShutdownToken::new(Rc::downgrade(&object_token));
-                        tokens.insert(object.id, object_token);
+                // Build declared objects.
+                for object in dataflow.objects_to_build {
+                    let object_token = Rc::new(());
+                    context.shutdown_token = ShutdownToken::new(Rc::downgrade(&object_token));
+                    tokens.insert(object.id, object_token);
 
-                        let bundle = context.render_recursive_plan(0, object.plan);
-                        context.insert_id(Id::Global(object.id), bundle);
-                    }
+                    let bundle = context.render_recursive_plan(0, object.plan);
+                    context.insert_id(Id::Global(object.id), bundle);
+                }
 
-                    // Export declared indexes.
-                    for (idx_id, dependencies, idx) in indexes {
-                        context.export_index_iterative(
-                            compute_state,
-                            &mut tokens,
-                            dependencies,
-                            idx_id,
-                            &idx,
-                            output_probes.clone(),
-                        );
-                    }
+                // Export declared indexes.
+                for (idx_id, dependencies, idx) in indexes {
+                    context.export_index_iterative(
+                        compute_state,
+                        &mut tokens,
+                        dependencies,
+                        idx_id,
+                        &idx,
+                        output_probes.clone(),
+                    );
+                }
 
-                    // Export declared sinks.
-                    for (sink_id, dependencies, sink) in sinks {
-                        context.export_sink(
-                            compute_state,
-                            &mut tokens,
-                            dependencies,
-                            sink_id,
-                            &sink,
-                            output_probes.clone(),
-                        );
-                    }
-                });
+                // Export declared sinks.
+                for (sink_id, dependencies, sink) in sinks {
+                    context.export_sink(
+                        compute_state,
+                        &mut tokens,
+                        dependencies,
+                        sink_id,
+                        &sink,
+                        output_probes.clone(),
+                    );
+                }
+            });
         } else {
             scope.clone().region_named(&build_name, |region| {
                 let mut context =
