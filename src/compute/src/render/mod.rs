@@ -273,7 +273,7 @@ pub fn build_compute_dataflow<A: Allocate>(
         if recursive {
             scope
                 .clone()
-                .iterative::<PointStamp<usize>, _, _>(|region| {
+                .iterative::<PointStamp<u64>, _, _>(|region| {
                     let mut context =
                         crate::render::context::Context::for_dataflow_in(&dataflow, region.clone());
 
@@ -606,7 +606,7 @@ where
 
 impl<G> Context<G, Row>
 where
-    G: Scope<Timestamp = Product<mz_repr::Timestamp, PointStamp<usize>>>,
+    G: Scope<Timestamp = Product<mz_repr::Timestamp, PointStamp<u64>>>,
 {
     /// Renders a plan to a differential dataflow, producing the collection of results.
     ///
@@ -629,7 +629,7 @@ where
                 use differential_dataflow::operators::iterate::Variable;
 
                 use differential_dataflow::dynamic::feedback_summary;
-                let inner = feedback_summary::<usize>(level + 1, 1);
+                let inner = feedback_summary::<u64>(level + 1, 1);
                 let oks_v = Variable::new(
                     &mut self.scope,
                     Product::new(Default::default(), inner.clone()),
