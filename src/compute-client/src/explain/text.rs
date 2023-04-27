@@ -145,11 +145,19 @@ impl DisplayText<PlanRenderingContext<'_, Plan>> for Plan {
                 writeln!(f, "{}With Mutually Recursive", ctx.indent)?;
                 ctx.indented(|ctx| {
                     for (id, value, max_iter) in bindings.iter().rev() {
-                        writeln!(
-                            f,
-                            "{}cte [MaxIterations {:?}] {} =",
-                            ctx.indent, max_iter, *id
-                        )?;
+                        if let Some(max_iter) = max_iter {
+                            writeln!(
+                                f,
+                                "{}cte [MaxIterations {}] {} =",
+                                ctx.indent, max_iter, *id
+                            )?;
+                        } else {
+                            writeln!(
+                                f,
+                                "{}cte {} =",
+                                ctx.indent, *id
+                            )?;
+                        }
                         ctx.indented(|ctx| value.fmt_text(f, ctx))?;
                     }
                     Ok(())
