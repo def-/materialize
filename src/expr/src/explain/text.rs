@@ -22,7 +22,7 @@ use mz_repr::{GlobalId, Row};
 use super::{ExplainMultiPlan, ExplainSinglePlan};
 use crate::explain::ExplainSource;
 use crate::{
-    AggregateExpr, Id, JoinImplementation, JoinInputCharacteristics, LocalId, MapFilterProject,
+    AggregateExpr, Id, JoinImplementation, JoinInputCharacteristics, MapFilterProject,
     MirRelationExpr, MirScalarExpr, RowSetFinishing,
 };
 
@@ -307,27 +307,16 @@ impl MirRelationExpr {
                 assert_eq!(ids.len(), values.len());
                 assert_eq!(ids.len(), max_iters.len());
                 let bindings = itertools::izip!(ids.iter(), values.iter(), max_iters.iter())
-                    .collect::<Vec<(&LocalId, &MirRelationExpr, &Option<u64>)>>(); // CLion needs these explicit types
+                    .collect::<Vec<_>>(); // CLion needs these explicit types
                 let head = body.as_ref();
 
-                // Determine whether all `max_iters` are the same.
-                // If all of them are the same, then we'll print it on top of the block (or not
-                // print it at all of it's None). If there are differences, then we print them on
-                // the ctes.
-                let all_max_iters_same = {
-                    let mut all_same = true;
-                    let first = max_iters.iter().next().unwrap();
-                    for max_iter in max_iters {
-                        if max_iter != first {
-                            all_same = false;
-                        }
-                    }
-                    if all_same {
-                        first
-                    } else {
-                        &None
-                    }
-                };
+                // Determine whether all `max_iters` are the same number.
+                // If all of them are the same, then we print it on top of the block (or not print
+                // it at all if it's None). If there are differences, then we print them on the
+                // ctes.
+                let all_max_iters_same = max_iters.iter().reduce(|first, i| {
+                    if i == first { first } else { &None }
+                }).unwrap_or(&None);
 
                 if ctx.config.linear_chains {
                     write!(f, "{}With Mutually Recursive", ctx.indent)?;

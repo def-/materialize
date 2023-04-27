@@ -104,13 +104,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
-use itertools::izip;
-
 use differential_dataflow::dynamic::pointstamp::PointStamp;
 use differential_dataflow::lattice::Lattice;
 use differential_dataflow::operators::arrange::Arrange;
 use differential_dataflow::operators::reduce::ReduceCore;
 use differential_dataflow::{AsCollection, Collection};
+use itertools::izip;
 use timely::communication::Allocate;
 use timely::dataflow::operators::to_stream::ToStream;
 use timely::dataflow::operators::BranchWhen;
