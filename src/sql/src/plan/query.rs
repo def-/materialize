@@ -83,6 +83,7 @@ use crate::plan::typeconv::{self, CastContext};
 use crate::plan::with_options::TryFromValue;
 use crate::plan::{transform_ast, PlanContext, ShowCreatePlan};
 use crate::plan::{Params, QueryWhen};
+use crate::plan::PlanError::InvalidMaxIterations;
 
 use super::statement::show;
 
@@ -1120,6 +1121,9 @@ fn plan_query_inner(
             max_iterations,
             ctes: _,
         }) => {
+            if let Some(0) = max_iterations {
+                return Err(InvalidMaxIterations);
+            }
             let mut bindings = Vec::new();
             for (id, value, shadowed_val) in cte_bindings.into_iter() {
                 if let Some(cte) = qcx.ctes.remove(&id) {
