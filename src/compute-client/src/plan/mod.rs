@@ -11,9 +11,9 @@
 
 #![warn(missing_debug_implementations)]
 
-use itertools::Itertools;
 use std::collections::{BTreeMap, BTreeSet};
 
+use itertools::Itertools;
 use proptest::arbitrary::Arbitrary;
 use proptest::prelude::*;
 use proptest::strategy::Strategy;
