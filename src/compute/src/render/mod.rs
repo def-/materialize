@@ -100,10 +100,11 @@
 //! stream. This reduces the amount of recomputation that must be performed
 //! if/when the errors are retracted.
 
-use itertools::izip;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
+
+use itertools::izip;
 
 use differential_dataflow::dynamic::pointstamp::PointStamp;
 use differential_dataflow::lattice::Lattice;
@@ -661,22 +662,19 @@ where
                     oks = oks.with_token(Weak::clone(token));
                 }
 
-                match max_iter {
-                    Some(max_iter) => {
-                        // We swallow the results of the `max_iter`th iteration, because
-                        // these results would go into the `max_iter + 1`th iteration.
-                        let (in_limit, _over_limit) =
-                            oks.inner.branch_when(move |Product { inner: ps, .. }| {
-                                // We get None in the first iteration, because the `PointStamp` doesn't yet have
-                                // the `level`th element. It will get created when applying the summary for the
-                                // first time.
-                                let iteration_index = *ps.vector.get(level).unwrap_or(&0);
-                                // The pointstamp starts counting from 0, so we need to add 1.
-                                iteration_index + 1 >= max_iter
-                            });
-                        oks = Collection::new(in_limit);
-                    }
-                    None => {}
+                if let Some(max_iter) = max_iter {
+                    // We swallow the results of the `max_iter`th iteration, because
+                    // these results would go into the `max_iter + 1`th iteration.
+                    let (in_limit, _over_limit) =
+                        oks.inner.branch_when(move |Product { inner: ps, .. }| {
+                            // We get None in the first iteration, because the `PointStamp` doesn't yet have
+                            // the `level`th element. It will get created when applying the summary for the
+                            // first time.
+                            let iteration_index = *ps.vector.get(level).unwrap_or(&0);
+                            // The pointstamp starts counting from 0, so we need to add 1.
+                            iteration_index + 1 >= max_iter
+                        });
+                    oks = Collection::new(in_limit);
                 }
 
                 oks_v.set(&oks);

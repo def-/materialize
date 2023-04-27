@@ -20,8 +20,9 @@
 //!    pairs on the same line or as lowercase `$key` fields on indented lines.
 //! 5. A single non-recursive parameter can be written just as `$val`.
 
-use itertools::{izip, Itertools};
 use std::{collections::BTreeMap, fmt, ops::Deref};
+
+use itertools::{izip, Itertools};
 
 use mz_expr::{Id, MirScalarExpr};
 use mz_ore::str::{bracketed, separated, IndentLike, StrExt};
