@@ -461,6 +461,30 @@ SELECT (SELECT sum(n) FROM t0) - (SELECT sum(n) FROM t1);
 ----
 200
 
+statement ok
+CREATE TABLE t1 (f1 INTEGER);
+
+statement ok
+CREATE MATERIALIZED VIEW v1 AS WITH MUTUALLY RECURSIVE MAXITERATIONS 2 cnt (f1 INTEGER) AS (SELECT f1 FROM t1 UNION ALL SELECT f1+1 AS f1 FROM cnt) SELECT * FROM cnt;
+
+statement ok
+INSERT INTO t1 VALUES (1);
+
+query I
+SELECT * FROM v1;
+----
+1
+2
+
+statement ok
+UPDATE t1 SET f1 = 2;
+
+query I
+SELECT * FROM v1;
+----
+2
+3
+
 statement error db error: ERROR: Expected literal unsigned integer, found identifier "cnt"
 WITH MUTUALLY RECURSIVE MAXITERATIONS
   cnt (i int) AS (SELECT 1 AS i UNION SELECT i+1 FROM cnt)
