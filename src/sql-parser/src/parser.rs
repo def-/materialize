@@ -4629,15 +4629,7 @@ impl<'a> Parser<'a> {
                 if parser.parse_keyword(MUTUALLY) {
                     parser.expect_keyword(RECURSIVE)?;
                     let max_iterations = if parser.parse_keyword(MAXITERATIONS) {
-                        let parsed = parser.parse_literal_uint()?;
-                        if parsed == 0 {
-                            return parser_err!(
-                                parser,
-                                parser.peek_prev_pos(),
-                                "MAXITERATIONS has to be greater than 0"
-                            );
-                        }
-                        Some(parsed)
+                        Some(parser.parse_literal_uint()?)
                     } else {
                         None
                     };
