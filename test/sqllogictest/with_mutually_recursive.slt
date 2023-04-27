@@ -461,6 +461,39 @@ SELECT (SELECT sum(n) FROM t0) - (SELECT sum(n) FROM t1);
 ----
 200
 
+query I
+WITH MUTUALLY RECURSIVE MAXITERATIONS 6
+  cnt (i int) AS (
+    (WITH MUTUALLY RECURSIVE MAXITERATIONS 3
+       cnt (i int) AS (
+         SELECT 1 AS i
+         UNION
+         SELECT i+1 FROM cnt)
+       SELECT i FROM cnt
+    )
+    UNION
+    SELECT i+100 FROM cnt)
+SELECT i FROM cnt;
+----
+1
+2
+3
+301
+302
+303
+101
+102
+103
+401
+402
+403
+201
+202
+203
+501
+502
+503
+
 statement ok
 CREATE TABLE t1 (f1 INTEGER);
 
