@@ -292,7 +292,7 @@ Explained Query:
 
 EOF
 
-## MAXITERATIONS -- consolidation of independent recursive query blocks
+## MAXITERATIONS -- consolidation of independent recursive query blocks with different MAXITERATIONS
 
 query T multiline
 EXPLAIN SELECT * FROM (
@@ -317,6 +317,37 @@ Explained Query:
       Distinct group_by=[(#0 - 2)]
         Get l1
     cte [MaxIterations 5] l0 =
+      Distinct group_by=[#0]
+        Get l0
+
+EOF
+
+## MAXITERATIONS -- consolidation of independent recursive query blocks with equal MAXITERATIONS.
+## We want to see MaxIterations printed at the block level rather than on each cte.
+
+query T multiline
+EXPLAIN SELECT * FROM (
+    WITH MUTUALLY RECURSIVE MAXITERATIONS 27
+        foo (a int8) AS (SELECT DISTINCT a FROM foo)
+    SELECT * FROM foo
+)
+UNION ALL
+SELECT * FROM (
+    WITH MUTUALLY RECURSIVE MAXITERATIONS 27
+        bar (a int8) AS (SELECT DISTINCT a - 2 FROM bar)
+    SELECT * FROM bar
+);
+----
+Explained Query:
+  Return
+    Union
+      Get l0
+      Get l1
+  With Mutually Recursive MaxIterations 27
+    cte l1 =
+      Distinct group_by=[(#0 - 2)]
+        Get l1
+    cte l0 =
       Distinct group_by=[#0]
         Get l0
 

@@ -12,11 +12,11 @@
 use std::collections::BTreeMap;
 
 use itertools::{zip_eq, Itertools};
-use num_traits::ToPrimitive;
 
 use mz_expr::visit::Visit;
 use mz_expr::JoinImplementation::IndexedFilter;
 use mz_expr::{func, EvalError, MirRelationExpr, MirScalarExpr, UnaryFunc, RECURSION_LIMIT};
+use mz_ore::cast::CastFrom;
 use mz_ore::soft_panic_or_log;
 use mz_ore::stack::{CheckedRecursion, RecursionGuard};
 use mz_repr::{ColumnType, RelationType, ScalarType};
@@ -132,7 +132,7 @@ impl ColumnKnowledge {
                     // Sum up the arity of all ids in the enclosing LetRec node.
                     let let_rec_arity = ids.iter().fold(0, |acc, id| {
                         let id = mz_expr::Id::Local(id.clone());
-                        acc + knowledge[&id].len().to_u64().unwrap()
+                        acc + u64::cast_from(knowledge[&id].len())
                     });
 
                     // Sequentially union knowledge[i][j] with the result of

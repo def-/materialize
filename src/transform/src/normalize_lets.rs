@@ -161,7 +161,7 @@ impl NormalizeLets {
     }
 }
 
-use crate::normalize_lets::support::replace_bindings_from_map;
+use support::replace_bindings_from_map;
 pub use renumbering::renumber_bindings;
 
 // Support methods that are unlikely to be useful to other modules.
