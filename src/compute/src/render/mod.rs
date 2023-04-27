@@ -671,7 +671,7 @@ where
                             // first time.
                             let iteration_index = *ps.vector.get(level).unwrap_or(&0);
                             // The pointstamp starts counting from 0, so we need to add 1.
-                            iteration_index + 1 >= max_iter
+                            iteration_index + 1 >= max_iter.into()
                         });
                     oks = Collection::new(in_limit);
                 }

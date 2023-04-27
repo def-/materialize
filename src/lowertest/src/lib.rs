@@ -78,6 +78,7 @@
 //! See [README.md].
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 use serde::de::DeserializeOwned;
@@ -104,6 +105,12 @@ pub trait MzReflect {
 impl<T: MzReflect> MzReflect for Vec<T> {
     fn add_to_reflected_type_info(rti: &mut ReflectedTypeInfo) {
         T::add_to_reflected_type_info(rti);
+    }
+}
+
+impl MzReflect for NonZeroU64 {
+    fn add_to_reflected_type_info(_rti: &mut ReflectedTypeInfo) {
+        unimplemented!(); // We need to implement it only if we want to use MzReflect for WMR later
     }
 }
 

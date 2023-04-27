@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::mem;
+use std::num::NonZeroU64;
 
 use itertools::Itertools;
 use mz_expr::visit::Visit;
@@ -105,7 +106,7 @@ pub enum HirRelationExpr {
     LetRec {
         /// Maximum number of iterations to evaluate. We don't throw an error when reaching this
         /// limit. Instead, we simply use the current contents of each Id as the final result.
-        max_iter: Option<u64>,
+        max_iter: Option<NonZeroU64>,
         /// List of bindings all of which are in scope of each other.
         bindings: Vec<(String, mz_expr::LocalId, HirRelationExpr, RelationType)>,
         /// Result of the AST node.

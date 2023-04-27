@@ -153,7 +153,7 @@ impl ColumnKnowledge {
                         // Check for conditions (2) and (3).
                         if curr_iteration >= max_iterations
                             || min_max_iter
-                                .map(|min_max_iter| curr_iteration >= min_max_iter)
+                                .map(|min_max_iter| curr_iteration >= min_max_iter.get())
                                 .unwrap_or(false)
                         {
                             if curr_iteration > 3 * let_rec_arity {

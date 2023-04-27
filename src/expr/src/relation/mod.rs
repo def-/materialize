@@ -12,7 +12,7 @@
 use std::cmp::{max, Ordering};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU64, NonZeroUsize};
 
 use bytesize::ByteSize;
 use itertools::Itertools;
@@ -139,7 +139,7 @@ pub enum MirRelationExpr {
         /// (We don't error when reaching the limit, just return the current state as final result.)
         /// The per-`LetRec` limit that the user specified is initially copied to each binding to
         /// accommodate slicing and merging of `LetRec`s in MIR transforms (`NormalizeLets`).
-        max_iters: Vec<Option<u64>>,
+        max_iters: Vec<Option<NonZeroU64>>,
         /// The result of the `Let`, evaluated with `id` bound to `value`.
         body: Box<MirRelationExpr>,
     },

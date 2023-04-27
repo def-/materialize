@@ -168,14 +168,15 @@ use support::replace_bindings_from_map;
 mod support {
 
     use std::collections::BTreeMap;
+    use std::num::NonZeroU64;
 
     use mz_expr::{Id, LocalId, MirRelationExpr};
 
     pub(super) fn replace_bindings_from_map(
-        map: BTreeMap<LocalId, (MirRelationExpr, Option<u64>)>,
+        map: BTreeMap<LocalId, (MirRelationExpr, Option<NonZeroU64>)>,
         ids: &mut Vec<LocalId>,
         values: &mut Vec<MirRelationExpr>,
-        max_iters: &mut Vec<Option<u64>>,
+        max_iters: &mut Vec<Option<NonZeroU64>>,
     ) {
         let (new_ids, new_values, new_max_iters) = map_to_3vecs(map);
         *ids = new_ids;
@@ -184,8 +185,8 @@ mod support {
     }
 
     pub(super) fn map_to_3vecs(
-        map: BTreeMap<LocalId, (MirRelationExpr, Option<u64>)>,
-    ) -> (Vec<LocalId>, Vec<MirRelationExpr>, Vec<Option<u64>>) {
+        map: BTreeMap<LocalId, (MirRelationExpr, Option<NonZeroU64>)>,
+    ) -> (Vec<LocalId>, Vec<MirRelationExpr>, Vec<Option<NonZeroU64>>) {
         let (new_ids, new_values_and_max_iters): (Vec<_>, Vec<_>) = map.into_iter().unzip();
         let (new_values, new_max_iters) = new_values_and_max_iters.into_iter().unzip();
         (new_ids, new_values, new_max_iters)
@@ -313,6 +314,7 @@ mod let_motion {
 
     use itertools::izip;
     use std::collections::{BTreeMap, BTreeSet};
+    use std::num::NonZeroU64;
 
     use crate::normalize_lets::support::{map_to_3vecs, replace_bindings_from_map};
     use mz_expr::{LocalId, MirRelationExpr};
@@ -404,8 +406,8 @@ mod let_motion {
     /// or into `bindings` if they should not be further processed (e.g. from a `LetRec`).
     fn digest_lets_helper(
         expr: &mut MirRelationExpr,
-        worklist: &mut Vec<(LocalId, MirRelationExpr, Option<u64>)>,
-        bindings: &mut BTreeMap<LocalId, (MirRelationExpr, Option<u64>)>,
+        worklist: &mut Vec<(LocalId, MirRelationExpr, Option<NonZeroU64>)>,
+        bindings: &mut BTreeMap<LocalId, (MirRelationExpr, Option<NonZeroU64>)>,
     ) {
         let mut to_visit = vec![expr];
         while let Some(expr) = to_visit.pop() {
@@ -446,8 +448,8 @@ mod let_motion {
     /// rather than when it could be empty.
     pub(crate) fn harvest_non_recursive(
         expr: &mut MirRelationExpr,
-    ) -> BTreeMap<LocalId, (MirRelationExpr, Option<u64>)> {
-        let mut peeled: BTreeMap<LocalId, (MirRelationExpr, Option<u64>)> = BTreeMap::new();
+    ) -> BTreeMap<LocalId, (MirRelationExpr, Option<NonZeroU64>)> {
+        let mut peeled: BTreeMap<LocalId, (MirRelationExpr, Option<NonZeroU64>)> = BTreeMap::new();
         if let MirRelationExpr::LetRec {
             ids,
             values,
@@ -457,7 +459,8 @@ mod let_motion {
         {
             let mut id_set: BTreeSet<_> = ids.iter().cloned().collect();
             let mut cannot = BTreeSet::new();
-            let mut retain: BTreeMap<LocalId, (MirRelationExpr, Option<u64>)> = BTreeMap::new();
+            let mut retain: BTreeMap<LocalId, (MirRelationExpr, Option<NonZeroU64>)> =
+                BTreeMap::new();
             let mut counts = BTreeMap::new();
             for (id, value, max_iter) in izip!(ids.drain(..), values.drain(..), max_iters.drain(..))
             {
@@ -491,6 +494,7 @@ mod inlining {
 
     use itertools::izip;
     use std::collections::BTreeMap;
+    use std::num::NonZeroU64;
 
     use crate::normalize_lets::support::replace_bindings_from_map;
     use mz_expr::{Id, LocalId, MirRelationExpr};
@@ -710,11 +714,11 @@ mod inlining {
     /// Possible states of let binding inlineability.
     enum InlineOffer {
         /// There is a unique reference to this value and given the option it should take this expression.
-        Take(Option<MirRelationExpr>, Option<u64>),
+        Take(Option<MirRelationExpr>, Option<NonZeroU64>),
         /// Any reference to this value should clone this expression.
-        Clone(MirRelationExpr, Option<u64>),
+        Clone(MirRelationExpr, Option<NonZeroU64>),
         /// Any reference to this value should do no inlining of it.
-        Unavailable(MirRelationExpr, Option<u64>),
+        Unavailable(MirRelationExpr, Option<NonZeroU64>),
     }
 
     /// Substitute `Get{id}` expressions for any proposed expressions.
