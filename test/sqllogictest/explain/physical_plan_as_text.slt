@@ -879,7 +879,7 @@ Explained Query:
       Get::PassArrangements l1
         raw=true
   With Mutually Recursive
-    cte [MaxIterations None] l1 =
+    cte l1 =
       ArrangeBy
         input_key=[#0]
         raw=true
@@ -891,7 +891,7 @@ Explained Query:
             map=((#0 - 2))
           Get::PassArrangements l1
             raw=true
-    cte [MaxIterations Some(5)] l0 =
+    cte [MaxIterations 5] l0 =
       ArrangeBy
         input_key=[#0]
         raw=true
