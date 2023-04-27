@@ -38,6 +38,7 @@ use std::convert::{TryFrom, TryInto};
 
 use std::iter;
 use std::mem;
+use std::num::NonZeroU64;
 
 use itertools::Itertools;
 use uuid::Uuid;
@@ -45,6 +46,7 @@ use uuid::Uuid;
 use mz_expr::virtual_syntax::AlgExcept;
 use mz_expr::{func as expr_func, Id, LocalId, MirScalarExpr, RowSetFinishing};
 use mz_ore::collections::CollectionExt;
+use mz_ore::option::FallibleMapExt;
 use mz_ore::stack::{CheckedRecursion, RecursionGuard};
 use mz_ore::str::StrExt;
 use mz_repr::adt::char::CharLength;
@@ -1121,9 +1123,6 @@ fn plan_query_inner(
             max_iterations,
             ctes: _,
         }) => {
-            if let Some(0) = max_iterations {
-                return Err(InvalidMaxIterations);
-            }
             let mut bindings = Vec::new();
             for (id, value, shadowed_val) in cte_bindings.into_iter() {
                 if let Some(cte) = qcx.ctes.remove(&id) {
@@ -1135,7 +1134,9 @@ fn plan_query_inner(
             }
             if !bindings.is_empty() {
                 result = HirRelationExpr::LetRec {
-                    max_iter: max_iterations,
+                    max_iter: max_iterations.try_map(|max_iterations| {
+                        NonZeroU64::new(*max_iterations).ok_or(InvalidMaxIterations)
+                    })?,
                     bindings,
                     body: Box::new(result),
                 }
