@@ -314,9 +314,10 @@ impl MirRelationExpr {
                 // If all of them are the same, then we print it on top of the block (or not print
                 // it at all if it's None). If there are differences, then we print them on the
                 // ctes.
-                let all_max_iters_same = max_iters.iter().reduce(|first, i| {
-                    if i == first { first } else { &None }
-                }).unwrap_or(&None);
+                let all_max_iters_same = max_iters
+                    .iter()
+                    .reduce(|first, i| if i == first { first } else { &None })
+                    .unwrap_or(&None);
 
                 if ctx.config.linear_chains {
                     write!(f, "{}With Mutually Recursive", ctx.indent)?;
