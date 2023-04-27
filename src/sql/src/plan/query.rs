@@ -81,9 +81,9 @@ use crate::plan::scope::{Scope, ScopeItem};
 use crate::plan::statement::{StatementContext, StatementDesc};
 use crate::plan::typeconv::{self, CastContext};
 use crate::plan::with_options::TryFromValue;
+use crate::plan::PlanError::InvalidMaxIterations;
 use crate::plan::{transform_ast, PlanContext, ShowCreatePlan};
 use crate::plan::{Params, QueryWhen};
-use crate::plan::PlanError::InvalidMaxIterations;
 
 use super::statement::show;
 

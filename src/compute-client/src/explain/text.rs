@@ -152,11 +152,7 @@ impl DisplayText<PlanRenderingContext<'_, Plan>> for Plan {
                                 ctx.indent, max_iter, *id
                             )?;
                         } else {
-                            writeln!(
-                                f,
-                                "{}cte {} =",
-                                ctx.indent, *id
-                            )?;
+                            writeln!(f, "{}cte {} =", ctx.indent, *id)?;
                         }
                         ctx.indented(|ctx| value.fmt_text(f, ctx))?;
                     }

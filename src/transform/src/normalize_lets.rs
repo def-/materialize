@@ -161,8 +161,8 @@ impl NormalizeLets {
     }
 }
 
-use support::replace_bindings_from_map;
 pub use renumbering::renumber_bindings;
+use support::replace_bindings_from_map;
 
 // Support methods that are unlikely to be useful to other modules.
 mod support {
