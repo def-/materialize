@@ -7,7 +7,6 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0.
 
-import multiprocessing
 import os
 
 from materialize import ROOT, spawn, ui
@@ -94,12 +93,9 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
             "--lcov",
             "--output-path",
             "coverage/cargotest.lcov",
-            # This can cause intermittent coverage problems, but
-            # single-threaded is too slow:
-            # https://github.com/rust-lang/rust/issues/91092
-            f"--test-threads={multiprocessing.cpu_count()}",
             "--profile=coverage",
-            "--no-fail-fast",
+            # We still want a coverage report on crash
+            "--ignore-run-fail",
         ]
         try:
             spawn.runv(cmd + args.args, env=env)
