@@ -139,6 +139,7 @@ pub enum MirRelationExpr {
         /// (We don't error when reaching the limit, just return the current state as final result.)
         /// The per-`LetRec` limit that the user specified is initially copied to each binding to
         /// accommodate slicing and merging of `LetRec`s in MIR transforms (`NormalizeLets`).
+        #[mzreflect(ignore)]
         max_iters: Vec<Option<NonZeroU64>>,
         /// The result of the `Let`, evaluated with `id` bound to `value`.
         body: Box<MirRelationExpr>,
