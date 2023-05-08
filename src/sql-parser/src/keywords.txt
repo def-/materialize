@@ -182,6 +182,7 @@ Introspection
 Is
 Isnull
 Isolation
+Iteration
 Join
 Json
 Kafka
@@ -206,7 +207,6 @@ Map
 Materialize
 Materialized
 Max
-Maxiterations
 Mechanisms
 Merge
 Message

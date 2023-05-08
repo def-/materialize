@@ -605,11 +605,11 @@ Source materialize.public.t1
 
 EOF
 
-# Give up when reaching MAXITERATIONS
-# Same as the previous query, but with MAXITERATIONS 1.
+# Give up when reaching ITERATION LIMIT
+# Same as the previous query, but with ITERATION LIMIT 1.
 query T multiline
 EXPLAIN WITH(arity, types)
-WITH MUTUALLY RECURSIVE MAXITERATIONS 1
+WITH MUTUALLY RECURSIVE (ITERATION LIMIT 1)
   c0(f1 integer, f2 integer) AS (
     SELECT * FROM (
       SELECT * FROM t1

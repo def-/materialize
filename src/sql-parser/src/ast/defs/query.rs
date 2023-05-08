@@ -319,7 +319,7 @@ pub enum CteBlock<T: AstInfo> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MutRecBlock<T: AstInfo> {
-    pub max_iterations: Option<u64>,
+    pub options: Vec<MutRecBlockOption<T>>,
     pub ctes: Vec<CteMutRec<T>>,
 }
 
@@ -344,10 +344,7 @@ impl<T: AstInfo> CteBlock<T> {
                     names.push(&cte.alias.name);
                 }
             }
-            CteBlock::MutuallyRecursive(MutRecBlock {
-                max_iterations: _,
-                ctes,
-            }) => {
+            CteBlock::MutuallyRecursive(MutRecBlock { options: _, ctes }) => {
                 for cte in ctes.iter() {
                     names.push(&cte.name);
                 }
@@ -365,15 +362,12 @@ impl<T: AstInfo> AstDisplay for CteBlock<T> {
                     f.write_str("WITH ");
                     f.write_node(&display::comma_separated(list));
                 }
-                CteBlock::MutuallyRecursive(MutRecBlock {
-                    max_iterations,
-                    ctes,
-                }) => {
+                CteBlock::MutuallyRecursive(MutRecBlock { options, ctes }) => {
                     f.write_str("WITH MUTUALLY RECURSIVE ");
-                    if let Some(max_iterations) = max_iterations {
-                        f.write_str("MAXITERATIONS ");
-                        f.write_node(max_iterations);
-                        f.write_str(" ");
+                    if !options.is_empty() {
+                        f.write_str("(");
+                        f.write_node(&display::comma_separated(&options));
+                        f.write_str(") ");
                     }
                     f.write_node(&display::comma_separated(ctes));
                 }
@@ -442,6 +436,36 @@ impl<T: AstInfo> AstDisplay for CteMutRecColumnDef<T> {
     }
 }
 impl_display_t!(CteMutRecColumnDef);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum MutRecBlockOptionName {
+    IterLimit,
+}
+
+impl AstDisplay for MutRecBlockOptionName {
+    fn fmt<W: fmt::Write>(&self, f: &mut AstFormatter<W>) {
+        f.write_str(match self {
+            MutRecBlockOptionName::IterLimit => "ITERATION LIMIT",
+        })
+    }
+}
+impl_display!(MutRecBlockOptionName);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct MutRecBlockOption<T: AstInfo> {
+    pub name: MutRecBlockOptionName,
+    pub value: Option<WithOptionValue<T>>,
+}
+
+impl<T: AstInfo> AstDisplay for MutRecBlockOption<T> {
+    fn fmt<W: fmt::Write>(&self, f: &mut AstFormatter<W>) {
+        f.write_node(&self.name);
+        if let Some(v) = &self.value {
+            f.write_str(" = ");
+            f.write_node(v);
+        }
+    }
+}
 
 /// One item of the comma-separated list following `SELECT`
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]

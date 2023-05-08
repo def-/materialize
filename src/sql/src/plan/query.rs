@@ -61,10 +61,10 @@ use mz_sql_parser::ast::visit_mut::{self, VisitMut};
 use mz_sql_parser::ast::{
     AsOf, Assignment, AstInfo, CteBlock, DeleteStatement, Distinct, Expr, Function, FunctionArgs,
     HomogenizingFunction, Ident, InsertSource, IsExprConstruct, Join, JoinConstraint, JoinOperator,
-    Limit, MutRecBlock, OrderByExpr, Query, Select, SelectItem, SelectOption, SelectOptionName,
-    SetExpr, SetOperator, ShowStatement, SubscriptPosition, TableAlias, TableFactor, TableFunction,
-    TableWithJoins, UnresolvedItemName, UpdateStatement, Value, Values, WindowFrame,
-    WindowFrameBound, WindowFrameUnits, WindowSpec,
+    Limit, MutRecBlock, MutRecBlockOption, MutRecBlockOptionName, OrderByExpr, Query, Select,
+    SelectItem, SelectOption, SelectOptionName, SetExpr, SetOperator, ShowStatement,
+    SubscriptPosition, TableAlias, TableFactor, TableFunction, TableWithJoins, UnresolvedItemName,
+    UpdateStatement, Value, Values, WindowFrame, WindowFrameBound, WindowFrameUnits, WindowSpec,
 };
 
 use crate::catalog::{CatalogItemType, CatalogType, SessionCatalog};
@@ -1103,7 +1103,7 @@ fn plan_query_inner(
     }?;
 
     // Both introduce `Let` bindings atop `result` and re-install shadowed bindings.
-    match q.ctes {
+    match &q.ctes {
         CteBlock::Simple(_) => {
             for (id, value, shadowed_val) in cte_bindings.into_iter().rev() {
                 if let Some(cte) = qcx.ctes.remove(&id) {
@@ -1119,10 +1119,11 @@ fn plan_query_inner(
                 }
             }
         }
-        CteBlock::MutuallyRecursive(MutRecBlock {
-            max_iterations,
-            ctes: _,
-        }) => {
+        CteBlock::MutuallyRecursive(MutRecBlock { options, ctes: _ }) => {
+            let MutRecBlockOptionExtracted {
+                iter_limit,
+                seen: _,
+            } = MutRecBlockOptionExtracted::try_from(options.clone())?;
             let mut bindings = Vec::new();
             for (id, value, shadowed_val) in cte_bindings.into_iter() {
                 if let Some(cte) = qcx.ctes.remove(&id) {
@@ -1134,7 +1135,7 @@ fn plan_query_inner(
             }
             if !bindings.is_empty() {
                 result = HirRelationExpr::LetRec {
-                    max_iter: max_iterations.try_map(|max_iterations| {
+                    max_iter: iter_limit.try_map(|max_iterations| {
                         NonZeroU64::new(*max_iterations).ok_or(InvalidMaxIterations)
                     })?,
                     bindings,
@@ -1146,6 +1147,8 @@ fn plan_query_inner(
 
     Ok((result, scope, finishing, expected_group_size))
 }
+
+generate_extracted_config!(MutRecBlockOption, (IterLimit, u64));
 
 /// Creates plans for CTEs and introduces them to `qcx.ctes`.
 ///
@@ -1194,10 +1197,7 @@ pub fn plan_ctes(
                 result.push((cte.id, val, shadowed));
             }
         }
-        CteBlock::MutuallyRecursive(MutRecBlock {
-            max_iterations: _,
-            ctes,
-        }) => {
+        CteBlock::MutuallyRecursive(MutRecBlock { options: _, ctes }) => {
             qcx.scx.require_with_mutually_recursive()?;
 
             // Insert column types into `qcx.ctes` first for recursive bindings.
