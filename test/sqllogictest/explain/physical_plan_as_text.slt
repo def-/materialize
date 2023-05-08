@@ -856,11 +856,11 @@ Source materialize.public.r
 
 EOF
 
-# Test `LetRec` printing, with and without MAXITERATIONS
+# Test `LetRec` printing, with and without ITERATION LIMIT
 query T multiline
 EXPLAIN PHYSICAL PLAN AS TEXT FOR
 SELECT * FROM (
-    WITH MUTUALLY RECURSIVE MAXITERATIONS 5
+    WITH MUTUALLY RECURSIVE (ITERATION LIMIT 5)
         foo (a int8) AS (SELECT DISTINCT a FROM foo)
     SELECT * FROM foo
 )

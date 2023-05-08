@@ -214,10 +214,7 @@ pub fn create_statement(
                         self.ctes.push(cte.alias.name.clone());
                     }
                 }
-                CteBlock::MutuallyRecursive(MutRecBlock {
-                    max_iterations: _,
-                    ctes,
-                }) => {
+                CteBlock::MutuallyRecursive(MutRecBlock { options: _, ctes }) => {
                     for cte in ctes.iter() {
                         self.ctes.push(cte.name.clone());
                     }

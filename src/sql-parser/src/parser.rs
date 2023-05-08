@@ -4628,13 +4628,16 @@ impl<'a> Parser<'a> {
             let cte_block = if parser.parse_keyword(WITH) {
                 if parser.parse_keyword(MUTUALLY) {
                     parser.expect_keyword(RECURSIVE)?;
-                    let max_iterations = if parser.parse_keyword(MAXITERATIONS) {
-                        Some(parser.parse_literal_uint()?)
+                    let options = if parser.consume_token(&Token::LParen) {
+                        let options =
+                            parser.parse_comma_separated(Self::parse_mut_rec_block_option)?;
+                        parser.expect_token(&Token::RParen)?;
+                        options
                     } else {
-                        None
+                        vec![]
                     };
                     CteBlock::MutuallyRecursive(MutRecBlock {
-                        max_iterations,
+                        options,
                         ctes: parser.parse_comma_separated(Parser::parse_cte_mut_rec)?,
                     })
                 } else {
@@ -4648,6 +4651,15 @@ impl<'a> Parser<'a> {
             let body = parser.parse_query_body(SetPrecedence::Zero)?;
 
             parser.parse_query_tail(cte_block, body)
+        })
+    }
+
+    fn parse_mut_rec_block_option(&mut self) -> Result<MutRecBlockOption<Raw>, ParserError> {
+        self.expect_keywords(&[ITERATION, LIMIT])?;
+        let name = MutRecBlockOptionName::IterLimit;
+        Ok(MutRecBlockOption {
+            name,
+            value: self.parse_optional_option_value()?,
         })
     }
 

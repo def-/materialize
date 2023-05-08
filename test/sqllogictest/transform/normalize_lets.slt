@@ -265,12 +265,12 @@ Explained Query:
 
 EOF
 
-#### Tests for MAXITERATIONS
+#### Tests for ITERATION LIMIT
 
-## MAXITERATIONS -- Simple test
+## ITERATION LIMIT -- Simple test
 
 query T multiline
-EXPLAIN WITH MUTUALLY RECURSIVE MAXITERATIONS 10
+EXPLAIN WITH MUTUALLY RECURSIVE (ITERATION LIMIT 10)
   cnt (i int) AS (
     SELECT 1 AS i
     UNION
@@ -292,17 +292,17 @@ Explained Query:
 
 EOF
 
-## MAXITERATIONS -- consolidation of independent recursive query blocks with different MAXITERATIONS
+## ITERATION LIMIT -- consolidation of independent recursive query blocks with different ITERATION LIMIT
 
 query T multiline
 EXPLAIN SELECT * FROM (
-    WITH MUTUALLY RECURSIVE MAXITERATIONS 5
+    WITH MUTUALLY RECURSIVE (ITERATION LIMIT 5)
         foo (a int8) AS (SELECT DISTINCT a FROM foo)
     SELECT * FROM foo
 )
 UNION ALL
 SELECT * FROM (
-    WITH MUTUALLY RECURSIVE MAXITERATIONS 7
+    WITH MUTUALLY RECURSIVE (ITERATION LIMIT 7)
         bar (a int8) AS (SELECT DISTINCT a - 2 FROM bar)
     SELECT * FROM bar
 );
@@ -322,18 +322,18 @@ Explained Query:
 
 EOF
 
-## MAXITERATIONS -- consolidation of independent recursive query blocks with equal MAXITERATIONS.
-## We want to see MaxIterations printed at the block level rather than on each cte.
+## ITERATION LIMIT -- consolidation of independent recursive query blocks with equal ITERATION LIMIT.
+## We want to see ITERATION LIMIT printed at the block level rather than on each cte.
 
 query T multiline
 EXPLAIN SELECT * FROM (
-    WITH MUTUALLY RECURSIVE MAXITERATIONS 27
+    WITH MUTUALLY RECURSIVE (ITERATION LIMIT 27)
         foo (a int8) AS (SELECT DISTINCT a FROM foo)
     SELECT * FROM foo
 )
 UNION ALL
 SELECT * FROM (
-    WITH MUTUALLY RECURSIVE MAXITERATIONS 27
+    WITH MUTUALLY RECURSIVE (ITERATION LIMIT 27)
         bar (a int8) AS (SELECT DISTINCT a - 2 FROM bar)
     SELECT * FROM bar
 );
@@ -353,12 +353,12 @@ Explained Query:
 
 EOF
 
-## MAXITERATIONS -- consolidation of not-really nested recursive query.
-## Here, the MAXITERATIONS of the inner WMR is irrelevant, because it's not recursive.
+## ITERATION LIMIT -- consolidation of not-really nested recursive query.
+## Here, the ITERATION LIMIT of the inner WMR is irrelevant, because it's not recursive.
 query T multiline
-EXPLAIN WITH MUTUALLY RECURSIVE MAXITERATIONS 9
+EXPLAIN WITH MUTUALLY RECURSIVE (ITERATION LIMIT 9)
     foo (a int8) AS (
-        WITH MUTUALLY RECURSIVE MAXITERATIONS 3
+        WITH MUTUALLY RECURSIVE (ITERATION LIMIT 3)
             bar (b int8) AS (
                 SELECT * FROM foo
             )
@@ -377,11 +377,11 @@ Explained Query:
 
 EOF
 
-# MAXITERATIONS -- a nested recursive query.
+# ITERATION LIMIT -- a nested recursive query.
 query T multiline
-EXPLAIN WITH MUTUALLY RECURSIVE MAXITERATIONS 17
+EXPLAIN WITH MUTUALLY RECURSIVE (ITERATION LIMIT 17)
     foo (a int8) AS (
-        WITH MUTUALLY RECURSIVE MAXITERATIONS 11
+        WITH MUTUALLY RECURSIVE (ITERATION LIMIT 11)
             bar (b int8) AS (
                 SELECT * FROM (SELECT * FROM foo UNION ALL SELECT * FROM bar)
             )
@@ -408,10 +408,10 @@ Explained Query:
 
 EOF
 
-## MAXITERATIONS -- Complex inlining and other things.
+## ITERATION LIMIT -- Complex inlining and other things.
 
 query T multiline
-EXPLAIN WITH MUTUALLY RECURSIVE MAXITERATIONS 21
+EXPLAIN WITH MUTUALLY RECURSIVE (ITERATION LIMIT 21)
     label (node int, comp int) AS (
         SELECT dst, MIN(comp)
         FROM (
@@ -424,7 +424,7 @@ EXPLAIN WITH MUTUALLY RECURSIVE MAXITERATIONS 21
         GROUP BY dst
     )
 SELECT round, COUNT(*) FROM (
-    WITH MUTUALLY RECURSIVE MAXITERATIONS 23
+    WITH MUTUALLY RECURSIVE (ITERATION LIMIT 23)
         relabel (node int, comp int, round int) AS (
             SELECT DISTINCT ON(node) node, comp, round
             FROM (

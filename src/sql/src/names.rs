@@ -1066,10 +1066,7 @@ impl<'a> Fold<Raw, Aug> for NameResolver<'a> {
                 }
                 CteBlock::Simple(result_ctes)
             }
-            CteBlock::MutuallyRecursive(MutRecBlock {
-                max_iterations,
-                ctes,
-            }) => {
+            CteBlock::MutuallyRecursive(MutRecBlock { options, ctes }) => {
                 let mut result_ctes = Vec::<CteMutRec<Aug>>::new();
 
                 let initial_id = self.ctes.len();
@@ -1099,7 +1096,10 @@ impl<'a> Fold<Raw, Aug> for NameResolver<'a> {
                     });
                 }
                 CteBlock::MutuallyRecursive(MutRecBlock {
-                    max_iterations,
+                    options: options
+                        .into_iter()
+                        .map(|option| self.fold_mut_rec_block_option(option))
+                        .collect(),
                     ctes: result_ctes,
                 })
             }
