@@ -623,7 +623,7 @@ Explained Query:
   Return // { arity: 3, types: "(integer, integer, integer)" }
     Map ((#0 + #1)) // { arity: 3, types: "(integer, integer, integer)" }
       Get l0 // { arity: 2, types: "(integer, integer)" }
-  With Mutually Recursive MaxIterations 1
+  With Mutually Recursive [iteration_limit=1]
     cte l0 =
       Map (3, 5) // { arity: 2, types: "(integer, integer)" }
         Distinct // { arity: 0, types: "()" }

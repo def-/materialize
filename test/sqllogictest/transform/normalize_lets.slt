@@ -280,7 +280,7 @@ SELECT * FROM cnt;
 Explained Query:
   Return
     Get l0
-  With Mutually Recursive MaxIterations 10
+  With Mutually Recursive [iteration_limit=10]
     cte l0 =
       Distinct group_by=[#0]
         Union
@@ -313,10 +313,10 @@ Explained Query:
       Get l0
       Get l1
   With Mutually Recursive
-    cte [MaxIterations 7] l1 =
+    cte [iteration_limit=7] l1 =
       Distinct group_by=[(#0 - 2)]
         Get l1
-    cte [MaxIterations 5] l0 =
+    cte [iteration_limit=5] l0 =
       Distinct group_by=[#0]
         Get l0
 
@@ -343,7 +343,7 @@ Explained Query:
     Union
       Get l0
       Get l1
-  With Mutually Recursive MaxIterations 27
+  With Mutually Recursive [iteration_limit=27]
     cte l1 =
       Distinct group_by=[(#0 - 2)]
         Get l1
@@ -369,7 +369,7 @@ SELECT * FROM foo;
 Explained Query:
   Return
     Get l0
-  With Mutually Recursive MaxIterations 9
+  With Mutually Recursive [iteration_limit=9]
     cte l0 =
       Union
         Get l0
@@ -392,7 +392,7 @@ SELECT * FROM foo;
 Explained Query:
   Return
     Get l1
-  With Mutually Recursive MaxIterations 17
+  With Mutually Recursive [iteration_limit=17]
     cte l1 =
       Return
         Threshold
@@ -400,7 +400,7 @@ Explained Query:
             Get l1
             Negate
               Get l0
-      With Mutually Recursive MaxIterations 11
+      With Mutually Recursive [iteration_limit=11]
         cte l0 =
           Union
             Get l1
@@ -446,7 +446,7 @@ Explained Query:
       Reduce group_by=[#0] aggregates=[count(*)]
         Project (#2)
           Get l1
-    With Mutually Recursive MaxIterations 23
+    With Mutually Recursive [iteration_limit=23]
       cte l1 =
         TopK group_by=[#0] order_by=[#1 asc nulls_last] limit=1 monotonic=false
           Union
@@ -461,7 +461,7 @@ Explained Query:
                   ArrangeBy keys=[[#0]]
                     Filter (#0) IS NOT NULL
                       Get l1
-  With Mutually Recursive MaxIterations 21
+  With Mutually Recursive [iteration_limit=21]
     cte l0 =
       Reduce group_by=[#0] aggregates=[min(#1)]
         Union

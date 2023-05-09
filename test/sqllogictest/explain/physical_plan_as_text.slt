@@ -891,7 +891,7 @@ Explained Query:
             map=((#0 - 2))
           Get::PassArrangements l1
             raw=true
-    cte [MaxIterations 5] l0 =
+    cte [iteration_limit=5] l0 =
       ArrangeBy
         input_key=[#0]
         raw=true

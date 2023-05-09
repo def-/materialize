@@ -322,7 +322,7 @@ impl MirRelationExpr {
                 if ctx.config.linear_chains {
                     write!(f, "{}With Mutually Recursive", ctx.indent)?;
                     if let Some(max_iter) = all_max_iters_same {
-                        write!(f, " MaxIterations {}", max_iter)?;
+                        write!(f, " [iteration_limit={}]", max_iter)?;
                     }
                     writeln!(f)?;
                     ctx.indented(|ctx| {
@@ -330,7 +330,7 @@ impl MirRelationExpr {
                             write!(f, "{}cte", ctx.indent)?;
                             if all_max_iters_same.is_none() {
                                 if let Some(max_iter) = max_iter {
-                                    write!(f, " [MaxIterations {}]", max_iter)?;
+                                    write!(f, " [iteration_limit={}]", max_iter)?;
                                 }
                             }
                             writeln!(f, " {} =", id)?;
@@ -347,7 +347,7 @@ impl MirRelationExpr {
                     ctx.indented(|ctx| head.fmt_text(f, ctx))?;
                     write!(f, "{}With Mutually Recursive", ctx.indent)?;
                     if let Some(max_iter) = all_max_iters_same {
-                        write!(f, " MaxIterations {}", max_iter)?;
+                        write!(f, " [iteration_limit={}]", max_iter)?;
                     }
                     writeln!(f)?;
                     ctx.indented(|ctx| {
@@ -355,7 +355,7 @@ impl MirRelationExpr {
                             write!(f, "{}cte", ctx.indent)?;
                             if all_max_iters_same.is_none() {
                                 if let Some(max_iter) = max_iter {
-                                    write!(f, " [MaxIterations {}]", max_iter)?;
+                                    write!(f, " [iteration_limit={}]", max_iter)?;
                                 }
                             }
                             writeln!(f, " {} =", id)?;

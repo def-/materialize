@@ -535,6 +535,11 @@ WITH MUTUALLY RECURSIVE (ITERATION LIMIT)
   cnt (i int) AS (SELECT 1 AS i UNION SELECT i+1 FROM cnt)
 SELECT * FROM cnt;
 
+statement error db error: ERROR: Expected ITERATION, found right parenthesis
+WITH MUTUALLY RECURSIVE ()
+  cnt (i int) AS (SELECT 1 AS i UNION SELECT i+1 FROM cnt)
+SELECT * FROM cnt;
+
 statement error db error: ERROR: invalid ITERATION LIMIT: cannot use value as number
 WITH MUTUALLY RECURSIVE (ITERATION LIMIT aaaaaaa)
   cnt (i int) AS (SELECT 1 AS i UNION SELECT i+1 FROM cnt)
@@ -551,7 +556,7 @@ WITH MUTUALLY RECURSIVE (ITERATION LIMIT 3, ITERATION LIMIT 5)
 SELECT * FROM cnt;
 
 # It's important that we error out for ITERATION LIMIT 0, because we are NOT handling this case in some optimizer transforms.
-statement error db error: ERROR: MAXITERATIONS has to be greater than 0
+statement error db error: ERROR: ITERATION LIMIT has to be greater than 0
 WITH MUTUALLY RECURSIVE (ITERATION LIMIT 0)
   cnt (i int) AS (SELECT 1 AS i UNION SELECT i+1 FROM cnt)
 SELECT * FROM cnt;

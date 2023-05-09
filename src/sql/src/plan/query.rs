@@ -83,7 +83,7 @@ use crate::plan::scope::{Scope, ScopeItem};
 use crate::plan::statement::{StatementContext, StatementDesc};
 use crate::plan::typeconv::{self, CastContext};
 use crate::plan::with_options::TryFromValue;
-use crate::plan::PlanError::InvalidMaxIterations;
+use crate::plan::PlanError::InvalidIterationLimit;
 use crate::plan::{transform_ast, PlanContext, ShowCreatePlan};
 use crate::plan::{Params, QueryWhen};
 
@@ -1135,8 +1135,8 @@ fn plan_query_inner(
             }
             if !bindings.is_empty() {
                 result = HirRelationExpr::LetRec {
-                    max_iter: iter_limit.try_map(|max_iterations| {
-                        NonZeroU64::new(*max_iterations).ok_or(InvalidMaxIterations)
+                    max_iter: iter_limit.try_map(|iter_limit| {
+                        NonZeroU64::new(*iter_limit).ok_or(InvalidIterationLimit)
                     })?,
                     bindings,
                     body: Box::new(result),

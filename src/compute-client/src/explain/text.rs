@@ -148,7 +148,7 @@ impl DisplayText<PlanRenderingContext<'_, Plan>> for Plan {
                         if let Some(max_iter) = max_iter {
                             writeln!(
                                 f,
-                                "{}cte [MaxIterations {}] {} =",
+                                "{}cte [iteration_limit={}] {} =",
                                 ctx.indent, max_iter, *id
                             )?;
                         } else {
