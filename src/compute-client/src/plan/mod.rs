@@ -14,7 +14,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU64;
 
-use itertools::Itertools;
 use proptest::arbitrary::Arbitrary;
 use proptest::prelude::*;
 use proptest::strategy::Strategy;
@@ -602,14 +601,7 @@ impl RustType<ProtoPlan> for Plan {
                 } => LetRec(
                     ProtoPlanLetRec {
                         ids: ids.into_proto(),
-                        max_iters: max_iters
-                            .into_iter()
-                            .map(|d| match d {
-                                Some(d) => d.get(),
-                                None => 0u64,
-                            })
-                            .collect_vec()
-                            .into_proto(),
+                        max_iters: max_iters.into_proto(),
                         values: values.into_proto(),
                         body: Some(body.into_proto()),
                     }
@@ -749,11 +741,7 @@ impl RustType<ProtoPlan> for Plan {
             LetRec(proto) => {
                 let ids: Vec<LocalId> = proto.ids.into_rust()?;
                 let values: Vec<Plan> = proto.values.into_rust()?;
-                let max_iters: Vec<Option<NonZeroU64>> = proto
-                    .max_iters
-                    .into_iter()
-                    .map(NonZeroU64::new) // 0 is correctly mapped to None
-                    .collect();
+                let max_iters: Vec<Option<NonZeroU64>> = proto.max_iters.into_rust()?;
                 assert_eq!(ids.len(), values.len());
                 assert_eq!(ids.len(), max_iters.len());
                 Plan::LetRec {
