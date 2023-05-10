@@ -12,11 +12,11 @@ import os
 import re
 import subprocess
 from collections import OrderedDict
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import junit_xml
 
-from materialize import ROOT, ci_util, ui
+from materialize import ROOT, ci_util
 
 # - None value indicates that this line is interesting, but we don't know yet
 #   if it can actually be covered.
@@ -27,6 +27,9 @@ Coverage = Dict[str, OrderedDict[int, Optional[int]]]
 SOURCE_RE = re.compile(
     "^/var/lib/buildkite-agent/builds/buildkite-.*/materialize/coverage/(.*$)"
 )
+# Deriving generates more code, but we don't expect to cover this in most
+# cases, so ignore such lines.
+IGNORE_RE = re.compile(r"^#\[derive\(.*\)\]")
 
 
 def find_modified_lines() -> Coverage:
@@ -120,7 +123,7 @@ def mark_covered_lines(
                     coverage[file][line_nr] = (coverage[file][line_nr] or 0) + hit
 
 
-def get_report(coverage: Coverage) -> str:
+def get_report(coverage: Coverage) -> Tuple[str, str]:
     """
     Remove uncovered lines in real files and print a git diff, then restore to
     original state. This is pretty messy, we might want to do it without git if
@@ -138,23 +141,25 @@ def get_report(coverage: Coverage) -> str:
                         f.write(line)
                 f.truncate()
 
-        # Only set user for CI, not when testing this script locally
-        if ui.env_is_truthy("CI"):
-            subprocess.run(
-                ["git", "config", "user.email", "coverage@materialize.com"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "config", "user.name", "Code Coverage"],
-                check=True,
-            )
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-a", "-m", "Covered in unit test only"],
+        result = subprocess.run(
+            [
+                "git",
+                "diff",
+                # Spaces can be moved around, leading to confusing reports
+                "--ignore-all-space",
+                "--output-indicator-old=!",
+                "HEAD",
+            ],
             check=True,
+            capture_output=True,
         )
-        # Add the lines back so they show up with a "." marker
-        subprocess.run(["git", "revert", "--no-commit", "HEAD"], check=True)
+        unit_test_only = result.stdout.decode("utf-8").strip()
 
+    finally:
+        # Restore the code into its original state
+        subprocess.run(["git", "reset", "--hard"], check=True)
+
+    try:
         # Remove lines which are not covered at all so they show up with "!" marker
         for file, lines in coverage.items():
             with open(file, "r+") as f:
@@ -165,7 +170,11 @@ def get_report(coverage: Coverage) -> str:
                     # If a line has positive or negative coverage then it is
                     # covered in normal tests or unit tests, print it out.
                     # All remaining lines can be covered, but are not covered.
-                    if lines.get(i + 1) is None or (lines.get(i + 1) or 0) != 0:
+                    if (
+                        lines.get(i + 1) is None
+                        or (lines.get(i + 1) or 0) != 0
+                        or IGNORE_RE.match(line)
+                    ):
                         f.write(line)
                 f.truncate()
 
@@ -173,17 +182,20 @@ def get_report(coverage: Coverage) -> str:
             [
                 "git",
                 "diff",
+                # Spaces can be moved around, leading to confusing reports
+                "--ignore-all-space",
                 "--output-indicator-old=!",
-                "--output-indicator-new=.",
                 "HEAD",
             ],
             check=True,
             capture_output=True,
         )
-        return result.stdout.decode("utf-8").strip()
+        uncovered = result.stdout.decode("utf-8").strip()
+
+        return (uncovered, unit_test_only)
     finally:
         # Restore the code into its original state
-        subprocess.run(["git", "reset", "--hard", "HEAD~"], check=True)
+        subprocess.run(["git", "reset", "--hard"], check=True)
 
 
 def main() -> None:
@@ -214,22 +226,48 @@ ci-coverage-pr-report creates a code coverage report for CI.""",
             test_case = junit_xml.TestCase("Unit Tests", "Code Coverage")
             test_case.add_error_info(message="No coverage for unit tests available")
             test_cases.append(test_case)
-    report = get_report(coverage)
+    (uncovered_report, unit_test_only_report) = get_report(coverage)
 
-    test_case = junit_xml.TestCase("Uncovered Lines in Pull Request", "Code Coverage")
-    if len(report):
+    test_case = junit_xml.TestCase("Uncovered Lines in PR", "Code Coverage")
+    if len(uncovered_report):
+        print("Uncovered Lines in PR")
         # Buildkite interprets the +++ and --- chars at the start of line, put
         # in a zero-width space as a workaround.
-        print(report.replace("\n+++", "\n\u200B+++").replace("\n---", "\n\u200B---"))
+        print(
+            uncovered_report.replace("\n+++", "\n\u200B+++").replace(
+                "\n---", "\n\u200B---"
+            )
+        )
         test_case.add_error_info(
-            message="Full coverage report is available in Buildkite. The following changed lines are uncovered:",
-            output=report,
+            message="The following changed lines are uncovered:",
+            output=uncovered_report,
+        )
+    else:
+        test_case.add_error_info(message="All changed lines are covered.")
+    test_cases.append(test_case)
+
+    test_case = junit_xml.TestCase(
+        "Lines Covered only in Unit Tests in PR", "Code Coverage"
+    )
+    if len(unit_test_only_report):
+        print("Lines Covered only in Unit Tests in PR")
+        # Buildkite interprets the +++ and --- chars at the start of line, put
+        # in a zero-width space as a workaround.
+        print(
+            unit_test_only_report.replace("\n+++", "\n\u200B+++").replace(
+                "\n---", "\n\u200B---"
+            )
+        )
+        test_case.add_error_info(
+            message="The following changed lines are covered only in unit tests:",
+            output=unit_test_only_report,
         )
     else:
         test_case.add_error_info(
-            message="Full coverage report is available in Buildkite. All changed lines are covered."
+            message="All changed lines are covered outside of unit tests."
         )
     test_cases.append(test_case)
+
     junit_suite = junit_xml.TestSuite("Code Coverage", test_cases)
     junit_report = ROOT / ci_util.junit_report_filename("coverage")
     with junit_report.open("w") as f:
