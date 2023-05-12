@@ -24,6 +24,7 @@ import inspect
 import os
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from contextlib import contextmanager
@@ -50,6 +51,7 @@ from typing import (
 )
 
 import pg8000
+import pg8000.exceptions
 import sqlparse
 import yaml
 from pg8000 import Cursor
@@ -71,6 +73,8 @@ class UnknownCompositionError(UIError):
 
 class Composition:
     """A loaded mzcompose.py file."""
+
+    cursors: Dict[Tuple[int, str, str, Optional[int]], Cursor]
 
     @dataclass
     class TestResult:
@@ -94,6 +98,7 @@ class Composition:
         self.silent = silent
         self.workflows: Dict[str, Callable[..., None]] = {}
         self.test_results: OrderedDict[str, Composition.TestResult] = OrderedDict()
+        self.cursors = {}
 
         if name in self.repo.compositions:
             self.path = self.repo.compositions[name]
@@ -448,13 +453,20 @@ class Composition:
         print_statement: bool = True,
     ) -> None:
         """Run a batch of SQL statements against the materialized service."""
-        with self.sql_cursor(
-            service=service, user=user, port=port, password=password
-        ) as cursor:
+        key = (threading.get_ident(), service, user, port)
+        if key not in self.cursors:
+            self.cursors[key] = self.sql_cursor(
+                service=service, user=user, port=port, password=password
+            )
+        cursor = self.cursors[key]
+        try:
             for statement in sqlparse.split(sql):
                 if print_statement:
                     print(f"> {statement}")
                 cursor.execute(statement)
+        except pg8000.exceptions.InterfaceError as e:
+            del self.cursors[key]
+            raise e
 
     def sql_query(
         self,
@@ -464,9 +476,18 @@ class Composition:
         password: Optional[str] = None,
     ) -> Any:
         """Execute and return results of a SQL query."""
-        with self.sql_cursor(service=service, user=user, password=password) as cursor:
+        key = (threading.get_ident(), service, user, None)
+        if key not in self.cursors:
+            self.cursors[key] = self.sql_cursor(
+                service=service, user=user, password=password
+            )
+        cursor = self.cursors[key]
+        try:
             cursor.execute(sql)
             return cursor.fetchall()
+        except pg8000.exceptions.InterfaceError as e:
+            del self.cursors[key]
+            raise e
 
     def run(
         self,
