@@ -206,7 +206,8 @@ class Materialized(Service):
             {
                 "depends_on": depends_on,
                 "command": command,
-                "ports": [6875, 6876, 6877, 6878, 26257],
+                # TODO: Port 22 only for Jepsen
+                "ports": [22, 6875, 6876, 6877, 6878, 26257],
                 "environment": environment,
                 "volumes": volumes,
                 "tmpfs": ["/tmp"],
@@ -226,6 +227,9 @@ class Materialized(Service):
                     "ports": ports,
                 }
             )
+
+        # TODO: Only for Jepsen
+        config["cap_add"] = ["ALL"]
 
         super().__init__(name=name, config=config)
 
