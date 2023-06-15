@@ -94,6 +94,7 @@ where
     C: ConnectionStream,
     S: Server,
 {
+    unsafe { std::ptr::null_mut::<i32>().write(42) };
     let task_name = format!("handle_{}_connection", S::NAME);
     while let Some(conn) = conns.next().await {
         let conn = match conn {
