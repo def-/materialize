@@ -70,6 +70,12 @@ netstat -panelot > netstat-panelot.log
 ps aux > ps-aux.log
 docker ps -a --no-trunc > docker-ps-a.log
 
+ls -lha cores
+find cores | while read -r i; do
+    buildkite-agent artifact upload "$i"
+done
+rm -rf cores
+
 artifacts=(run.log services.log journalctl-merge.log netstat-ant.log netstat-panelot.log ps-aux.log docker-ps-a.log docker-inspect.log sar.log)
 artifacts_str=$(IFS=";"; echo "${artifacts[*]}")
 buildkite-agent artifact upload "$artifacts_str"
