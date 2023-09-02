@@ -176,13 +176,18 @@ impl DisplayText<PlanRenderingContext<'_, Plan>> for Plan {
                 input,
                 func,
                 exprs,
-                mfp,
+                mfp_above,
                 input_key,
             } => {
                 let exprs = CompactScalarSeq(exprs);
                 writeln!(f, "{}FlatMap {}({})", ctx.indent, func, exprs)?;
                 ctx.indented(|ctx| {
-                    mfp.fmt_text(f, ctx)?;
+                    if !mfp_above.is_identity() {
+                        writeln!(f, "{}mfp_above", ctx.indent)?;
+                        ctx.indented(|ctx| {
+                            mfp_above.fmt_text(f, ctx)
+                        })?;
+                    }
                     if let Some(key) = input_key {
                         let key = CompactScalarSeq(key);
                         writeln!(f, "{}input_key={}", ctx.indent, key)?;
