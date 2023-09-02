@@ -184,9 +184,7 @@ impl DisplayText<PlanRenderingContext<'_, Plan>> for Plan {
                 ctx.indented(|ctx| {
                     if !mfp_above.is_identity() {
                         writeln!(f, "{}mfp_above", ctx.indent)?;
-                        ctx.indented(|ctx| {
-                            mfp_above.fmt_text(f, ctx)
-                        })?;
+                        ctx.indented(|ctx| mfp_above.fmt_text(f, ctx))?;
                     }
                     if let Some(key) = input_key {
                         let key = CompactScalarSeq(key);
