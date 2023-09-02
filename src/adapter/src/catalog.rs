@@ -97,7 +97,6 @@ use mz_storage_client::types::sources::{
 use mz_transform::dataflow::DataflowMetainfo;
 use mz_transform::Optimizer;
 use once_cell::sync::Lazy;
-use proptest_derive::Arbitrary;
 use regex::Regex;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
@@ -2202,7 +2201,7 @@ impl From<CatalogEntry> for storage::Item {
         storage::Item {
             id: entry.id,
             name: entry.name,
-            create_sql: entry.item.into_serialized(),
+            create_sql: entry.item.into_create_sql(),
             owner_id: entry.owner_id,
             privileges: entry.privileges.into_all_values().collect(),
         }
@@ -2902,7 +2901,7 @@ impl CatalogItem {
         }
     }
 
-    pub(crate) fn to_serialized(&self) -> String {
+    pub(crate) fn to_create_sql(&self) -> String {
         match self {
             CatalogItem::Table(table) => table.create_sql.clone(),
             CatalogItem::Log(_) => unreachable!("builtin logs cannot be serialized"),
@@ -2924,7 +2923,7 @@ impl CatalogItem {
         }
     }
 
-    pub(crate) fn into_serialized(self) -> String {
+    pub(crate) fn into_create_sql(self) -> String {
         match self {
             CatalogItem::Table(table) => table.create_sql,
             CatalogItem::Log(_) => unreachable!("builtin logs cannot be serialized"),
@@ -4833,12 +4832,12 @@ impl Catalog {
         for (id, schema_id, name) in migration_metadata.user_create_ops.drain(..) {
             let entry = self.get_entry(&id);
             let item = entry.item();
-            let serialized_item = item.to_serialized();
+            let create_sql = item.to_create_sql();
             tx.insert_item(
                 id,
                 schema_id,
                 &name,
-                serialized_item,
+                create_sql,
                 entry.owner_id,
                 entry.privileges().all_values_owned().collect(),
             )?;
@@ -6567,12 +6566,12 @@ impl Catalog {
                             }
                         }
                         let schema_id = name.qualifiers.schema_spec.clone().into();
-                        let serialized_item = item.to_serialized();
+                        let create_sql = item.to_create_sql();
                         tx.insert_item(
                             id,
                             schema_id,
                             &name.item,
-                            serialized_item,
+                            create_sql,
                             owner_id,
                             privileges.clone(),
                         )?;
@@ -8473,23 +8472,6 @@ pub struct ClusterVariantManaged {
 pub enum ClusterVariant {
     Managed(ClusterVariantManaged),
     Unmanaged,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub enum SerializedReplicaLocation {
-    Unmanaged {
-        storagectl_addrs: Vec<String>,
-        storage_addrs: Vec<String>,
-        computectl_addrs: Vec<String>,
-        compute_addrs: Vec<String>,
-        workers: usize,
-    },
-    Managed {
-        size: String,
-        /// `Some(az)` if the AZ was specified by the user and must be respected;
-        availability_zone: Option<String>,
-        disk: bool,
-    },
 }
 
 impl ConnCatalog<'_> {

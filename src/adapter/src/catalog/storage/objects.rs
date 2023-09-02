@@ -464,33 +464,20 @@ impl RustType<proto::ItemKey> for ItemKey {
 
 impl RustType<proto::ItemValue> for ItemValue {
     fn into_proto(&self) -> proto::ItemValue {
-        let definition = proto::CatalogItem {
-            value: Some(proto::catalog_item::Value::V1(proto::catalog_item::V1 {
-                create_sql: self.create_sql.clone(),
-            })),
-        };
         proto::ItemValue {
             schema_id: Some(self.schema_id.into_proto()),
             name: self.name.to_string(),
-            definition: Some(definition),
+            create_sql: self.create_sql.to_string(),
             owner_id: Some(self.owner_id.into_proto()),
             privileges: self.privileges.into_proto(),
         }
     }
 
     fn from_proto(proto: proto::ItemValue) -> Result<Self, TryFromProtoError> {
-        let create_sql_value = proto
-            .definition
-            .ok_or_else(|| TryFromProtoError::missing_field("ItemValue::definition"))?
-            .value
-            .ok_or_else(|| TryFromProtoError::missing_field("CatalogItem::value"))?;
-        let create_sql = match create_sql_value {
-            proto::catalog_item::Value::V1(c) => c.create_sql,
-        };
         Ok(ItemValue {
             schema_id: proto.schema_id.into_rust_if_some("ItemValue::schema_id")?,
             name: proto.name,
-            create_sql,
+            create_sql: proto.create_sql,
             owner_id: proto.owner_id.into_rust_if_some("ItemValue::owner_id")?,
             privileges: proto.privileges.into_rust()?,
         })
