@@ -1552,7 +1552,10 @@ impl<C: ConnectionAccess> SourceConnection for KafkaSourceConnection<C> {
         let metadata_columns = [
             (&self.include_offset, ScalarType::UInt64),
             (&self.include_partition, ScalarType::Int32),
-            (&self.include_timestamp, ScalarType::Timestamp),
+            (
+                &self.include_timestamp,
+                ScalarType::Timestamp { precision: None },
+            ),
             (&self.include_topic, ScalarType::String),
             (&self.include_headers, header_typ),
         ];
@@ -2395,7 +2398,10 @@ impl LoadGenerator {
                         .with_column("id", ScalarType::Int64.nullable(false))
                         .with_column("seller", ScalarType::Int64.nullable(false))
                         .with_column("item", ScalarType::String.nullable(false))
-                        .with_column("end_time", ScalarType::TimestampTz.nullable(false))
+                        .with_column(
+                            "end_time",
+                            ScalarType::TimestampTz { precision: None }.nullable(false),
+                        )
                         .with_key(vec![0]),
                 ),
                 (
@@ -2405,7 +2411,10 @@ impl LoadGenerator {
                         .with_column("buyer", ScalarType::Int64.nullable(false))
                         .with_column("auction_id", ScalarType::Int64.nullable(false))
                         .with_column("amount", ScalarType::Int32.nullable(false))
-                        .with_column("bid_time", ScalarType::TimestampTz.nullable(false))
+                        .with_column(
+                            "bid_time",
+                            ScalarType::TimestampTz { precision: None }.nullable(false),
+                        )
                         .with_key(vec![0]),
                 ),
             ],
@@ -2426,14 +2435,20 @@ impl LoadGenerator {
                             .with_column("id", ScalarType::Int64.nullable(false))
                             .with_column("customer_id", ScalarType::Int64.nullable(false))
                             .with_column("campaign_id", ScalarType::Int64.nullable(false))
-                            .with_column("impression_time", ScalarType::TimestampTz.nullable(false))
+                            .with_column(
+                                "impression_time",
+                                ScalarType::TimestampTz { precision: None }.nullable(false),
+                            )
                             .with_key(vec![0]),
                     ),
                     (
                         "clicks",
                         RelationDesc::empty()
                             .with_column("impression_id", ScalarType::Int64.nullable(false))
-                            .with_column("click_time", ScalarType::TimestampTz.nullable(false))
+                            .with_column(
+                                "click_time",
+                                ScalarType::TimestampTz { precision: None }.nullable(false),
+                            )
                             .without_keys(),
                     ),
                     (
@@ -2441,8 +2456,14 @@ impl LoadGenerator {
                         RelationDesc::empty()
                             .with_column("id", ScalarType::Int64.nullable(false))
                             .with_column("customer_id", ScalarType::Int64.nullable(false))
-                            .with_column("created_at", ScalarType::TimestampTz.nullable(false))
-                            .with_column("converted_at", ScalarType::TimestampTz.nullable(true))
+                            .with_column(
+                                "created_at",
+                                ScalarType::TimestampTz { precision: None }.nullable(false),
+                            )
+                            .with_column(
+                                "converted_at",
+                                ScalarType::TimestampTz { precision: None }.nullable(true),
+                            )
                             .with_column("conversion_amount", ScalarType::Int64.nullable(true))
                             .with_key(vec![0]),
                     ),
@@ -2451,7 +2472,10 @@ impl LoadGenerator {
                         RelationDesc::empty()
                             .with_column("id", ScalarType::Int64.nullable(false))
                             .with_column("lead_id", ScalarType::Int64.nullable(false))
-                            .with_column("created_at", ScalarType::TimestampTz.nullable(false))
+                            .with_column(
+                                "created_at",
+                                ScalarType::TimestampTz { precision: None }.nullable(false),
+                            )
                             .with_column("amount", ScalarType::Int64.nullable(false))
                             .with_key(vec![0]),
                     ),
@@ -2460,7 +2484,10 @@ impl LoadGenerator {
                         RelationDesc::empty()
                             .with_column("lead_id", ScalarType::Int64.nullable(false))
                             .with_column("experiment_bucket", ScalarType::String.nullable(false))
-                            .with_column("predicted_at", ScalarType::TimestampTz.nullable(false))
+                            .with_column(
+                                "predicted_at",
+                                ScalarType::TimestampTz { precision: None }.nullable(false),
+                            )
                             .with_column("score", ScalarType::Float64.nullable(false))
                             .without_keys(),
                     ),
