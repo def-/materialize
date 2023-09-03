@@ -148,6 +148,9 @@ SELECT 1, a + b as c FROM t WHERE a > 0 and b < 0 and a + b > 0
       "plan": {
         "PeekExisting": [
           {
+            "User": 1
+          },
+          {
             "User": 4
           },
           null,
@@ -913,6 +916,9 @@ SELECT * FROM t ORDER BY b asc, a desc LIMIT 5
       "id": "Explained Query (fast path)",
       "plan": {
         "PeekExisting": [
+          {
+            "User": 1
+          },
           {
             "User": 4
           },
