@@ -203,6 +203,7 @@ impl Bindings {
                 *relation = MirRelationExpr::Get {
                     id: Id::Local(LocalId::new(*id)),
                     typ,
+                    persist_or_index: None,
                 }
             }
 

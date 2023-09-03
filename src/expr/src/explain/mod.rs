@@ -200,6 +200,7 @@ pub fn enforce_linear_chains(expr: &mut MirRelationExpr) -> Result<(), ExplainEr
                     body: Box::new(Get {
                         id: Id::Local(id.clone()),
                         typ: input.typ(),
+                        persist_or_index: None,
                     }),
                 };
                 // swap the current body with the replacement

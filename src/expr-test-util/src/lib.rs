@@ -522,12 +522,17 @@ impl<'a> MirRelationExprDeserializeContext<'a> {
             Some(TokenTree::Ident(ident)) => {
                 let name = ident.to_string();
                 match self.scope.get(&name) {
-                    Some((id, typ)) => Ok(MirRelationExpr::Get { id, typ }),
+                    Some((id, typ)) => Ok(MirRelationExpr::Get {
+                        id,
+                        typ,
+                        persist_or_index: None,
+                    }),
                     None => match self.catalog.get(&name) {
                         None => Err(format!("no catalog object named {}", name)),
                         Some((id, typ)) => Ok(MirRelationExpr::Get {
                             id: Id::Global(*id),
                             typ: typ.clone(),
+                            persist_or_index: None,
                         }),
                     },
                 }
