@@ -13,7 +13,8 @@ set -euo pipefail
 
 . misc/shlib/shlib.bash
 
-mkdir cores
+mkdir -p cores
+chmod 777 cores
 sudo sysctl -w kernel.core_pattern=/cores/core.%p
 
 mzcompose() {

@@ -79,7 +79,7 @@ ps aux > ps-aux.log
 docker ps -a --no-trunc > docker-ps-a.log
 
 ls -lha cores
-find cores | while read -r i; do
+find cores -name 'core.*' | while read -r i; do
     buildkite-agent artifact upload "$i"
 done
 rm -rf cores
