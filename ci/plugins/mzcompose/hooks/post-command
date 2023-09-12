@@ -13,6 +13,10 @@ set -euo pipefail
 
 ulimit -a
 
+echo "Core pattern:"
+
+cat /proc/sys/kernel/core_pattern
+
 . misc/shlib/shlib.bash
 
 run() {
