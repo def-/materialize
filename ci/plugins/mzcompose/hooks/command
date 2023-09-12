@@ -13,6 +13,8 @@ set -euo pipefail
 
 . misc/shlib/shlib.bash
 
+sudo sysctl -w kernel.core_pattern=core
+
 mzcompose() {
     bin/ci-builder run stable bin/mzcompose --find "$BUILDKITE_PLUGIN_MZCOMPOSE_COMPOSITION" "$@"
 }
