@@ -11,6 +11,8 @@
 
 set -euo pipefail
 
+ulimit -a
+
 . misc/shlib/shlib.bash
 
 run() {
