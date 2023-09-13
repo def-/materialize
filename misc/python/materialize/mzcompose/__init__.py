@@ -26,7 +26,8 @@ from typing import (
 
 import pg8000
 
-from materialize import spawn, ui
+from materialize import mzbuild, spawn, ui, ROOT
+from materialize.mzcompose import loader
 from materialize.ui import UIError
 
 T = TypeVar("T")

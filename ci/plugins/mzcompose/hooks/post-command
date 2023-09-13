@@ -78,6 +78,7 @@ netstat -panelot > netstat-panelot.log
 ps aux > ps-aux.log
 docker ps -a --no-trunc > docker-ps-a.log
 
+sudo chmod -R 777 cores/
 ls -lha cores
 find cores -name 'core.*' | while read -r i; do
     buildkite-agent artifact upload "$i"
