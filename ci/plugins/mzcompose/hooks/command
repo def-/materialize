@@ -15,7 +15,8 @@ set -euo pipefail
 
 mkdir -p cores
 chmod 777 cores
-sudo sysctl -w kernel.core_pattern=/cores/core.%p
+
+sudo sysctl -w kernel.core_pattern="|/usr/bin/env tee /cores/core.%p"
 
 mzcompose() {
     bin/ci-builder run stable bin/mzcompose --find "$BUILDKITE_PLUGIN_MZCOMPOSE_COMPOSITION" "$@"
