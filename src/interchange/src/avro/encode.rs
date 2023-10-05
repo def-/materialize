@@ -9,7 +9,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::rc::Rc;
 
 use byteorder::{NetworkEndian, WriteBytesExt};
 use chrono::Timelike;
@@ -25,7 +24,7 @@ use serde_json::json;
 
 use crate::encode::{column_names_and_types, Encode, TypedDatum};
 use crate::envelopes::{self, ENVELOPE_CUSTOM_NAMES};
-use crate::json::{build_row_schema_json, SchemaJsonOptions};
+use crate::json::{build_row_schema_json, SchemaOptions};
 
 // TODO(rkhaitan): this schema intentionally omits the data_collections field
 // that is typically present in Debezium transaction metadata topics. See
@@ -170,10 +169,10 @@ impl AvroSchemaGenerator {
             &value_columns,
             avro_value_fullname.as_deref().unwrap_or("envelope"),
             &ENVELOPE_CUSTOM_NAMES,
-            SchemaJsonOptions {
+            sink_from,
+            &SchemaOptions {
                 set_null_defaults,
-                item_id: sink_from,
-                doc_comments: Rc::new(value_doc_options),
+                doc_comments: value_doc_options,
             },
         )?;
         let writer_schema = Schema::parse(&row_schema).expect("valid schema constructed");
@@ -185,10 +184,10 @@ impl AvroSchemaGenerator {
                     &columns,
                     avro_key_fullname.as_deref().unwrap_or("row"),
                     &BTreeMap::new(),
-                    SchemaJsonOptions {
+                    sink_from,
+                    &SchemaOptions {
                         set_null_defaults,
-                        item_id: sink_from,
-                        doc_comments: Rc::new(key_doc_options),
+                        doc_comments: key_doc_options,
                     },
                 )?;
                 Some(KeyInfo {
