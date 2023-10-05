@@ -582,7 +582,7 @@ CREATE SINK foo FROM bar INTO KAFKA CONNECTION baz (TOPIC 'topic') FORMAT AVRO U
 parse-statement
 CREATE SINK foo FROM bar INTO KAFKA CONNECTION baz (TOPIC 'topic') FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY CONNECTION conn2 (DOC ON COLUMN c = 'comment') ENVELOPE UPSERT
 ----
-error: need to specify a relation and a column
+error: need to specify an object and a column
 CREATE SINK foo FROM bar INTO KAFKA CONNECTION baz (TOPIC 'topic') FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY CONNECTION conn2 (DOC ON COLUMN c = 'comment') ENVELOPE UPSERT
                                                                                                                                                ^
 

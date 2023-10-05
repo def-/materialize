@@ -2103,7 +2103,7 @@ impl<'a> Parser<'a> {
                 if identifiers.len() < 2 {
                     return Err(ParserError::new(
                         start,
-                        "need to specify a relation and a column",
+                        "need to specify an object and a column",
                     ));
                 }
                 identifiers.pop().unwrap()
