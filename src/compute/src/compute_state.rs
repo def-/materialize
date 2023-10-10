@@ -782,6 +782,10 @@ impl PendingPeek {
                 // This choice is conservative, and not the end of the world
                 // from a performance perspective.
                 let arena = RowArena::new();
+                // TODO(vmarcos): We could think of not transiting through `Row` below,
+                // but rather create another type-sensitive dispatch to obtain the borrow
+                // on the key and value datums. The complexity does not seem worth the payoff
+                // if all we are doing here is returning a naturally limited number of results.
                 let key = cursor.key(&storage).into_row(&mut key_buf, key_types);
                 let row = cursor.val(&storage).into_row(&mut val_buf, val_types);
                 // TODO: We could unpack into a re-used allocation, except
