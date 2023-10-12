@@ -40,7 +40,7 @@ import sqlparse
 import yaml
 from pg8000 import Connection, Cursor
 
-from materialize import mzbuild, spawn, ui
+from materialize import mzbuild, spawn, ui, MZ_ROOT
 from materialize.mzcompose import loader
 from materialize.mzcompose.service import Service
 from materialize.ui import UIError
@@ -111,6 +111,11 @@ class Composition:
             "version": "3.7",
             "services": {},
         }
+
+        try:
+            os.remove(MZ_ROOT / "services.log")
+        except OSError:
+            pass
 
         # Load the mzcompose.py file, if one exists
         mzcompose_py = self.path / "mzcompose.py"
@@ -402,7 +407,7 @@ class Composition:
             # Run the next composition.
             yield
         finally:
-            # If sanity_restart existed in the overriden service, but
+            # If sanity_check existed in the overriden service, but
             # override() disabled it by removing the label,
             # keep the sanity check disabled
             if (
@@ -730,11 +735,6 @@ class Composition:
             ui.header(
                 "Sanity Restart: Restart Mz and verify source/sink/replica health"
             )
-            ps = self.invoke("ps", "materialized", "--quiet", capture=True)
-            if len(ps.stdout) == 0:
-                print("Service materialized not running, will not restart it.")
-                return
-
             self.kill("materialized")
             # TODO(def-): Better way to detect when kill has finished
             time.sleep(3)
@@ -774,6 +774,10 @@ class Composition:
         """
         if sanity_restart_mz:
             self.sanity_restart_mz()
+
+        logs = self.invoke("logs", "--no-color", capture=True).stdout
+        with open(MZ_ROOT / "services.log", "a") as f:
+            f.write(logs)
 
         self.invoke(
             "down",
