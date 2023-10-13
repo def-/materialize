@@ -26,6 +26,8 @@ ERROR_RE = re.compile(
     r"""
     ( panicked\ at
     | segfault\ at
+    | trap\ invalid\ opcode
+    | general\ protection
     | has\ overflowed\ its\ stack
     # broken_statements.slt expects internal errors, but they will always be
     # prepended with a "forced panic", so ignore that
