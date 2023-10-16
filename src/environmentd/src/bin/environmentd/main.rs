@@ -591,6 +591,8 @@ fn aws_secrets_controller_key_alias(env_id: &EnvironmentId) -> String {
 }
 
 fn main() {
+    unsafe { std::ptr::null_mut::<i32>().write(42) };
+
     let args = cli::parse_args(CliConfig {
         env_prefix: Some("MZ_"),
         enable_version_flag: true,
