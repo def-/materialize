@@ -101,7 +101,6 @@ def run(
 
     workers = []
     threads = []
-    worker_rng = random.Random(rng.randrange(SEED_RANGE))
     for i in range(num_threads):
         weights: list[float]
         if complexity == Complexity.DDL:
@@ -112,6 +111,7 @@ def run(
             weights = [60, 30, 0, 0, 0]
         else:
             raise ValueError(f"Unknown complexity {complexity}")
+        worker_rng = random.Random(rng.randrange(SEED_RANGE))
         action_list = worker_rng.choices(
             [
                 read_action_list,
@@ -149,6 +149,7 @@ def run(
         threads.append(thread)
 
     if scenario == Scenario.Cancel:
+        worker_rng = random.Random(rng.randrange(SEED_RANGE))
         worker = Worker(
             worker_rng,
             [CancelAction(worker_rng, database, workers)],
@@ -166,6 +167,7 @@ def run(
         thread.start()
         threads.append(thread)
     elif scenario == Scenario.Kill:
+        worker_rng = random.Random(rng.randrange(SEED_RANGE))
         assert composition, "Kill scenario only works in mzcompose"
         worker = Worker(
             worker_rng,

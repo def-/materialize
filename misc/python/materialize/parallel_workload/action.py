@@ -316,7 +316,10 @@ class CreateIndexAction(Action):
         columns = self.rng.sample(table.columns, len(table.columns))
         columns_str = "_".join(column.name() for column in columns)
         # columns_str may exceed 255 characters, so it is converted to a positive number with hash
-        index_name = f"idx_{table.name()}_{abs(hash(columns_str))}"
+        columns_value = sum(
+            [10**i * c for i, c in enumerate(columns_str.encode("utf-8"))]
+        )
+        index_name = f"idx_{table.name()}_{columns_value}"
         index_elems = []
         for column in columns:
             order = self.rng.choice(["ASC", "DESC"])
