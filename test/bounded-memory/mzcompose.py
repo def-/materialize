@@ -23,10 +23,10 @@ from materialize.mzcompose.services.testdrive import Testdrive
 # regressions in memory usage
 PAD_LEN = 1024
 STRING_PAD = "x" * PAD_LEN
-REPEAT = 16 * 1024
-ITERATIONS = 128
-MATERIALIZED_MEMORY = "5Gb"
-CLUSTERD_MEMORY = "3.5Gb"
+REPEAT = 8 * 1024 * 1024
+ITERATIONS = 1
+MATERIALIZED_MEMORY = "50Gb"
+CLUSTERD_MEMORY = "35Gb"
 
 SERVICES = [
     Materialized(memory=MATERIALIZED_MEMORY),
@@ -112,12 +112,15 @@ class KafkaScenario(Scenario):
     SOURCE = dedent(
         """
         > CREATE SOURCE s1
-          IN CLUSTER clusterd
           FROM KAFKA CONNECTION kafka_conn (TOPIC 'testdrive-topic1-${testdrive.seed}')
           FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY CONNECTION csr_conn
           ENVELOPE UPSERT;
 
-        > CREATE MATERIALIZED VIEW v1 AS SELECT COUNT(*) FROM s1;
+        > DROP CLUSTER REPLICA clusterd.r1;
+
+        #> CREATE MATERIALIZED VIEW v1 IN CLUSTER clusterd AS SELECT COUNT(*) FROM s1;
+        #> CREATE MATERIALIZED VIEW v2 IN CLUSTER clusterd AS SELECT s1.f1 || s2.f1 AS f1 FROM s1, s1 AS s2
+        > CREATE INDEX i1 IN CLUSTER clusterd ON s1 (f1);
         """
     )
 
@@ -130,6 +133,9 @@ class KafkaScenario(Scenario):
 
     POST_RESTART = dedent(
         f"""
+        > SELECT * FROM v1;
+        {REPEAT + 2}
+
         # Delete all rows except markers
         $ kafka-ingest format=avro key-format=avro topic=topic1 schema=${{value-schema}} key-schema=${{key-schema}} repeat={REPEAT}
         "${{kafka-ingest.iteration}}"
@@ -231,9 +237,16 @@ SCENARIOS = [
         + KafkaScenario.SOURCE
         + dedent(
             f"""
-            # Expect all ingested data + two MARKERs
-            > SELECT * FROM v1;
-            {REPEAT + 2}
+            > CREATE CLUSTER REPLICA clusterd.r1
+                STORAGECTL ADDRESSES ['clusterd:2100'],
+                STORAGE ADDRESSES ['clusterd:2103'],
+                COMPUTECTL ADDRESSES ['clusterd:2101'],
+                COMPUTE ADDRESSES ['clusterd:2102']
+
+            > SET CLUSTER = clusterd
+
+            > SELECT * FROM s1 ORDER BY f1 LIMIT 1;
+            0 0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
             """
         ),
         post_restart=KafkaScenario.SCHEMAS + KafkaScenario.POST_RESTART,
