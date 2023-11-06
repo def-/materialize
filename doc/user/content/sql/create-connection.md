@@ -37,6 +37,7 @@ Field                                   | Value            | Required | Descript
 `BROKER`                                | `text`           | ✓        | The Kafka bootstrap server. Exclusive with `BROKERS`.
 `BROKERS`                               | `text[]`         |          | A comma-separated list of Kafka bootstrap servers. Exclusive with `BROKER`.
 `PROGRESS TOPIC`                        | `text`           |          | The name of a topic that Kafka sinks can use to track internal consistency metadata. If this is not specified, a default topic name will be selected.
+`SECURITY PROTOCOL`                     | `text`           |          | The security protocol to use: `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, or `SASL_SSL`. Defaults to `SASL_SSL` if [SASL options](#kafka-auth-sasl-options) are specified, otherwise `SSL`.
 `SSH TUNNEL`                            | object name      |          | The name of an [SSH tunnel connection](#ssh-tunnel) to route network traffic through by default.
 
 #### `WITH` options {#kafka-with-options}
@@ -50,18 +51,20 @@ Field         | Value     | Description
 {{< tabs >}}
 {{< tab "SSL">}}
 
-To connect to a Kafka broker that requires [SSL authentication](https://docs.confluent.io/platform/current/kafka/authentication_ssl.html),
+To connect to a Kafka broker that requires [SSL encryption or authentication](https://docs.confluent.io/platform/current/kafka/authentication_ssl.html),
 use the following options:
 
 ##### SSL options {#kafka-auth-ssl-options}
 
 Field                       | Value            | Required | Description
 ----------------------------|------------------|:--------:|------------------
-`SSL CERTIFICATE AUTHORITY` | secret or `text` |          | The certificate authority (CA) certificate in PEM format. Used for both SSL client and server authentication. If unspecified, uses the system's default CA certificates.
-`SSL CERTIFICATE`           | secret or `text` | ✓        | Your SSL certificate in PEM format. Required for SSL client authentication.
-`SSL KEY`                   | secret           | ✓        | Your SSL certificate's key in PEM format. Required for SSL client authentication.
+`SSL CERTIFICATE AUTHORITY` | secret or `text` |          | The certificate authority (CA) certificate in PEM format. Used to validate the brokers' TLS certificates. If unspecified, uses the system's default CA certificates.
+`SSL CERTIFICATE`           | secret or `text` |          | Your SSL certificate in PEM format for SSL client authentication. If unspecified, no client authentication is performed.
+`SSL KEY`                   | secret           |          | Your SSL certificate's key in PEM format. Required if `SSL KEY` is specified.
 
 ##### Example {#kafka-auth-ssl-example}
+
+With both TLS encryption and TLS client authentication:
 
 ```sql
 CREATE SECRET kafka_ssl_crt AS '<BROKER_SSL_CRT>';
@@ -69,10 +72,27 @@ CREATE SECRET kafka_ssl_key AS '<BROKER_SSL_KEY>';
 
 CREATE CONNECTION kafka_connection TO KAFKA (
     BROKER 'rp-f00000bar.data.vectorized.cloud:30365',
+    SECURITY PROTOCOL = 'SSL'
     SSL KEY = SECRET kafka_ssl_key,
     SSL CERTIFICATE = SECRET kafka_ssl_crt
 );
 ```
+
+With only TLS encryption:
+
+{{< warning >}}
+It is insecure to use TLS encryption with no authentication unless
+you are using a [network security connection](#network-security-connections)
+to tunnel into a private network as shown below.
+{{< /warning >}}
+
+```sql
+CREATE CONNECTION kafka_connection TO KAFKA (
+    BROKER = 'rp-f00000bar.data.vectorized.cloud:30365' USING SSH TUNNEL ssh_connection,
+    SECURITY PROTOCOL = 'SSL'
+);
+```
+
 
 {{< /tab >}}
 
@@ -85,21 +105,63 @@ use the following options.
 
 Field                                   | Value            | Required | Description
 ----------------------------------------|------------------|:--------:|-------------------------------
-`SASL MECHANISMS`                       | `text`           | ✓        | The SASL mechanism to use for authentication. Supported: `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`.
-`SASL USERNAME`                         | secret or `text` | ✓        | Your SASL username, if any. Required if `SASL MECHANISMS` is `PLAIN`.
-`SASL PASSWORD`                         | secret           | ✓        | Your SASL password, if any. Required if `SASL MECHANISMS` is `PLAIN`.
-`SSL CERTIFICATE AUTHORITY`             | secret or `text` |          | The certificate authority (CA) certificate. Used for both SSL client and server authentication. If unspecified, uses the system's default CA certificates.
+`SASL MECHANISMS`                       | `text`           | ✓        | The SASL mechanism to use for authentication: `PLAIN`, `SCRAM-SHA-256`, or `SCRAM-SHA-512`.
+`SASL USERNAME`                         | secret or `text` | ✓        | Your SASL username.
+`SASL PASSWORD`                         | secret           | ✓        | Your SASL password.
+`SSL CERTIFICATE AUTHORITY`             | secret or `text` |          | The certificate authority (CA) certificate. Used to validate the brokers' TLS certificates. If unspecified, uses the system's default CA certificates.
 
 ##### Example {#kafka-auth-sasl-example}
+
+With TLS encryption:
 
 ```sql
 CREATE SECRET kafka_password AS '<BROKER_PASSWORD>';
 
 CREATE CONNECTION kafka_connection TO KAFKA (
     BROKER 'unique-jellyfish-0000-kafka.upstash.io:9092',
+    SECURITY PROTOCOL = 'SASL_SSL',
     SASL MECHANISMS = 'SCRAM-SHA-256',
     SASL USERNAME = 'foo',
     SASL PASSWORD = SECRET kafka_password
+);
+```
+
+Without TLS encryption:
+
+{{< warning >}}
+It is insecure to use SASL authentication without TLS encryption unless
+you are using a [network security connection](#network-security-connections)
+to tunnel into a private network as shown below.
+{{< /warning >}}
+
+```sql
+CREATE SECRET kafka_password AS '<BROKER_PASSWORD>';
+
+CREATE CONNECTION kafka_connection TO KAFKA (
+    BROKER 'unique-jellyfish-0000-kafka.upstash.io:9092' USING SSH TUNNEL ssh_connection,
+    SECURITY PROTOCOL = 'SASL_PLAINTEXT',
+    SASL MECHANISMS = 'SCRAM-SHA-256',
+    SASL USERNAME = 'foo',
+    SASL PASSWORD = SECRET kafka_password,
+);
+```
+
+{{< /tab >}}
+
+{{< tab "None">}}
+
+To connect to a Kafka broker that requires no authentication:
+
+{{< warning >}}
+It is insecure to use an unauthenticated Kafka broker unless
+you are using a [network security connection](#network-security-connections)
+to tunnel into a private network as shown below.
+{{< /warning >}}
+
+```sql
+CREATE CONNECTION kafka_connection TO KAFKA (
+    BROKER 'unique-jellyfish-0000-kafka.upstash.io:9092' USING SSH TUNNEL ssh_connection,
+    SECURITY PROTOCOL = 'PLAINTEXT',
 );
 ```
 

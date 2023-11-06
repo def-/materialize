@@ -270,7 +270,7 @@ pub struct SaslConfig {
     pub sasl_mechanism: String,
     pub username: StringOrSecret,
     pub password: GlobalId,
-    pub tls_root_cert: Option<StringOrSecret>,
+    pub tls: Option<SaslTlsConfig>,
 }
 
 impl Arbitrary for SaslConfig {
@@ -282,36 +282,27 @@ impl Arbitrary for SaslConfig {
             any::<String>(),
             StringOrSecret::arbitrary(),
             GlobalId::arbitrary(),
-            proptest::option::of(any::<StringOrSecret>()),
+            <Option<SaslTlsConfig>>::arbitrary(),
         )
-            .prop_map(
-                |(sasl_mechanism, username, password, tls_root_cert)| SaslConfig {
-                    sasl_mechanism,
-                    username,
-                    password,
-                    tls_root_cert,
-                },
-            )
+            .prop_map(|(sasl_mechanism, username, password, tls)| SaslConfig {
+                sasl_mechanism,
+                username,
+                password,
+                tls,
+            })
             .boxed()
     }
+}
+
+#[derive(Arbitrary, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SaslTlsConfig {
+    pub root_cert: Option<StringOrSecret>,
 }
 
 #[derive(Arbitrary, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum KafkaSecurity {
     Tls(KafkaTlsConfig),
     Sasl(SaslConfig),
-}
-
-impl From<KafkaTlsConfig> for KafkaSecurity {
-    fn from(c: KafkaTlsConfig) -> Self {
-        KafkaSecurity::Tls(c)
-    }
-}
-
-impl From<SaslConfig> for KafkaSecurity {
-    fn from(c: SaslConfig) -> Self {
-        KafkaSecurity::Sasl(c)
-    }
 }
 
 /// Specifies a Kafka broker in a [`KafkaConnection`].
@@ -433,14 +424,21 @@ impl KafkaConnection {
                 sasl_mechanism: mechanisms,
                 username,
                 password,
-                tls_root_cert: certificate_authority,
+                tls,
             })) => {
-                options.insert("security.protocol".into(), "SASL_SSL".into());
                 options.insert("sasl.mechanisms".into(), StringOrSecret::String(mechanisms));
                 options.insert("sasl.username".into(), username);
                 options.insert("sasl.password".into(), StringOrSecret::Secret(password));
-                if let Some(certificate_authority) = certificate_authority {
-                    options.insert("ssl.ca.pem".into(), certificate_authority);
+                match tls {
+                    None => {
+                        options.insert("security.protocol".into(), "SASL_PLAIN".into());
+                    }
+                    Some(tls) => {
+                        options.insert("security.protocol".into(), "SASL_SSL".into());
+                        if let Some(root_cert) = tls.root_cert {
+                            options.insert("ssl.ca.pem".into(), root_cert);
+                        }
+                    }
                 }
             }
             None => (),
@@ -621,7 +619,7 @@ impl RustType<ProtoKafkaConnectionSaslConfig> for SaslConfig {
             sasl_mechanism: self.sasl_mechanism.into_proto(),
             username: Some(self.username.into_proto()),
             password: Some(self.password.into_proto()),
-            tls_root_cert: self.tls_root_cert.into_proto(),
+            tls: self.tls.into_proto(),
         }
     }
 
@@ -634,7 +632,21 @@ impl RustType<ProtoKafkaConnectionSaslConfig> for SaslConfig {
             password: proto
                 .password
                 .into_rust_if_some("ProtoKafkaConnectionSaslConfig::password")?,
-            tls_root_cert: proto.tls_root_cert.into_rust()?,
+            tls: proto.tls.into_rust()?,
+        })
+    }
+}
+
+impl RustType<ProtoKafkaConnectionSaslTlsConfig> for SaslTlsConfig {
+    fn into_proto(&self) -> ProtoKafkaConnectionSaslTlsConfig {
+        ProtoKafkaConnectionSaslTlsConfig {
+            root_cert: self.root_cert.into_proto(),
+        }
+    }
+
+    fn from_proto(proto: ProtoKafkaConnectionSaslTlsConfig) -> Result<Self, TryFromProtoError> {
+        Ok(SaslTlsConfig {
+            root_cert: proto.root_cert.into_rust()?,
         })
     }
 }
