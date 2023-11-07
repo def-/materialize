@@ -53,6 +53,7 @@ from materialize.mzcompose.services.redpanda import Redpanda
 from materialize.mzcompose.services.schema_registry import SchemaRegistry
 from materialize.mzcompose.services.testdrive import Testdrive
 from materialize.mzcompose.services.zookeeper import Zookeeper
+from materialize.mzcompose.services.balancerd import Balancerd
 from materialize.version_list import VersionsFromDocs
 
 #
@@ -93,13 +94,12 @@ SERVICES = [
     Redpanda(),
     Cockroach(setup_materialize=True),
     Minio(setup_materialize=True),
-    Materialized(),
-    Testdrive(
-        default_timeout=default_timeout,
-        materialize_params={"statement_timeout": f"'{default_timeout}'"},
-    ),
     KgenService(),
     Postgres(),
+    Balancerd(),
+    # Overridden below
+    Materialized(),
+    Testdrive(),
 ]
 
 
@@ -118,14 +118,16 @@ def run_one_scenario(
     common_seed = round(time.time())
 
     for mz_id, instance in enumerate(["this", "other"]):
-        tag, size, params = (
-            (args.this_tag, args.this_size, args.this_params)
+        balancerd, tag, size, params = (
+            (args.this_balancerd, args.this_tag, args.this_size, args.this_params)
             if instance == "this"
-            else (args.other_tag, args.other_size, args.other_params)
+            else (args.other_balancerd, args.other_tag, args.other_size, args.other_params)
         )
 
         if tag == "common-ancestor":
             tag = benchmark_utils.resolve_tag_of_common_ancestor()
+
+        entrypoint_host = "balancerd" if balancerd else "materialized"
 
         c.up("testdrive", persistent=True)
 
@@ -152,10 +154,18 @@ def run_one_scenario(
             mz = create_mz_service(mz_image, size, additional_system_parameter_defaults)
 
         start_overridden_mz_and_cockroach(c, mz, instance)
+        if balancerd:
+           c.up("balancerd")
 
-        executor = Docker(composition=c, seed=common_seed, materialized=mz)
+        with c.override(
+          Testdrive(
+            materialize_url = f"postgres://materialize@{entrypoint_host}:6875",
+            default_timeout=default_timeout,
+            materialize_params={"statement_timeout": f"'{default_timeout}'"})
+        ):
+          executor = Docker(composition=c, seed=common_seed, materialized=mz)
 
-        benchmark = Benchmark(
+          benchmark = Benchmark(
             mz_id=mz_id,
             scenario=scenario,
             scale=args.scale,
@@ -164,11 +174,11 @@ def run_one_scenario(
             termination_conditions=make_termination_conditions(args),
             aggregation_class=make_aggregation_class(),
             measure_memory=args.measure_memory,
-        )
+          )
 
-        aggregations = benchmark.run()
-        for aggregation, comparator in zip(aggregations, comparators):
-            comparator.append(aggregation.aggregate())
+          aggregations = benchmark.run()
+          for aggregation, comparator in zip(aggregations, comparators):
+              comparator.append(aggregation.aggregate())
 
         c.kill("cockroach", "materialized", "testdrive")
         c.rm("cockroach", "materialized", "testdrive")
@@ -238,6 +248,13 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
     )
 
     parser.add_argument(
+        "--this-balancerd",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use balancerd for THIS"
+    )
+
+    parser.add_argument(
         "--this-params",
         metavar="PARAMS",
         type=str,
@@ -259,6 +276,13 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
         type=str,
         default=os.getenv("OTHER_PARAMS", None),
         help="Semicolon-separated list of parameter=value pairs to apply to the 'OTHER' Mz instance",
+    )
+
+    parser.add_argument(
+        "--other-balancerd",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use balancerd for OTHER"
     )
 
     parser.add_argument(
@@ -313,9 +337,11 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
             f"""
             this_tag: {args.this_tag}
             this_size: {args.this_size}
+            this_balancerd: {args.this_balancerd}
 
             other_tag: {args.other_tag}
             other_size: {args.other_size}
+            other_balancerd: {args.other_balancerd}
 
             root_scenario: {args.root_scenario}"""
         )

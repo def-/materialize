@@ -17,6 +17,7 @@ from materialize.mzcompose.composition import Composition, WorkflowArgumentParse
 from materialize.mzcompose.services.clusterd import Clusterd
 from materialize.mzcompose.services.kafka import Kafka
 from materialize.mzcompose.services.materialized import Materialized
+from materialize.mzcompose.services.balancerd import Balancerd
 from materialize.mzcompose.services.schema_registry import SchemaRegistry
 from materialize.mzcompose.services.testdrive import Testdrive
 from materialize.mzcompose.services.zookeeper import Zookeeper
@@ -1090,16 +1091,17 @@ class GroupBy(Generator):
 
 
 class Unions(Generator):
-    COUNT = min(
-        Generator.COUNT, 10
-    )  # https://github.com/MaterializeInc/materialize/issues/8600
+    COUNT = 500
+# min(
+    #     Generator.COUNT, 200
+    # )  # https://github.com/MaterializeInc/materialize/issues/8600
 
     @classmethod
     def body(cls) -> None:
         print("> CREATE TABLE t1 (f1 INTEGER);")
         print("> INSERT INTO t1 VALUES (0)")
 
-        union_list = " UNION DISTINCT ".join(
+        union_list = " UNION ALL ".join(
             f"(SELECT f1 + {i} FROM t1 AS a{i})" for i in cls.all()
         )
         print(f">SELECT COUNT(*) FROM ({union_list})")
@@ -1404,7 +1406,8 @@ SERVICES = [
     # We create all sources, sinks and dataflows by default with SIZE '1'
     # The workflow_instance_size workflow is testing multi-process clusters
     Materialized(memory="8G", default_size=1),
-    Testdrive(default_timeout="120s"),
+    Testdrive(default_timeout="120s", materialize_url = "postgres://materialize@balancerd:6875"),
+    Balancerd()
 ]
 
 
@@ -1424,9 +1427,7 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
     )
     args = parser.parse_args()
 
-    c.up("zookeeper", "kafka", "schema-registry")
-
-    c.up("materialized")
+    c.up("zookeeper", "kafka", "schema-registry", "materialized","balancerd")
 
     nodes = [
         Clusterd(name="clusterd_1_1"),

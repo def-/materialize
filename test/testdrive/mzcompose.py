@@ -18,6 +18,7 @@ from materialize.mzcompose.services.redpanda import Redpanda
 from materialize.mzcompose.services.schema_registry import SchemaRegistry
 from materialize.mzcompose.services.testdrive import Testdrive
 from materialize.mzcompose.services.zookeeper import Zookeeper
+from materialize.mzcompose.services.balancerd import Balancerd
 
 SERVICES = [
     Zookeeper(),
@@ -27,6 +28,7 @@ SERVICES = [
     Localstack(),
     Materialized(),
     Testdrive(),
+    Balancerd()
 ]
 
 
@@ -70,7 +72,7 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
     )
     args = parser.parse_args()
 
-    dependencies = ["materialized"]
+    dependencies = ["materialized", "balancerd"]
     if args.redpanda:
         dependencies += ["redpanda"]
     else:
@@ -80,6 +82,7 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
         dependencies += ["localstack"]
 
     testdrive = Testdrive(
+        materialize_url = "postgres://materialize@balancerd:6875",
         forward_buildkite_shard=True,
         kafka_default_partitions=args.kafka_default_partitions,
         aws_region=args.aws_region,
