@@ -7,15 +7,9 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0.
 
-import os
-import random
 
-from materialize.mzcompose import (
-    DEFAULT_MZ_VOLUMES,
-)
 from materialize.mzcompose.service import (
     Service,
-    ServiceDependency,
 )
 
 
@@ -24,7 +18,7 @@ class Balancerd(Service):
         self,
         name: str = "balancerd",
         mzbuild: str = "balancerd",
-        entrypoint: str | None = None
+        entrypoint: list[str] | None = None,
     ) -> None:
         if entrypoint is None:
             entrypoint = [
@@ -34,7 +28,7 @@ class Balancerd(Service):
                 "--https-listen-addr=0.0.0.0:6876",
                 "--internal-http-listen-addr=0.0.0.0:6878",
                 "--static-resolver-addr=materialized:6875",
-                "--https-resolver-template='{}:6876'"
+                "--https-resolver-template='{}:6876'",
             ]
 
         super().__init__(
