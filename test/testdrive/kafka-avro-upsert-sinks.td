@@ -165,10 +165,10 @@ $ kafka-create-topic topic=input
 $ kafka-ingest format=avro topic=input schema=${schema}
 {"array":[{"data":{"a":1,"b":1},"time":1,"diff":1}]}
 {"array":[{"data":{"a":2,"b":2},"time":1,"diff":1}]}
-{"array":[{"data":{"a":3,"b":1},"time":2,"diff":1}]}
-{"array":[{"data":{"a":4,"b":2},"time":2,"diff":1}]}
-{"array":[{"data":{"a":1,"b":7},"time":3,"diff":1}]}
-{"com.materialize.cdc.progress":{"lower":[0],"upper":[4],"counts":[{"time":1,"count":2},{"time":2,"count":2}, {"time": 3, "count": 1}]}}
+{"array":[{"data":{"a":3,"b":1},"time":4,"diff":1}]}
+{"array":[{"data":{"a":4,"b":2},"time":4,"diff":1}]}
+{"array":[{"data":{"a":1,"b":7},"time":7,"diff":1}]}
+{"com.materialize.cdc.progress":{"lower":[0],"upper":[4],"counts":[{"time":1,"count":2},{"time":4,"count":2}, {"time": 7, "count": 1}]}}
 
 > SELECT * FROM input;
 a  b
@@ -188,11 +188,11 @@ $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.p
 1	{"a": 2} {"a": 2, "b": 2}
 
 $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.public.input_sink sort-messages=true
-2	{"a": 3} {"a": 3, "b": 1}
-2	{"a": 4} {"a": 4, "b": 2}
+4	{"a": 3} {"a": 3, "b": 1}
+4	{"a": 4} {"a": 4, "b": 2}
 
 $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.public.input_sink sort-messages=true
-3	{"a": 1} {"a": 1, "b": 7}
+7	{"a": 1} {"a": 1, "b": 7}
 
 # Again, compare split by transaction. See comment just above.
 
@@ -201,14 +201,14 @@ $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.p
 1	{"a": 2, "b": 2} {"a": 2, "b": 2}
 
 $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.public.input_sink_multiple_keys sort-messages=true
-2	{"a": 3, "b": 1} {"a": 3, "b": 1}
-2	{"a": 4, "b": 2} {"a": 4, "b": 2}
+4	{"a": 3, "b": 1} {"a": 3, "b": 1}
+4	{"a": 4, "b": 2} {"a": 4, "b": 2}
 
 # missing key denotes DELETE
 
 $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.public.input_sink_multiple_keys sort-messages=true
-3 {"a": 1, "b": 1}
-3	{"a": 1, "b": 7} {"a": 1, "b": 7}
+7 {"a": 1, "b": 1}
+7	{"a": 1, "b": 7} {"a": 1, "b": 7}
 
 # verify if/when input deletions are emitted to an UPSERT sink
 
@@ -232,21 +232,21 @@ $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.p
 1	{"a": 1} {"a": 1, "b": 1}
 
 $ kafka-ingest format=avro topic=input-with-deletions schema=${schema}
-{"array":[{"data":{"a":1,"b":2},"time":2,"diff":1}]}
-{"com.materialize.cdc.progress":{"lower":[2],"upper":[3],"counts":[{"time":2,"count":1}]}}
+{"array":[{"data":{"a":1,"b":2},"time":4,"diff":1}]}
+{"com.materialize.cdc.progress":{"lower":[2],"upper":[3],"counts":[{"time":4,"count":1}]}}
 
 $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.public.input_with_deletions_sink sort-messages=true
-2	{"a": 1} {"a": 1, "b": 2}
+4	{"a": 1} {"a": 1, "b": 2}
 
 # deletion of the "shadowed" input should not cause downstream updates
 
 $ kafka-ingest format=avro topic=input-with-deletions schema=${schema}
-{"array":[{"data":{"a":1,"b":1},"time":3,"diff":-1}]}
-{"com.materialize.cdc.progress":{"lower":[3],"upper":[4],"counts":[{"time":3,"count":1}]}}
+{"array":[{"data":{"a":1,"b":1},"time":7,"diff":-1}]}
+{"com.materialize.cdc.progress":{"lower":[3],"upper":[4],"counts":[{"time":7,"count":1}]}}
 
 $ kafka-ingest format=avro topic=input-with-deletions schema=${schema}
-{"array":[{"data":{"a":1,"b":2},"time":4,"diff":-1}]}
-{"com.materialize.cdc.progress":{"lower":[4],"upper":[5],"counts":[{"time":4,"count":1}]}}
+{"array":[{"data":{"a":1,"b":2},"time":10,"diff":-1}]}
+{"com.materialize.cdc.progress":{"lower":[4],"upper":[5],"counts":[{"time":10,"count":1}]}}
 
 # now we should see a NULL update on the key, which means a DELETE
 
@@ -254,16 +254,16 @@ $ kafka-verify-data format=avro sink=materialize.public.input_with_deletions_sin
 {"a": 1}
 
 $ kafka-ingest format=avro topic=input-with-deletions schema=${schema}
-{"array":[{"data":{"a":1,"b":1},"time":5,"diff":1}]}
-{"array":[{"data":{"a":1,"b":2},"time":5,"diff":1}]}
-{"com.materialize.cdc.progress":{"lower":[5],"upper":[6],"counts":[{"time":5,"count":2}]}}
+{"array":[{"data":{"a":1,"b":1},"time":13,"diff":1}]}
+{"array":[{"data":{"a":1,"b":2},"time":13,"diff":1}]}
+{"com.materialize.cdc.progress":{"lower":[5],"upper":[6],"counts":[{"time":13,"count":2}]}}
 
 $ kafka-verify-data headers=materialize-timestamp format=avro sink=materialize.public.input_with_deletions_sink sort-messages=true
 5	{"a": 1} {"a": 1, "b": 2}
 
 $ kafka-ingest format=avro topic=input-with-deletions schema=${schema}
-{"array":[{"data":{"a":1,"b":2},"time":6,"diff":-1}]}
-{"com.materialize.cdc.progress":{"lower":[6],"upper":[7],"counts":[{"time":6,"count":1}]}}
+{"array":[{"data":{"a":1,"b":2},"time":16,"diff":-1}]}
+{"com.materialize.cdc.progress":{"lower":[6],"upper":[7],"counts":[{"time":16,"count":1}]}}
 
 # removing the occluding input should "reveal" the previous input again
 #
@@ -286,13 +286,13 @@ $ kafka-create-topic topic=non-keyed-input
 $ kafka-ingest format=avro topic=non-keyed-input schema=${schema}
 {"array":[{"data":{"a":1,"b":1},"time":1,"diff":1}]}
 {"array":[{"data":{"a":2,"b":1},"time":1,"diff":1}]}
-{"array":[{"data":{"a":1,"b":1},"time":2,"diff":-1}]}
-{"array":[{"data":{"a":2,"b":1},"time":2,"diff":-1}]}
-{"array":[{"data":{"a":1,"b":2},"time":2,"diff":1}]}
-{"array":[{"data":{"a":2,"b":2},"time":2,"diff":1}]}
-{"array":[{"data":{"a":1,"b":2},"time":3,"diff":-1}]}
-{"array":[{"data":{"a":2,"b":2},"time":3,"diff":-1}]}
-{"com.materialize.cdc.progress":{"lower":[0],"upper":[10],"counts":[{"time":1,"count":2}, {"time":2,"count":4}, {"time":3,"count":2}]}}
+{"array":[{"data":{"a":1,"b":1},"time":4,"diff":-1}]}
+{"array":[{"data":{"a":2,"b":1},"time":4,"diff":-1}]}
+{"array":[{"data":{"a":1,"b":2},"time":4,"diff":1}]}
+{"array":[{"data":{"a":2,"b":2},"time":4,"diff":1}]}
+{"array":[{"data":{"a":1,"b":2},"time":7,"diff":-1}]}
+{"array":[{"data":{"a":2,"b":2},"time":7,"diff":-1}]}
+{"com.materialize.cdc.progress":{"lower":[0],"upper":[10],"counts":[{"time":1,"count":2}, {"time":4,"count":4}, {"time":7,"count":2}]}}
 
 # Verify that the update appears as an upsert instead of a create + delete, even when keys are not enforced.
 $ kafka-verify-data headers=materialize-timestamp format=avro topic=not-enforced-sink-${testdrive.seed} sort-messages=true
@@ -300,12 +300,12 @@ $ kafka-verify-data headers=materialize-timestamp format=avro topic=not-enforced
 1	{"a": 2} {"a": 2, "b": 1}
 
 $ kafka-verify-data headers=materialize-timestamp format=avro topic=not-enforced-sink-${testdrive.seed} sort-messages=true
-2	{"a": 1} {"a": 1, "b": 2}
-2	{"a": 2} {"a": 2, "b": 2}
+4	{"a": 1} {"a": 1, "b": 2}
+4	{"a": 2} {"a": 2, "b": 2}
 
 $ kafka-verify-data headers=materialize-timestamp format=avro topic=not-enforced-sink-${testdrive.seed} sort-messages=true
-3	{"a": 1}
-3	{"a": 2}
+7	{"a": 1}
+7	{"a": 2}
 
 # Bad upsert keys
 
