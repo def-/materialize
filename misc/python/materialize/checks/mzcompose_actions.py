@@ -59,6 +59,7 @@ class StartMz(MzcomposeAction):
             system_parameter_defaults=self.system_parameter_defaults,
             additional_system_parameter_defaults=additional_system_parameter_defaults,
             sanity_restart=False,
+            catalog_store="stash",
         )
 
         with c.override(mz):
