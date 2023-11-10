@@ -25,8 +25,8 @@ SERVICES = [
         port="30123:30123",
         allow_host_ports=True,
         environment_extra=[
-            "KAFKA_ADVERTISED_LISTENERS=HOST://localhost:30123,PLAINTEXT://kafka:9092",
-            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=HOST:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+            "KAFKA_ADVERTISED_LISTENERS=HOST://localhost:30123,SSL://kafka:9092",
+            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=HOST:SSL,SSL:SSL",
         ],
     ),
     SchemaRegistry(),

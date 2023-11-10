@@ -41,7 +41,7 @@ class Kafka(Service):
         environment_extra: list[str] = [],
         depends_on_extra: list[str] = [],
         volumes: list[str] = [],
-        listener_type: str = "PLAINTEXT",
+        listener_type: str = "SSL",
     ) -> None:
         environment = [
             *environment,
