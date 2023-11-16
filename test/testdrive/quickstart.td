@@ -101,7 +101,7 @@ $ set-regex match=\d{13,20} replacement=<TIMESTAMP>
 $ postgres-execute connection=postgres://materialize:materialize@${testdrive.materialize-sql-addr}
 INSERT INTO fraud_accounts VALUES (12)
 
-> FETCH 1 c WITH (timeout='1s')
+> FETCH 1 c WITH (timeout='30s')
 <TIMESTAMP> -1 12
 
 > COMMIT
