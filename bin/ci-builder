@@ -191,6 +191,7 @@ case "$cmd" in
             --env POSTGRES_URL
             --env COCKROACH_URL
             --env MZ_SOFT_ASSERTIONS
+            --env MALLOC_CONF
         )
 
         if [[ $detach_container == "true" ]]; then

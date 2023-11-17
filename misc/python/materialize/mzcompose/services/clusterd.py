@@ -29,6 +29,7 @@ class Clusterd(Service):
         environment = [
             "CLUSTERD_LOG_FILTER",
             "MZ_SOFT_ASSERTIONS=1",
+            "MALLOC_CONF=tcache:false,lg_extent_max_active_fit:20,dirty_decay_ms:0,muzzy_decay_ms:0",
             *environment_extra,
         ]
 

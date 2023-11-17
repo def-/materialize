@@ -69,6 +69,7 @@ class Materialized(Service):
             "MZ_ORCHESTRATOR_PROCESS_PROMETHEUS_SERVICE_DISCOVERY_DIRECTORY=/mzdata/prometheus",
             "MZ_BOOTSTRAP_ROLE=materialize",
             "MZ_INTERNAL_PERSIST_PUBSUB_LISTEN_ADDR=0.0.0.0:6879",
+            "MALLOC_CONF=tcache:false,lg_extent_max_active_fit:20,dirty_decay_ms:0,muzzy_decay_ms:0",
             # Please think twice before forwarding additional environment
             # variables from the host, as it's easy to write tests that are
             # then accidentally dependent on the state of the host machine.
