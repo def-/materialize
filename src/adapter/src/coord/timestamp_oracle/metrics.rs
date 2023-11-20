@@ -13,8 +13,9 @@ use std::time::{Duration, Instant};
 
 use mz_ore::metric;
 use mz_ore::metrics::{Counter, IntCounter, MetricsRegistry};
+use mz_ore::stats::HISTOGRAM_COUNT_BUCKETS;
 use mz_postgres_client::metrics::PostgresClientMetrics;
-use prometheus::{CounterVec, IntCounterVec};
+use prometheus::{CounterVec, Histogram, HistogramVec, IntCounterVec};
 
 use crate::coord::timestamp_oracle::retry::RetryStream;
 
@@ -28,6 +29,11 @@ pub struct Metrics {
     /// Metrics for
     /// [`TimestampOracle`](crate::coord::timestamp_oracle::TimestampOracle).
     pub oracle: OracleMetrics,
+
+    /// Metrics recording how many operations we batch into one oracle call, for
+    /// those operations that _do_ support batching, and only when using the
+    /// `BatchingTimestampOracle` wrapper.
+    pub batching: BatchingMetrics,
 
     /// Metrics for each retry loop.
     pub retries: RetriesMetrics,
@@ -56,6 +62,7 @@ impl Metrics {
 
         Metrics {
             oracle: vecs.oracle_metrics(timeline),
+            batching: vecs.batching_metrics(timeline),
             retries: vecs.retries_metrics(timeline),
             postgres_client: PostgresClientMetrics::new(registry, &pg_client_metrics_prefix),
             _vecs: vecs,
@@ -74,6 +81,8 @@ struct MetricsVecs {
     retry_finished: IntCounterVec,
     retry_retries: IntCounterVec,
     retry_sleep_seconds: CounterVec,
+
+    batched_op_count: HistogramVec,
 }
 
 impl MetricsVecs {
@@ -120,6 +129,13 @@ impl MetricsVecs {
                 help: "time spent in retry loop backoff",
                 var_labels: ["timeline", "op"],
             )),
+
+            batched_op_count: registry.register(metric!(
+                name: "mz_ts_oracle_batched_op_count",
+                help: "number of operations that were batched into one external operation",
+                var_labels: ["timeline", "op"],
+                buckets: HISTOGRAM_COUNT_BUCKETS.to_vec(),
+            )),
         }
     }
 
@@ -140,6 +156,14 @@ impl MetricsVecs {
                 .with_label_values(&[timeline, op]),
             failed: self.external_op_failed.with_label_values(&[timeline, op]),
             seconds: self.external_op_seconds.with_label_values(&[timeline, op]),
+        }
+    }
+
+    fn batching_metrics(&self, timeline: &str) -> BatchingMetrics {
+        BatchingMetrics {
+            read_ts: self
+                .batched_op_count
+                .with_label_values(&[timeline, "read_ts"]),
         }
     }
 
@@ -202,6 +226,11 @@ pub struct OracleMetrics {
     pub peek_write_ts: ExternalOpMetrics,
     pub read_ts: ExternalOpMetrics,
     pub apply_write: ExternalOpMetrics,
+}
+
+#[derive(Debug)]
+pub struct BatchingMetrics {
+    pub read_ts: Histogram,
 }
 
 #[derive(Debug)]

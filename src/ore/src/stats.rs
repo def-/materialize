@@ -75,3 +75,6 @@ pub const HISTOGRAM_BYTE_BUCKETS: [f64; 7] = [
     67108864.0,
     1073741824.0,
 ];
+
+/// Buckets that capture a count of things.
+pub const HISTOGRAM_COUNT_BUCKETS: [f64; 9] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0];
