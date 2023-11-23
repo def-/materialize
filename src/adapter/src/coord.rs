@@ -1038,7 +1038,7 @@ pub struct Coordinator {
     metrics: Metrics,
 
     /// For registering new metrics.
-    timestamp_oracle_metrics: Arc<timestamp_oracle::metrics::Metrics>,
+    metrics_registry: MetricsRegistry,
 
     /// Tracing handle.
     tracing_handle: TracingHandle,
@@ -2286,8 +2286,6 @@ pub fn serve(
 
         let metrics = Metrics::register_into(&metrics_registry);
         let metrics_clone = metrics.clone();
-        let timestamp_oracle_metrics =
-            Arc::new(timestamp_oracle::metrics::Metrics::new(&metrics_registry));
         let segment_client_clone = segment_client.clone();
         let span = tracing::Span::current();
         let coord_now = now.clone();
@@ -2298,12 +2296,17 @@ pub fn serve(
         // use the same impl!
         let timestamp_oracle_impl = catalog.system_config().timestamp_oracle_impl();
 
-        let initial_timestamps = get_initial_oracle_timestamps(
-            &catalog,
-            &timestamp_oracle_url,
-            &timestamp_oracle_metrics,
-        )
-        .await?;
+        // We create a throwaway MetricsRegistry just for
+        // get_initial_oracle_timestamps, because we cannot create a
+        // timeline-scoped Metrics object, and because we don't need the metrics
+        // from this one call.
+        let dummy_oracle_metrics = Arc::new(timestamp_oracle::metrics::Metrics::new(
+            &MetricsRegistry::new(),
+            "all_timelines",
+        ));
+        let initial_timestamps =
+            get_initial_oracle_timestamps(&catalog, &timestamp_oracle_url, dummy_oracle_metrics)
+                .await?;
 
         let thread = thread::Builder::new()
             // The Coordinator thread tends to keep a lot of data on its stack. To
@@ -2326,7 +2329,7 @@ pub fn serve(
                         timestamp_oracle_impl,
                         persistence,
                         timestamp_oracle_url.clone(),
-                        &timestamp_oracle_metrics,
+                        &metrics_registry,
                         &mut timestamp_oracles,
                     ));
                 }
@@ -2364,7 +2367,7 @@ pub fn serve(
                     storage_usage_collection_interval,
                     segment_client,
                     metrics,
-                    timestamp_oracle_metrics,
+                    metrics_registry,
                     tracing_handle,
                     statement_logging: StatementLogging::new(),
                     webhook_concurrency_limit,
@@ -2443,7 +2446,7 @@ pub fn serve(
 async fn get_initial_oracle_timestamps(
     catalog: &Catalog,
     pg_timestamp_oracle_url: &Option<String>,
-    timestamp_oracle_metrics: &Arc<timestamp_oracle::metrics::Metrics>,
+    timestamp_oracle_metrics: Arc<timestamp_oracle::metrics::Metrics>,
 ) -> Result<BTreeMap<Timeline, Timestamp>, AdapterError> {
     let catalog_oracle_timestamps = catalog.get_all_persisted_timestamps().await?;
     let debug_msg = || {
@@ -2459,10 +2462,8 @@ async fn get_initial_oracle_timestamps(
 
     let mut initial_timestamps = catalog_oracle_timestamps;
     if let Some(timestamp_oracle_url) = pg_timestamp_oracle_url {
-        let oracle_config = PostgresTimestampOracleConfig::new(
-            timestamp_oracle_url,
-            Arc::clone(timestamp_oracle_metrics),
-        );
+        let oracle_config =
+            PostgresTimestampOracleConfig::new(timestamp_oracle_url, timestamp_oracle_metrics);
         let postgres_oracle_timestamps =
             PostgresTimestampOracle::<NowFn>::get_all_timelines(oracle_config).await?;
 

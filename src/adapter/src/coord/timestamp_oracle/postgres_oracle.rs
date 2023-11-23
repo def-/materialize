@@ -147,7 +147,7 @@ impl PostgresTimestampOracleConfig {
 
         let config = PostgresTimestampOracleConfig {
             url: url.to_string(),
-            metrics: Arc::new(Metrics::new(&MetricsRegistry::new())),
+            metrics: Arc::new(Metrics::new(&MetricsRegistry::new(), "all_timelines")),
             connection_pool_max_size: 2,
             connection_pool_max_wait: None,
             connection_pool_ttl: Duration::MAX,

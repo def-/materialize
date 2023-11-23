@@ -19,6 +19,7 @@ use mz_adapter_types::connection::ConnectionId;
 use mz_compute_types::ComputeInstanceId;
 use mz_expr::{CollectionPlan, OptimizedMirRelationExpr};
 use mz_ore::collections::CollectionExt;
+use mz_ore::metrics::MetricsRegistry;
 use mz_ore::now::{to_datetime, EpochMillis, NowFn};
 use mz_ore::vec::VecExt;
 use mz_repr::{GlobalId, Timestamp};
@@ -198,7 +199,7 @@ impl Coordinator {
             self.timestamp_oracle_impl,
             timestamp_persistence,
             self.timestamp_oracle_url.clone(),
-            &self.timestamp_oracle_metrics,
+            &self.metrics_registry,
             &mut self.global_timelines,
         )
         .await
@@ -213,7 +214,7 @@ impl Coordinator {
         timestamp_oracle_impl: TimestampOracleImpl,
         timestamp_persistence: P,
         timestamp_oracle_url: Option<String>,
-        metrics: &Arc<timestamp_oracle::metrics::Metrics>,
+        metrics_registry: &MetricsRegistry,
         global_timelines: &'a mut BTreeMap<Timeline, TimelineState<Timestamp>>,
     ) -> &'a mut TimelineState<Timestamp>
     where
@@ -241,11 +242,14 @@ impl Coordinator {
 
             let oracle = match timestamp_oracle_impl {
                 TimestampOracleImpl::Postgres => {
+                    let metrics = Arc::new(timestamp_oracle::metrics::Metrics::new(
+                        metrics_registry,
+                        &timeline.to_string(),
+                    ));
+
                     let timestamp_oracle_url = timestamp_oracle_url.expect("missing --timestamp-oracle-url even though the crdb-backed timestamp oracle was configured");
-                    let oracle_config = PostgresTimestampOracleConfig::new(
-                        &timestamp_oracle_url,
-                        Arc::clone(metrics),
-                    );
+                    let oracle_config =
+                        PostgresTimestampOracleConfig::new(&timestamp_oracle_url, metrics);
 
                     let oracle: Box<dyn TimestampOracle<mz_repr::Timestamp>> = Box::new(
                         PostgresTimestampOracle::open(

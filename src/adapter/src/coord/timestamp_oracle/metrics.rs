@@ -43,14 +43,21 @@ impl std::fmt::Debug for Metrics {
 }
 
 impl Metrics {
-    /// Returns a new [Metrics] instance connected to the given registry.
-    pub fn new(registry: &MetricsRegistry) -> Self {
+    /// Returns a new [Metrics] instance for the given `timeline`, connected to
+    /// the given registry.
+    pub fn new(registry: &MetricsRegistry, timeline: &str) -> Self {
         let vecs = MetricsVecs::new(registry);
 
+        // It's a bit annoying that we're encoding the timeline in the metric's
+        // name itself, but we don't want to change the labels on this one
+        // because it's used outside the timestamp oracles and there are
+        // existing dashboards for it.
+        let pg_client_metrics_prefix = format!("mz_ts_oracle_{}", timeline);
+
         Metrics {
-            oracle: vecs.oracle_metrics(),
-            retries: vecs.retries_metrics(),
-            postgres_client: PostgresClientMetrics::new(registry, "mz_ts_oracle"),
+            oracle: vecs.oracle_metrics(timeline),
+            retries: vecs.retries_metrics(timeline),
+            postgres_client: PostgresClientMetrics::new(registry, &pg_client_metrics_prefix),
             _vecs: vecs,
         }
     }
@@ -75,83 +82,87 @@ impl MetricsVecs {
             external_op_started: registry.register(metric!(
                 name: "mz_ts_oracle_started_count",
                 help: "count of oracle operations started",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
             external_op_succeeded: registry.register(metric!(
                 name: "mz_ts_oracle_succeeded_count",
                 help: "count of oracle operations succeeded",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
             external_op_failed: registry.register(metric!(
                 name: "mz_ts_oracle_failed_count",
                 help: "count of oracle operations failed",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
             external_op_seconds: registry.register(metric!(
                 name: "mz_ts_oracle_seconds",
                 help: "time spent in oracle operations",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
 
             retry_started: registry.register(metric!(
                 name: "mz_ts_oracle_retry_started_count",
                 help: "count of retry loops started",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
             retry_finished: registry.register(metric!(
                 name: "mz_ts_oracle_retry_finished_count",
                 help: "count of retry loops finished",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
             retry_retries: registry.register(metric!(
                 name: "mz_ts_oracle_retry_retries_count",
                 help: "count of total attempts by retry loops",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
             retry_sleep_seconds: registry.register(metric!(
                 name: "mz_ts_oracle_retry_sleep_seconds",
                 help: "time spent in retry loop backoff",
-                var_labels: ["op"],
+                var_labels: ["timeline", "op"],
             )),
         }
     }
 
-    fn oracle_metrics(&self) -> OracleMetrics {
+    fn oracle_metrics(&self, timeline: &str) -> OracleMetrics {
         OracleMetrics {
-            write_ts: self.external_op_metrics("write_ts"),
-            peek_write_ts: self.external_op_metrics("peek_write_ts"),
-            read_ts: self.external_op_metrics("read_ts"),
-            apply_write: self.external_op_metrics("apply_write"),
+            write_ts: self.external_op_metrics("write_ts", timeline),
+            peek_write_ts: self.external_op_metrics("peek_write_ts", timeline),
+            read_ts: self.external_op_metrics("read_ts", timeline),
+            apply_write: self.external_op_metrics("apply_write", timeline),
         }
     }
 
-    fn external_op_metrics(&self, op: &str) -> ExternalOpMetrics {
+    fn external_op_metrics(&self, op: &str, timeline: &str) -> ExternalOpMetrics {
         ExternalOpMetrics {
-            started: self.external_op_started.with_label_values(&[op]),
-            succeeded: self.external_op_succeeded.with_label_values(&[op]),
-            failed: self.external_op_failed.with_label_values(&[op]),
-            seconds: self.external_op_seconds.with_label_values(&[op]),
+            started: self.external_op_started.with_label_values(&[timeline, op]),
+            succeeded: self
+                .external_op_succeeded
+                .with_label_values(&[timeline, op]),
+            failed: self.external_op_failed.with_label_values(&[timeline, op]),
+            seconds: self.external_op_seconds.with_label_values(&[timeline, op]),
         }
     }
 
-    fn retries_metrics(&self) -> RetriesMetrics {
+    fn retries_metrics(&self, timeline: &str) -> RetriesMetrics {
         RetriesMetrics {
-            open: self.retry_metrics("open"),
-            get_all_timelines: self.retry_metrics("get_all_timelines"),
-            write_ts: self.retry_metrics("write_ts"),
-            peek_write_ts: self.retry_metrics("peek_write_ts"),
-            read_ts: self.retry_metrics("read_ts"),
-            apply_write: self.retry_metrics("apply_write"),
+            open: self.retry_metrics("open", timeline),
+            get_all_timelines: self.retry_metrics("get_all_timelines", timeline),
+            write_ts: self.retry_metrics("write_ts", timeline),
+            peek_write_ts: self.retry_metrics("peek_write_ts", timeline),
+            read_ts: self.retry_metrics("read_ts", timeline),
+            apply_write: self.retry_metrics("apply_write", timeline),
         }
     }
 
-    fn retry_metrics(&self, name: &str) -> RetryMetrics {
+    fn retry_metrics(&self, name: &str, timeline: &str) -> RetryMetrics {
         RetryMetrics {
             name: name.to_owned(),
-            started: self.retry_started.with_label_values(&[name]),
-            finished: self.retry_finished.with_label_values(&[name]),
-            retries: self.retry_retries.with_label_values(&[name]),
-            sleep_seconds: self.retry_sleep_seconds.with_label_values(&[name]),
+            started: self.retry_started.with_label_values(&[timeline, name]),
+            finished: self.retry_finished.with_label_values(&[timeline, name]),
+            retries: self.retry_retries.with_label_values(&[timeline, name]),
+            sleep_seconds: self
+                .retry_sleep_seconds
+                .with_label_values(&[timeline, name]),
         }
     }
 }
