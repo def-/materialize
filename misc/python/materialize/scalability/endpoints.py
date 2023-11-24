@@ -134,9 +134,11 @@ class MaterializeContainer(MaterializeNonRemote):
 
         print(f"Image is {self.image} (alternative: {self.alternative_image})")
 
+        params = {"timestamp_oracle": "catalog"} if self.alternative_image == "materialize/materialized:latest" else {}
+
         if self.image is not None and self.alternative_image is not None:
             if not self.composition.try_pull_service_image(
-                Materialized(image=self.image)
+                Materialized(image=self.image, additional_system_parameter_defaults=params)
             ):
                 # explicitly specified image cannot be found and alternative exists
                 print(
