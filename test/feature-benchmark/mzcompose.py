@@ -140,6 +140,9 @@ def run_one_scenario(
 
         additional_system_parameter_defaults = {}
 
+        if instance == "other":
+            additional_system_parameter_defaults["timestamp_oracle"] = "catalog"
+
         if params is not None:
             for param in params.split(";"):
                 param_name, param_value = param.split("=")
