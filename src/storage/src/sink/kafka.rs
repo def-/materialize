@@ -579,7 +579,7 @@ impl KafkaSinkState {
                     self.metrics.message_send_errors_counter.inc();
 
                     if let KafkaError::MessageProduction(RDKafkaErrorCode::QueueFull) = e {
-                        debug!(
+                        error!(
                             "unable to produce message in {}: rdkafka queue full; will retry",
                             self.name
                         );
@@ -715,7 +715,7 @@ impl KafkaSinkState {
                 )
                 .await;
 
-                debug!(
+                error!(
                     "{}: sending progress for gate ts: {:?}",
                     &self.name, min_frontier
                 );
@@ -735,7 +735,7 @@ impl KafkaSinkState {
             let mut write_frontier = self.write_frontier.borrow_mut();
 
             // make sure we don't regress
-            debug!(
+            error!(
                 "{}: downgrading write frontier to: {:?}",
                 &self.name, min_frontier
             );
