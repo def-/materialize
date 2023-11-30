@@ -159,6 +159,8 @@ def load_composition(args: argparse.Namespace) -> Composition:
         compose_local_version = Version.parse(
             spawn.capture(["docker", "compose", "version", "--short"])
         )
+        print(f"DOCKER VERSION: {docker_local_version}")
+        print(f"DOCKER COMPOSE VERSION: {compose_local_version}")
         compose_ci_version = Version.parse("2.15.1")
         if compose_local_version < compose_ci_version:
             raise UIError(
