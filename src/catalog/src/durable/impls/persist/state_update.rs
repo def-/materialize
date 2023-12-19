@@ -9,48 +9,50 @@
 
 use std::fmt::Debug;
 
-use mz_proto::{RustType, TryFromProtoError};
-use mz_repr::adt::jsonb::Jsonb;
+use mz_persist_types::codec_impls::{SimpleDecoder, SimpleEncoder, SimpleSchema};
+use mz_persist_types::dyn_struct::{ColumnsMut, ColumnsRef, DynStructCfg};
+use mz_persist_types::Codec;
+use mz_proto::{ProtoType, RustType, TryFromProtoError};
 use mz_repr::Diff;
-use mz_storage_types::sources::SourceData;
 use proptest_derive::Arbitrary;
+use prost::Message;
 
 use crate::durable::impls::persist::Timestamp;
 use crate::durable::objects::serialization::proto;
 use crate::durable::transaction::TransactionBatch;
 use crate::durable::Epoch;
 
-/// Trait for objects that can be converted to/from a [`StateUpdateKindRaw`].
-pub(crate) trait IntoStateUpdateKindRaw:
-    Into<StateUpdateKindRaw> + PartialEq + Eq + PartialOrd + Ord + Debug + Clone
+/// Trait for objects that can be converted to/from a [`StateUpdateKindBinary`].
+pub(crate) trait IntoStateUpdateKindBinary:
+    Into<StateUpdateKindBinary> + PartialEq + Eq + PartialOrd + Ord + Debug + Clone
 {
     type Error: Debug;
 
-    fn try_from(raw: StateUpdateKindRaw) -> Result<Self, Self::Error>;
+    fn try_from(binary: StateUpdateKindBinary) -> Result<Self, Self::Error>;
 }
 impl<
-        T: Into<StateUpdateKindRaw>
-            + TryFrom<StateUpdateKindRaw>
+        T: Into<StateUpdateKindBinary>
+            + TryFrom<StateUpdateKindBinary>
             + PartialEq
             + Eq
             + PartialOrd
             + Ord
             + Debug
             + Clone,
-    > IntoStateUpdateKindRaw for T
+    > IntoStateUpdateKindBinary for T
 where
     T::Error: Debug,
 {
     type Error = T::Error;
 
-    fn try_from(raw: StateUpdateKindRaw) -> Result<Self, Self::Error> {
-        <T as TryFrom<StateUpdateKindRaw>>::try_from(raw)
+    fn try_from(binary: StateUpdateKindBinary) -> Result<Self, Self::Error> {
+        <T as TryFrom<StateUpdateKindBinary>>::try_from(binary)
     }
 }
 
 /// A single update to the catalog state.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct StateUpdate<T: IntoStateUpdateKindRaw = StateUpdateKind> {
+pub struct StateUpdate<T: IntoStateUpdateKindBinary = StateUpdateKind> {
     /// They kind and contents of the state update.
     pub(crate) kind: T,
     /// The timestamp at which the update occurred.
@@ -147,39 +149,10 @@ impl StateUpdate {
     }
 }
 
-/// Decodes a [`StateUpdate<StateUpdateKindRaw>`] from the `(key, value, ts,
-/// diff)` tuple/update we store in persist.
-impl
-    From<(
-        (Result<SourceData, String>, Result<(), String>),
-        Timestamp,
-        i64,
-    )> for StateUpdate<StateUpdateKindRaw>
-{
-    fn from(
-        kvtd: (
-            (Result<SourceData, String>, Result<(), String>),
-            Timestamp,
-            i64,
-        ),
-    ) -> Self {
-        let ((key, val), ts, diff) = kvtd;
-        let (key, ()) = (
-            key.expect("persist decoding error"),
-            val.expect("persist decoding error"),
-        );
-        StateUpdate {
-            kind: StateUpdateKindRaw::from(key),
-            ts,
-            diff,
-        }
-    }
-}
-
-impl TryFrom<StateUpdate<StateUpdateKindRaw>> for StateUpdate<StateUpdateKind> {
+impl TryFrom<StateUpdate<StateUpdateKindBinary>> for StateUpdate<StateUpdateKind> {
     type Error = String;
 
-    fn try_from(update: StateUpdate<StateUpdateKindRaw>) -> Result<Self, Self::Error> {
+    fn try_from(update: StateUpdate<StateUpdateKindBinary>) -> Result<Self, Self::Error> {
         Ok(StateUpdate {
             kind: update.kind.try_into()?,
             ts: update.ts,
@@ -569,82 +542,124 @@ impl RustType<proto::StateUpdateKind> for StateUpdateKind {
     }
 }
 
-/// Version of [`StateUpdateKind`] to allow reading/writing raw json from/to persist.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct StateUpdateKindRaw(Jsonb);
+/// Binary version of [`StateUpdateKind`] to allow reading/writing raw binary from/to persist.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Arbitrary)]
+pub(crate) struct StateUpdateKindBinary(pub(crate) Vec<u8>);
 
-impl From<StateUpdateKind> for StateUpdateKindRaw {
+#[derive(Debug, Clone, Default)]
+pub struct StateUpdateKindSchema;
+
+impl From<StateUpdateKind> for StateUpdateKindBinary {
     fn from(value: StateUpdateKind) -> Self {
-        let kind = value.into_proto();
-        StateUpdateKindRaw::from_serde(&kind)
+        Self(value.into_proto().encode_to_vec())
     }
 }
 
-impl TryFrom<StateUpdateKindRaw> for StateUpdateKind {
+impl TryFrom<StateUpdateKindBinary> for StateUpdateKind {
     type Error = String;
 
-    fn try_from(value: StateUpdateKindRaw) -> Result<Self, Self::Error> {
-        let kind = StateUpdateKindRaw(value.0).to_serde();
-        StateUpdateKind::from_proto(kind).map_err(|err| err.to_string())
+    fn try_from(value: StateUpdateKindBinary) -> Result<Self, Self::Error> {
+        let kind =
+            proto::StateUpdateKind::decode(value.0.as_slice()).map_err(|err| err.to_string())?;
+        kind.into_rust().map_err(|err| err.to_string())
+    }
+}
+impl Codec for StateUpdateKindBinary {
+    type Schema = StateUpdateKindSchema;
+
+    fn codec_name() -> String {
+        "StateUpdateProto".to_string()
+    }
+
+    fn encode<B>(&self, buf: &mut B)
+    where
+        B: bytes::BufMut,
+    {
+        buf.put(self.0.as_slice());
+    }
+
+    fn decode<'a>(buf: &'a [u8]) -> Result<Self, String> {
+        Ok(Self(buf.to_vec()))
     }
 }
 
-impl From<StateUpdateKindRaw> for SourceData {
-    fn from(value: StateUpdateKindRaw) -> SourceData {
-        let row = value.0.into_row();
-        SourceData(Ok(row))
-    }
-}
+impl mz_persist_types::columnar::Schema<StateUpdateKindBinary> for StateUpdateKindSchema {
+    type Encoder<'a> = SimpleEncoder<'a, StateUpdateKindBinary, Vec<u8>>;
 
-impl From<SourceData> for StateUpdateKindRaw {
-    fn from(value: SourceData) -> Self {
-        let row = value.0.expect("only Ok values stored in catalog shard");
-        StateUpdateKindRaw(Jsonb::from_row(row))
-    }
-}
+    type Decoder<'a> = SimpleDecoder<'a, StateUpdateKindBinary, Vec<u8>>;
 
-impl StateUpdateKindRaw {
-    pub fn from_serde<S: serde::Serialize>(s: &S) -> Self {
-        let serde_value = serde_json::to_value(s).expect("valid json");
-        let row =
-            Jsonb::from_serde_json(serde_value).expect("contained integers should fit in f64");
-        StateUpdateKindRaw(row)
+    fn columns(&self) -> DynStructCfg {
+        SimpleSchema::<StateUpdateKindBinary, Vec<u8>>::columns(&())
     }
 
-    pub fn to_serde<D: serde::de::DeserializeOwned>(&self) -> D {
-        let serde_value = self.0.as_ref().to_serde_json();
-        serde_json::from_value::<D>(serde_value).expect("jsonb should roundtrip")
+    fn decoder<'a>(&self, cols: ColumnsRef<'a>) -> Result<Self::Decoder<'a>, String> {
+        SimpleSchema::<StateUpdateKindBinary, Vec<u8>>::decoder(cols, |val, ret| {
+            *ret =
+                StateUpdateKindBinary::decode(val).expect("should be valid StateUpdateKindBinary")
+        })
+    }
+
+    fn encoder<'a>(&self, cols: ColumnsMut<'a>) -> Result<Self::Encoder<'a>, String> {
+        SimpleSchema::<StateUpdateKindBinary, Vec<u8>>::push_encoder(cols, |col, val| {
+            let mut buf = Vec::new();
+            StateUpdateKindBinary::encode(val, &mut buf);
+            mz_persist_types::columnar::ColumnPush::<Vec<u8>>::push(col, &buf)
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::durable::impls::persist::state_update::StateUpdateKindRaw;
-    use crate::durable::impls::persist::StateUpdateKind;
     use mz_persist_types::Codec;
-    use mz_storage_types::sources::SourceData;
+    use mz_proto::ProtoType;
+    use mz_proto::RustType;
     use proptest::prelude::*;
+    use prost::Message;
+
+    use crate::durable::impls::persist::state_update::StateUpdateKindBinary;
+    use crate::durable::impls::persist::StateUpdateKind;
+    use crate::durable::objects::serialization::proto;
 
     proptest! {
         #[mz_ore::test]
         #[cfg_attr(miri, ignore)] // slow
         fn proptest_state_update_kind_roundtrip(kind: StateUpdateKind) {
-            // Verify that we can map encode into the "raw" json format. This
-            // validates things like contained integers fitting in f64.
-            let raw = StateUpdateKindRaw::from(kind.clone());
+            // Roundtrip through `Vec<u8>`.
+            let encoded = kind.into_proto().encode_to_vec();
+            let decoded = proto::StateUpdateKind::decode(encoded.as_slice())
+                .expect("decode error")
+                .into_rust()
+                .expect("decode error");
 
-            // Verify that the raw roundtrips through the SourceData Codec impl.
-            let source_data = SourceData::from(raw.clone());
-            let mut encoded = Vec::new();
-            source_data.encode(&mut encoded);
-            let decoded = SourceData::decode(&encoded).expect("should be valid SourceData");
-            prop_assert_eq!(&source_data, &decoded);
-            let decoded = StateUpdateKindRaw::from(decoded);
-            prop_assert_eq!(&raw, &decoded);
-
-            // Verify that the enum roundtrips.
-            let decoded = StateUpdateKind::try_from(decoded).expect("should be valid StateUpdateKind");
             prop_assert_eq!(&kind, &decoded);
+
+            // Roundtrip through `StateUpdateKindBinary`.
+            let kind_binary: StateUpdateKindBinary = kind.clone().into();
+            let kind_roundtrip = StateUpdateKind::try_from(kind_binary).expect("should roundtrip");
+
+            prop_assert_eq!(kind, kind_roundtrip);
+        }
+
+        #[mz_ore::test]
+        #[cfg_attr(miri, ignore)] // slow
+        fn proptest_state_update_kind_binary_roundtrip(kind: StateUpdateKindBinary) {
+            let mut binary = Vec::new();
+            kind.encode(&mut binary);
+            let decoded = StateUpdateKindBinary::decode(&binary).expect("should be valid StateUpdateKindBinary");
+
+            prop_assert_eq!(kind, decoded);
+        }
+
+        #[mz_ore::test]
+        #[cfg_attr(miri, ignore)] // slow
+        fn proptest_state_update_kind_binary_equivalence(kind: StateUpdateKind) {
+            let kind_encoded = kind.into_proto().encode_to_vec();
+
+            let kind_binary: StateUpdateKindBinary = kind.into();
+            let mut kind_binary_encoded = Vec::new();
+            kind_binary.encode(&mut kind_binary_encoded);
+
+            prop_assert_eq!(kind_encoded, kind_binary_encoded);
         }
     }
 }
