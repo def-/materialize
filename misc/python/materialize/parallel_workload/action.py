@@ -895,33 +895,7 @@ class CommitRollbackAction(Action):
         return True
 
 
-class FlipSessionFlagsAction(Action):
-    def __init__(
-        self,
-        rng: random.Random,
-        composition: Composition | None,
-    ):
-        super().__init__(rng, composition)
-        BOOLEAN_FLAG_VALUES = ["TRUE", "FALSE"]
-
-        self.flags_with_values: dict[str, list[str]] = dict()
-        for flag in [
-            "auto_route_catalog_queries",
-        ]:
-            self.flags_with_values[flag] = BOOLEAN_FLAG_VALUES
-        self.flags_with_values["transaction_isolation"] = [
-            "serializable",
-            "strict serializable",
-        ]
-
-    def run(self, exe: Executor) -> bool:
-        flag_name = self.rng.choice(list(self.flags_with_values.keys()))
-        flag_value = self.rng.choice(self.flags_with_values[flag_name])
-        exe.execute(f"SET {flag_name} = {flag_value}", http=Http.RANDOM)
-        return True
-
-
-class FlipSystemFlagsAction(Action):
+class FlipFlagsAction(Action):
     def __init__(
         self,
         rng: random.Random,
@@ -970,33 +944,8 @@ class FlipSystemFlagsAction(Action):
     def run(self, exe: Executor) -> bool:
         flag_name = self.rng.choice(list(self.flags_with_values.keys()))
         flag_value = self.rng.choice(self.flags_with_values[flag_name])
-
-        if self.conn is None:
-            self.create_system_connection(exe)
-
-        try:
-            self.flip_flag(exe, flag_name, flag_value)
-            return True
-        except:
-            self.create_system_connection(exe)
-            self.flip_flag(exe, flag_name, flag_value)
-            # ignore it
-            return False
-
-    def create_system_connection(self, exe: Executor):
-        self.conn = pg8000.connect(
-            host=exe.db.host,
-            port=exe.db.ports["mz_system"],
-            user="mz_system",
-            database="materialize",
-        )
-        self.conn.autocommit = True
-
-    def flip_flag(self, exe: Executor, flag_name: str, flag_value: str) -> None:
-        with self.conn.cursor() as cur:
-            query = (f"ALTER SYSTEM SET {flag_name} = {flag_value};",)
-            exe.log(query)
-            cur.execute(query)
+        exe.execute(f"SET {flag_name} = {flag_value};", http=Http.RANDOM)
+        return True
 
 
 class CreateViewAction(Action):
@@ -1967,7 +1916,7 @@ read_action_list = ActionList(
         # (SetClusterAction, 1),  # SET cluster cannot be called in an active transaction
         (CommitRollbackAction, 30),
         (ReconnectAction, 1),
-        (FlipSessionFlagsAction, 2),
+        (FlipFlagsAction, 2),
     ],
     autocommit=False,
 )
@@ -1977,7 +1926,7 @@ fetch_action_list = ActionList(
         (FetchAction, 30),
         # (SetClusterAction, 1),  # SET cluster cannot be called in an active transaction
         (ReconnectAction, 1),
-        (FlipSessionFlagsAction, 2),
+        (FlipFlagsAction, 2),
     ],
     autocommit=False,
 )
@@ -1991,7 +1940,7 @@ write_action_list = ActionList(
         (CommitRollbackAction, 10),
         (ReconnectAction, 1),
         (SourceInsertAction, 50),
-        (FlipSessionFlagsAction, 2),
+        (FlipFlagsAction, 2),
     ],
     autocommit=False,
 )
@@ -2004,7 +1953,7 @@ dml_nontrans_action_list = ActionList(
         (CommentAction, 5),
         (SetClusterAction, 1),
         (ReconnectAction, 1),
-        (FlipSessionFlagsAction, 2),
+        (FlipFlagsAction, 2),
         # (TransactionIsolationAction, 1),
     ],
     autocommit=True,  # deletes can't be inside of transactions
@@ -2048,8 +1997,7 @@ ddl_action_list = ActionList(
         (RenameViewAction, 10),
         (RenameSinkAction, 10),
         (SwapSchemaAction, 10),
-        (FlipSessionFlagsAction, 2),
-        (FlipSystemFlagsAction, 2),
+        (FlipFlagsAction, 2),
         # (TransactionIsolationAction, 1),
     ],
     autocommit=True,
