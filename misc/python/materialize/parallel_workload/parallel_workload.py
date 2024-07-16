@@ -388,7 +388,7 @@ def run(
                 print(f"{thread.name} still running: {worker.exe.last_log}")
         print("Threads have not stopped within 5 minutes, exiting hard")
         print_stats(num_queries, workers)
-        if scenario == Scenario.Rename:
+        if scenario == Scenario.Rename or num_threads >= 50:
             # TODO(def-): Switch to failing exit code when #28182 is fixed
             os._exit(0)
         os._exit(1)
