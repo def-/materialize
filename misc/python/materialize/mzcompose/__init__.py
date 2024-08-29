@@ -105,6 +105,7 @@ def get_default_system_parameters(
         "persist_batch_record_run_meta": (
             "true" if version >= MzVersion.parse_mz("v0.115.0-dev") else "false"
         ),
+        "persist_batch_structured_order": "true",
         "persist_fast_path_limit": "1000",
         "persist_inline_writes_single_max_bytes": "4096",
         "persist_inline_writes_total_max_bytes": "1048576",
