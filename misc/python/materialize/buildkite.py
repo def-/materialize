@@ -163,6 +163,7 @@ def upload_artifact(path: Path | str, cwd: Path | None = None):
             "buildkite-agent",
             "artifact",
             "upload",
+            "--no-http2",
             path,
         ],
         cwd=cwd,

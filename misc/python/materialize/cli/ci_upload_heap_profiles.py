@@ -56,6 +56,7 @@ def main() -> int:
                     "buildkite-agent",
                     "artifact",
                     "upload",
+                    "--no-http2",
                     "--log-level",
                     "error",
                     filename,
