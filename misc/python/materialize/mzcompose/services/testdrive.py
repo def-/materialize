@@ -87,6 +87,7 @@ class Testdrive(Service):
                 f"--materialize-url={materialize_url}",
                 f"--materialize-internal-url={materialize_url_internal}",
                 *(["--materialize-use-https"] if materialize_use_https else []),
+                "--aws-external-id-prefix=eb5cb59b-e2fe-41f3-87ca-d2176a495345",
             ]
 
         if aws_region:
