@@ -16,7 +16,7 @@ set -euo pipefail
 postgres=${MZDEV_POSTGRES:-postgres://root@localhost:26257/materialize}
 
 echo "Shutting down running environmentd and clusterd (if any)"
-killall -q environmentd clusterd || true
+killall -q environmentd clusterd materialized || true
 
 mkdir -p mzdata/pgdump
 for i in consensus.consensus storage.collections storage.data storage.fence storage.sinces storage.uppers tsoracle.timestamp_oracle adapter.collections adapter.data adapter.fence adapter.sinces adapter.uppers; do

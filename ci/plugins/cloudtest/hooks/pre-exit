@@ -33,11 +33,10 @@ if [ -n "${CI_COVERAGE_ENABLED:-}" ]; then
     ci_uncollapsed_heading "cloudtest: Fetching binaries for coverage"
     mkdir -p coverage/
     chmod 777 coverage/
-    kubectl cp environmentd-0:/usr/local/bin/environmentd coverage/environmentd
+    kubectl cp environmentd-0:/usr/local/bin/materialized coverage/materialized
     kubectl cp environmentd-0:/coverage coverage/
     for pod in $(kubectl get pods -o name | grep -E 'cluster-'); do
       kubectl cp "$pod":/coverage coverage/ || true # Could get deleted
-      kubectl cp "$pod":/usr/local/bin/clusterd coverage/clusterd || true
     done
 
     ci_unimportant_heading "cloudtest: Generate coverage information"
@@ -46,12 +45,10 @@ if [ -n "${CI_COVERAGE_ENABLED:-}" ]; then
         find . -name '*.profraw' -delete
 
         ARGS=()
-        for program in clusterd environmentd; do
-            if [ -f coverage/"$program" ]; then
-              export_cov coverage/"$program"
-              ARGS+=("-a" coverage/"$BUILDKITE_JOB_ID"-"$program".lcov)
-            fi
-        done
+        if [ -f coverage/materialized ]; then
+          export_cov coverage/materialized
+          ARGS+=("-a" coverage/"$BUILDKITE_JOB_ID"-materialized.lcov)
+        fi
         rm coverage/"$BUILDKITE_JOB_ID".profdata
         if [ "${#ARGS[@]}" != 0 ]; then
           bin/ci-builder run stable lcov "${ARGS[@]}" -o coverage/"$BUILDKITE_JOB_ID".lcov
