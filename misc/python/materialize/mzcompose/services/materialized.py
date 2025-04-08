@@ -10,6 +10,7 @@
 
 import json
 import os
+import threading
 from enum import Enum
 from typing import Any
 
@@ -46,7 +47,7 @@ class MaterializeEmulator(Service):
                 "test": ["CMD", "curl", "-f", "localhost:6878/api/readyz"],
                 "interval": "1s",
                 # A fully loaded Materialize can take a long time to start.
-                "start_period": "1200s",
+                "start_period": "600s",
             },
         }
 
@@ -293,12 +294,16 @@ class Materialized(Service):
 
         if image_version is None or image_version >= "v0.140.0-dev":
             if "MZ_CI_LICENSE_KEY" in os.environ:
-                with open("license_key", "w") as f:
+                # We have to take care to write a unique license_key file so
+                # that it is always valid, even if multiple Materialized
+                # objects are created concurrently.
+                filename = f"license_key.{threading.get_native_id()}"
+                with open(filename, "w") as f:
                     f.write(os.environ["MZ_CI_LICENSE_KEY"])
 
                 environment += ["MZ_LICENSE_KEY=/license_key/license_key"]
 
-                volumes += [f"{os.getcwd()}/license_key:/license_key/license_key"]
+                volumes += [f"{os.getcwd()}/{filename}:/license_key/license_key"]
 
         if use_default_volumes:
             volumes += DEFAULT_MZ_VOLUMES
