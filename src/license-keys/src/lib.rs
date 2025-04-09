@@ -7,7 +7,6 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0.
 
-use anyhow::{anyhow, bail};
 use jsonwebtoken::{Algorithm, DecodingKey, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -79,45 +78,34 @@ impl Default for ValidatedLicenseKey {
     }
 }
 
-pub fn validate(license_key: &str, environment_id: &str) -> anyhow::Result<ValidatedLicenseKey> {
-    let mut err = anyhow!("no public key found");
+pub fn validate(license_key: &str, environment_id: &str) -> Result<ValidatedLicenseKey, Box<dyn std::error::Error>> {
+    let mut err = "no public key found".to_string();
+
     for pubkey in PUBLIC_KEYS {
         match validate_with_pubkey(license_key, pubkey, environment_id) {
-            Ok(key) => {
-                return Ok(key);
-            }
-            Err(e) => {
-                err = e;
-            }
+            Ok(key) => return Ok(key),
+            Err(e) => err = e,
         }
     }
 
-    Err(err)
+    Err(err.into())
 }
 
 fn validate_with_pubkey(
     license_key: &str,
     pubkey_pem: &str,
     environment_id: &str,
-) -> anyhow::Result<ValidatedLicenseKey> {
-    // don't just read the version out of the payload before verifying it,
-    // trusting unsigned data to determine how to verify the signature is a
-    // bad idea. instead, just try validating it as each version
-    // independently, and if the signature is valid, only then check to
-    // ensure that the version matches what we validated.
-
-    // try current version first, so we can prefer that for error messages
+) -> Result<ValidatedLicenseKey, String> {
     let res = validate_with_pubkey_v1(license_key, pubkey_pem, environment_id);
     let err = match res {
         Ok(key) => return Ok(key),
         Err(e) => e,
     };
 
-    let previous_versions: Vec<Box<dyn Fn() -> anyhow::Result<ValidatedLicenseKey>>> = vec![
-        // add to this if/when we add new versions
-        // for example,
-        // Box::new(|| validate_with_pubkey_v1(license_key, pubkey_pem, environment_id)),
+    let previous_versions: Vec<Box<dyn Fn() -> Result<ValidatedLicenseKey, String>>> = vec![
+        // Add fallbacks here if needed
     ];
+
     for validator in previous_versions {
         if let Ok(key) = validator() {
             return Ok(key);
@@ -148,7 +136,7 @@ fn validate_with_pubkey_v1(
     license_key: &str,
     pubkey_pem: &str,
     environment_id: &str,
-) -> anyhow::Result<ValidatedLicenseKey> {
+) -> Result<ValidatedLicenseKey, String> {
     let mut validation = Validation::new(Algorithm::PS256);
     validation.set_required_spec_claims(&["exp", "nbf", "aud", "iss", "sub"]);
     validation.set_audience(&[environment_id, ANY_ENVIRONMENT_AUD]);
@@ -157,31 +145,30 @@ fn validate_with_pubkey_v1(
     validation.validate_nbf = true;
     validation.validate_aud = true;
 
-    let key = DecodingKey::from_rsa_pem(pubkey_pem.as_bytes())?;
+    let key = DecodingKey::from_rsa_pem(pubkey_pem.as_bytes())
+        .map_err(|e| format!("invalid RSA key: {}", e))?;
 
-    let (jwt, expired): (TokenData<Payload>, _) =
-        jsonwebtoken::decode(license_key, &key, &validation).map_or_else(
-            |e| {
-                if matches!(e.kind(), jsonwebtoken::errors::ErrorKind::ExpiredSignature) {
-                    validation.validate_exp = false;
-                    Ok((jsonwebtoken::decode(license_key, &key, &validation)?, true))
-                } else {
-                    Err::<_, anyhow::Error>(e.into())
-                }
-            },
-            |jwt| Ok((jwt, false)),
-        )?;
+    let (jwt, expired) = match jsonwebtoken::decode(license_key, &key, &validation) {
+        Ok(jwt) => (jwt, false),
+        Err(e) if matches!(e.kind(), jsonwebtoken::errors::ErrorKind::ExpiredSignature) => {
+            validation.validate_exp = false;
+            let jwt: TokenData<Payload> = jsonwebtoken::decode(license_key, &key, &validation)
+                .map_err(|e| format!("failed to decode expired JWT: {}", e))?;
+            (jwt, true)
+        }
+        Err(e) => return Err(format!("failed to decode JWT: {}", e)),
+    };
 
     if jwt.header.typ.as_deref() != Some("JWT") {
-        bail!("invalid jwt header type");
+        return Err("invalid jwt header type".to_string());
     }
 
     if jwt.claims.version != 1 {
-        bail!("invalid license key version");
+        return Err("invalid license key version".to_string());
     }
 
     if !(jwt.claims.nbf..=jwt.claims.exp).contains(&jwt.claims.iat) {
-        bail!("invalid issuance time");
+        return Err("invalid issuance time".to_string());
     }
 
     Ok(ValidatedLicenseKey {

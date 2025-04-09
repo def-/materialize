@@ -692,7 +692,7 @@ fn run(mut args: Args) -> Result<(), anyhow::Error> {
             license_key_text.trim(),
             &args.environment_id.organization_id().to_string(),
         )
-        .context("failed to validate license key file")?;
+        .map_err(|e| format!("failed to validate license key file: {}", e))?;
         if license_key.expired {
             let message = format!("The license key provided at {license_key_file} is expired! Please contact Materialize for assistance.");
             match license_key.expiration_behavior {
