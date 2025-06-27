@@ -29,7 +29,7 @@ SERVICES = [
         },
     ),
     Testdrive(),
-    SqlServer(image="materialize/sql-server:mzbuild-B343TJ6E2EXOI2NVIXR46JQ65AK5K4OB"),
+    SqlServer(),
 ]
 
 
