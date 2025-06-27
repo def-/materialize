@@ -23,9 +23,13 @@ from materialize.mzcompose.services.testdrive import Testdrive
 
 SERVICES = [
     Mz(app_password=""),
-    Materialized(),
+    Materialized(
+        additional_system_parameter_defaults={
+            "log_filter": "mz_storage::source::sql-server=trace,debug,info,warn,error"
+        },
+    ),
     Testdrive(),
-    SqlServer(),
+    SqlServer(image="materialize/sql-server:mzbuild-B343TJ6E2EXOI2NVIXR46JQ65AK5K4OB"),
 ]
 
 
