@@ -314,8 +314,8 @@ impl Retry {
         )
     }
 
-    /// Combines [`retry_async_canceling`] and [`retry_async_with_state`], so that both timeouts
-    /// are respected and user state can be passed in (bot not be read out).
+    /// Combines [`Retry::retry_async_canceling`] and [`Retry::retry_async_with_state`], so that
+    /// both timeouts are respected and user state can be passed in (bot not be read out).
     pub async fn retry_async_with_state_canceling<F, S, U, R, T, E>(
         self,
         mut user_state: S,
