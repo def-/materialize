@@ -668,6 +668,7 @@ def add_version_to_preflight_tests(pipeline: Any) -> None:
 def trim_test_selection_id(pipeline: Any, step_ids_to_run: set[int]) -> None:
     for i, step in enumerate(steps(pipeline)):
         ident = step.get("id") or step.get("command")
+        print(f"{i}: {step}")
         if (
             (i not in step_ids_to_run or len(step_ids_to_run) == 0)
             and "prompt" not in step
