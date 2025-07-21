@@ -375,15 +375,6 @@ def switch_jobs_to_aws(pipeline: Any, priority: int) -> None:
     # - Reconfigure the agent from hetzner-aarch64-4cpu-8gb to linux-aarch64-small in ci/mkpipeline.sh
 
     stuck: set[str] = set()
-    # TODO(def-): Remove me when Hetzner fixes its aarch64 availability
-    stuck.update(
-        [
-            "hetzner-aarch64-16cpu-32gb",
-            "hetzner-aarch64-8cpu-16gb",
-            "hetzner-aarch64-4cpu-8gb",
-            "hetzner-aarch64-2cpu-4gb",
-        ]
-    )
 
     if ui.env_is_truthy("CI_FORCE_SWITCH_TO_AWS", "0"):
         stuck = set(
@@ -405,11 +396,11 @@ def switch_jobs_to_aws(pipeline: Any, priority: int) -> None:
             }
         )
     else:
-        # TODO(def-): Reenable me when Hetzner fixes its aarch64 availability
+        branch = os.getenv("BUILDKITE_BRANCH")
         # If priority has manually been set to be low, or on main branch, we can
         # wait for agents to become available
-        # if branch == "main" or priority < 0:
-        #     return
+        if branch == "main" or priority < 0:
+            return
 
         # Consider Hetzner to be overloaded/broken when an important job is stuck waiting for an agent for > 20 minutes
         try:
