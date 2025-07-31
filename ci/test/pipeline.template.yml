@@ -452,6 +452,8 @@ steps:
           composition: platform-checks
           args: [
               --scenario=NoRestartNoUpgrade,
+              --no-external-metadata-store,  # faster
+              --no-external-blob-store,  # faster
               --default-replication-factor=1, # faster
               "--seed=$BUILDKITE_JOB_ID"
           ]
