@@ -32,8 +32,8 @@ class Postgres(Service):
             "LD_PRELOAD=libeatmydata.so",
         ],
         volumes: list[str] = [],
-        max_wal_senders: int = 100,
-        max_replication_slots: int = 100,
+        max_wal_senders: int = 10000,
+        max_replication_slots: int = 10000,
         setup_materialize: bool = False,
         restart: str = "no",
     ) -> None:

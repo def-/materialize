@@ -1813,136 +1813,136 @@ steps:
         label: "Parallel Workload (Read-Only)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --complexity=read, --threads=8]
+              args: [--runtime=3000, --complexity=read, --threads=8]
 
       - id: parallel-workload-dml
         label: "Parallel Workload (DML)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --complexity=dml, --threads=8]
+              args: [--runtime=3000, --complexity=dml, --threads=8]
 
       - id: parallel-workload-ddl
         label: "Parallel Workload (DDL)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --threads=8]
+              args: [--runtime=3000, --threads=8]
 
       - id: parallel-workload-ddl-only
         label: "Parallel Workload (DDL Only)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --complexity=ddl-only, --threads=8]
+              args: [--runtime=3000, --complexity=ddl-only, --threads=8]
 
       - id: parallel-workload-many-threads
         label: "Parallel Workload (many threads)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           # Sporadic OoM otherwise
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --threads=8]
+              args: [--runtime=3000, --threads=8]
         skip: "Too unstable at the moment"
 
       - id: parallel-workload-rename-naughty
         label: "Parallel Workload (rename + naughty identifiers)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --scenario=rename, --naughty-identifiers, --threads=8]
+              args: [--runtime=3000, --scenario=rename, --naughty-identifiers, --threads=8]
 
       - id: parallel-workload-rename
         label: "Parallel Workload (rename)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --scenario=rename, --threads=8]
+              args: [--runtime=3000, --scenario=rename, --threads=8]
 
       - id: parallel-workload-cancel
         label: "Parallel Workload (cancel)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --scenario=cancel, --threads=8]
+              args: [--runtime=3000, --scenario=cancel, --threads=8]
 
       - id: parallel-workload-kill
         label: "Parallel Workload (kill)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --scenario=kill, --threads=8]
+              args: [--runtime=3000, --scenario=kill, --threads=8]
 
       - id: parallel-workload-backup-restore
         label: "Parallel Workload (backup & restore)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         skip: "TODO(def-): Properly stop all db actions during backup & restore"
         agents:
           queue: hetzner-x86-64-16cpu-32gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --scenario=backup-restore, --naughty-identifiers, --threads=8]
+              args: [--runtime=3000, --scenario=backup-restore, --naughty-identifiers, --threads=8]
 
       - id: parallel-workload-0dt
         label: "Parallel Workload (0dt deploy)"
         depends_on: build-x86_64
         artifact_paths: [parallel-workload-queries.log.zst]
-        timeout_in_minutes: 90
+        timeout_in_minutes: 180
         agents:
           queue: hetzner-x86-64-dedi-16cpu-64gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: parallel-workload
-              args: [--runtime=1500, --scenario=0dt-deploy, --threads=8]
+              args: [--runtime=3000, --scenario=0dt-deploy, --threads=8]
 
   - group: Slow cluster tests
     key: slow-cluster
