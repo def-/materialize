@@ -114,7 +114,7 @@ struct Args {
     consistency_checks: ConsistencyCheckLevel,
     /// Whether to run statement logging consistency checks (adds a few seconds at the end of every
     /// test file).
-    #[clap(long, action = ArgAction::SetTrue)]
+    #[clap(long, action = ArgAction::SetFalse)]
     check_statement_logging: bool,
     /// Which log messages to emit.
     ///
