@@ -2384,6 +2384,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-rolling-upgrade-downtime
         label: "Orchestratord + rolling upgrade downtime"
@@ -2398,6 +2400,8 @@ steps:
         agents:
           # More stable results for recording benchmarks
           queue: hetzner-x86-64-dedi-8cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-default-properties
         label: "Orchestratord + defaults for properties"
@@ -2411,6 +2415,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-individual
         label: "Orchestratord + individual properties"
@@ -2424,6 +2430,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-combine
         label: "Orchestratord + combine properties"
@@ -2437,6 +2445,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-upgrade-individual
         label: "Orchestratord + upgrade, individual props"
@@ -2450,6 +2460,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-upgrade-combine
         label: "Orchestratord + upgrade, combine props"
@@ -2463,6 +2475,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-upgrade-chain-individual
         label: "Orchestratord + upgrade chain, individual props"
@@ -2476,6 +2490,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-upgrade-chain-combine
         label: "Orchestratord + upgrade chain, combine props"
@@ -2489,6 +2505,8 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
 
       - id: orchestratord-balancer
         label: "Orchestratord balancer CRD tests"
@@ -2502,3 +2520,5 @@ steps:
               ci-builder: stable
         agents:
           queue: hetzner-aarch64-16cpu-32gb
+        env:
+          MZ_GHCR: 0
