@@ -90,9 +90,7 @@ class PostgresMetadata(Postgres):
         )
 
 
-CockroachOrPostgresMetadata = (
-    Cockroach if os.getenv("BUILDKITE_TAG", "") != "" else PostgresMetadata
-)
+CockroachOrPostgresMetadata = Cockroach
 
 METADATA_STORE: str = (
     "cockroach" if CockroachOrPostgresMetadata == Cockroach else "postgres-metadata"
