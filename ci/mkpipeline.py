@@ -83,7 +83,7 @@ so it is executed.""",
     )
 
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--coverage", action="store_true")
+    parser.add_argument("--coverage", action="store_true", default=True)
     parser.add_argument(
         "--sanitizer",
         default=Sanitizer[os.getenv("CI_SANITIZER", "none")],
