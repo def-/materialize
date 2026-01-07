@@ -751,19 +751,8 @@ def compileSlowSltConfig() -> SltRunConfig:
     # Run selected tests with --auto-index-selects
     config.steps.append(
         SltRunStepConfig(
-            tests_with_views,
+            tests,
             ["--auto-index-selects", "--enable-table-keys"],
-        )
-    )
-
-    # Too slow to run with --auto-index-selects, can't run together with
-    # --auto-transactions, no differences seen in previous run. We might want to
-    # revisit and see if we can periodically test them, even if it takes 2-3 days
-    # for the run to finish.
-    config.steps.append(
-        SltRunStepConfig(
-            tests_without_views,
-            ["--auto-transactions", "--auto-index-tables", "--enable-table-keys"],
         )
     )
 

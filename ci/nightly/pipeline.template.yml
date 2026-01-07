@@ -2213,15 +2213,15 @@ steps:
   - id: sqllogictest
     label: ":bulb: SQL logic tests (4 replicas)"
     depends_on: build-aarch64
-    timeout_in_minutes: 480
-    parallelism: 4
+    timeout_in_minutes: 960
+    parallelism: 20
     agents:
       queue: hetzner-aarch64-16cpu-32gb
     plugins:
       - ./ci/plugins/mzcompose:
           composition: sqllogictest
           run: slow-tests
-          args: [--replicas=4, --parallelism=8]
+          args: [--replicas=1, --parallelism=8]
 
   - id: iceberg
     label: "Iceberg tests"
