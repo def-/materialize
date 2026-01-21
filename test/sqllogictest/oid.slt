@@ -1171,3 +1171,570 @@ SELECT oid, name FROM mz_objects WHERE id LIKE 's%' AND oid < 20000 ORDER BY oid
 17062  mz_replacements
 17063  pg_authid_core
 17064  pg_authid_core_ind
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### OID boundary value edge cases ###
+
+query T
+SELECT 0::oid
+----
+0
+
+query T
+SELECT 4294967295::oid
+----
+4294967295
+
+query T
+SELECT 1::oid
+----
+1
+
+query error "4294967296" OID out of range
+SELECT 4294967296::oid
+
+query error "-2" OID out of range
+SELECT (-2)::int8::oid
+
+### OID casting edge cases ###
+
+query T
+SELECT 100::int::oid::text
+----
+100
+
+query T
+SELECT 100::int4::oid
+----
+100
+
+query T
+SELECT 100::int8::oid
+----
+100
+
+query T
+SELECT '100'::oid
+----
+100
+
+query error invalid input syntax for type oid
+SELECT ''::oid
+
+query error invalid input syntax for type oid
+SELECT 'abc'::oid
+
+query error invalid input syntax for type oid
+SELECT '-1'::oid
+
+### OID NULL handling edge cases ###
+
+query T
+SELECT NULL::oid
+----
+NULL
+
+query B
+SELECT NULL::oid IS NULL
+----
+true
+
+query B
+SELECT 1::oid = NULL::oid
+----
+NULL
+
+query B
+SELECT NULL::oid = NULL::oid
+----
+NULL
+
+query B
+SELECT NULL::oid < 1::oid
+----
+NULL
+
+query B
+SELECT 1::oid > NULL::oid
+----
+NULL
+
+### OID comparison edge cases ###
+
+query B
+SELECT 0::oid = 0::oid
+----
+true
+
+query B
+SELECT 4294967295::oid = 4294967295::oid
+----
+true
+
+query B
+SELECT 0::oid < 1::oid
+----
+true
+
+query B
+SELECT 4294967295::oid > 4294967294::oid
+----
+true
+
+query B
+SELECT 0::oid <= 0::oid
+----
+true
+
+query B
+SELECT 4294967295::oid >= 4294967295::oid
+----
+true
+
+query B
+SELECT 1::oid <> 2::oid
+----
+true
+
+query B
+SELECT 1::oid != 1::oid
+----
+false
+
+### OID with wraparound comparison ###
+
+query B
+SELECT (-1)::oid > 0::oid
+----
+true
+
+query B
+SELECT (-1)::oid = 4294967295::oid
+----
+true
+
+query B
+SELECT (-2)::oid = 4294967294::oid
+----
+true
+
+### OID IS DISTINCT FROM edge cases ###
+
+query B
+SELECT 1::oid IS DISTINCT FROM 1::oid
+----
+false
+
+query B
+SELECT 1::oid IS DISTINCT FROM 2::oid
+----
+true
+
+query B
+SELECT 1::oid IS DISTINCT FROM NULL::oid
+----
+true
+
+query B
+SELECT NULL::oid IS DISTINCT FROM NULL::oid
+----
+false
+
+query B
+SELECT 1::oid IS NOT DISTINCT FROM 1::oid
+----
+true
+
+query B
+SELECT 1::oid IS NOT DISTINCT FROM NULL::oid
+----
+false
+
+query B
+SELECT NULL::oid IS NOT DISTINCT FROM NULL::oid
+----
+true
+
+### OID BETWEEN edge cases ###
+
+query B
+SELECT 5::oid BETWEEN 1::oid AND 10::oid
+----
+true
+
+query B
+SELECT 0::oid BETWEEN 0::oid AND 10::oid
+----
+true
+
+query B
+SELECT 10::oid BETWEEN 1::oid AND 10::oid
+----
+true
+
+query B
+SELECT 0::oid BETWEEN 1::oid AND 10::oid
+----
+false
+
+query B
+SELECT 5::oid NOT BETWEEN 1::oid AND 10::oid
+----
+false
+
+query B
+SELECT 0::oid NOT BETWEEN 1::oid AND 10::oid
+----
+true
+
+### OID IN list edge cases ###
+
+query B
+SELECT 1::oid IN (1::oid, 2::oid, 3::oid)
+----
+true
+
+query B
+SELECT 5::oid IN (1::oid, 2::oid, 3::oid)
+----
+false
+
+query B
+SELECT NULL::oid IN (1::oid, 2::oid)
+----
+NULL
+
+query B
+SELECT 1::oid IN (1::oid, NULL::oid)
+----
+true
+
+query B
+SELECT 2::oid IN (1::oid, NULL::oid)
+----
+NULL
+
+query B
+SELECT 1::oid NOT IN (1::oid, 2::oid)
+----
+false
+
+query B
+SELECT 5::oid NOT IN (1::oid, 2::oid)
+----
+true
+
+### OID COALESCE edge cases ###
+
+query T
+SELECT COALESCE(NULL::oid, 1::oid)
+----
+1
+
+query T
+SELECT COALESCE(1::oid, 2::oid)
+----
+1
+
+query T
+SELECT COALESCE(NULL::oid, NULL::oid, 3::oid)
+----
+3
+
+### OID NULLIF edge cases ###
+
+query T
+SELECT NULLIF(1::oid, 1::oid)
+----
+NULL
+
+query T
+SELECT NULLIF(1::oid, 2::oid)
+----
+1
+
+query T
+SELECT NULLIF(NULL::oid, 1::oid)
+----
+NULL
+
+### OID GREATEST/LEAST edge cases ###
+
+query T
+SELECT GREATEST(1::oid, 2::oid, 3::oid)
+----
+3
+
+query T
+SELECT LEAST(1::oid, 2::oid, 3::oid)
+----
+1
+
+query T
+SELECT GREATEST(NULL::oid, 2::oid)
+----
+2
+
+query T
+SELECT LEAST(1::oid, NULL::oid)
+----
+1
+
+query T
+SELECT GREATEST(NULL::oid, NULL::oid)
+----
+NULL
+
+### OID CASE expression edge cases ###
+
+query T
+SELECT CASE WHEN true THEN 1::oid ELSE 2::oid END
+----
+1
+
+query T
+SELECT CASE WHEN false THEN 1::oid ELSE 2::oid END
+----
+2
+
+query T
+SELECT CASE WHEN NULL THEN 1::oid ELSE 2::oid END
+----
+2
+
+query T
+SELECT CASE 1::oid WHEN 1::oid THEN 100::oid ELSE 200::oid END
+----
+100
+
+query T
+SELECT CASE 2::oid WHEN 1::oid THEN 100::oid ELSE 200::oid END
+----
+200
+
+### OID in table operations ###
+
+statement ok
+CREATE TABLE oid_test (id oid, name text)
+
+statement ok
+INSERT INTO oid_test VALUES (1, 'one'), (2, 'two'), (4294967295, 'max'), (0, 'zero'), (NULL, 'null')
+
+query TT
+SELECT * FROM oid_test WHERE id = 1::oid
+----
+1  one
+
+query TT
+SELECT * FROM oid_test WHERE id IS NULL
+----
+NULL  null
+
+query TT rowsort
+SELECT * FROM oid_test WHERE id < 3::oid
+----
+0  zero
+1  one
+2  two
+
+query TT
+SELECT * FROM oid_test ORDER BY id LIMIT 3
+----
+0  zero
+1  one
+2  two
+
+query TT
+SELECT * FROM oid_test ORDER BY id DESC LIMIT 2
+----
+NULL  null
+4294967295  max
+
+query TT
+SELECT * FROM oid_test ORDER BY id NULLS FIRST LIMIT 2
+----
+NULL  null
+0  zero
+
+### OID aggregate edge cases ###
+
+query I
+SELECT COUNT(*) FROM oid_test
+----
+5
+
+query I
+SELECT COUNT(id) FROM oid_test
+----
+4
+
+query T
+SELECT MAX(id) FROM oid_test
+----
+4294967295
+
+query T
+SELECT MIN(id) FROM oid_test
+----
+0
+
+### OID DISTINCT edge cases ###
+
+statement ok
+INSERT INTO oid_test VALUES (1, 'one_duplicate'), (NULL, 'null_duplicate')
+
+query T
+SELECT DISTINCT id FROM oid_test ORDER BY id
+----
+0
+1
+2
+4294967295
+NULL
+
+query I
+SELECT COUNT(DISTINCT id) FROM oid_test
+----
+4
+
+### OID GROUP BY edge cases ###
+
+query TI
+SELECT id, COUNT(*) FROM oid_test GROUP BY id ORDER BY id
+----
+0  1
+1  2
+2  1
+4294967295  1
+NULL  2
+
+### OID JOIN edge cases ###
+
+statement ok
+CREATE TABLE oid_lookup (oid_val oid, description text)
+
+statement ok
+INSERT INTO oid_lookup VALUES (1, 'first'), (2, 'second'), (3, 'third')
+
+query TTT
+SELECT t.id, t.name, l.description
+FROM oid_test t
+JOIN oid_lookup l ON t.id = l.oid_val
+ORDER BY t.id
+----
+1  one  first
+1  one_duplicate  first
+2  two  second
+
+query TTT
+SELECT t.id, t.name, l.description
+FROM oid_test t
+LEFT JOIN oid_lookup l ON t.id = l.oid_val
+WHERE l.description IS NULL
+ORDER BY t.name
+----
+NULL  null  NULL
+NULL  null_duplicate  NULL
+0  zero  NULL
+4294967295  max  NULL
+
+### OID subquery edge cases ###
+
+query TT
+SELECT * FROM oid_test WHERE id IN (SELECT oid_val FROM oid_lookup) ORDER BY id
+----
+1  one
+1  one_duplicate
+2  two
+
+query TT
+SELECT * FROM oid_test WHERE id = (SELECT MIN(oid_val) FROM oid_lookup) ORDER BY name
+----
+1  one
+1  one_duplicate
+
+### OID array edge cases ###
+
+query T
+SELECT ARRAY[1::oid, 2::oid, 3::oid]
+----
+{1,2,3}
+
+query T
+SELECT ARRAY[1::oid, NULL::oid, 3::oid]
+----
+{1,NULL,3}
+
+query B
+SELECT ARRAY[1::oid, 2::oid] = ARRAY[1::oid, 2::oid]
+----
+true
+
+query B
+SELECT ARRAY[1::oid, 2::oid] = ARRAY[1::oid, 3::oid]
+----
+false
+
+query B
+SELECT 2::oid = ANY(ARRAY[1::oid, 2::oid, 3::oid])
+----
+true
+
+query B
+SELECT 5::oid = ANY(ARRAY[1::oid, 2::oid, 3::oid])
+----
+false
+
+query B
+SELECT 5::oid <> ALL(ARRAY[1::oid, 2::oid, 3::oid])
+----
+true
+
+### OID with regclass/regtype edge cases ###
+
+query B
+SELECT 'bool'::regtype::oid = 16::oid
+----
+true
+
+query B
+SELECT 'int4'::regtype::oid = 23::oid
+----
+true
+
+### OID ordering edge cases ###
+
+query T
+SELECT x FROM (VALUES (3::oid), (1::oid), (2::oid), (NULL::oid)) AS t(x) ORDER BY x
+----
+1
+2
+3
+NULL
+
+query T
+SELECT x FROM (VALUES (3::oid), (1::oid), (2::oid), (NULL::oid)) AS t(x) ORDER BY x DESC
+----
+NULL
+3
+2
+1
+
+query T
+SELECT x FROM (VALUES (3::oid), (1::oid), (2::oid), (NULL::oid)) AS t(x) ORDER BY x NULLS FIRST
+----
+NULL
+1
+2
+3
+
+### Cleanup ###
+
+statement ok
+DROP TABLE oid_test
+
+statement ok
+DROP TABLE oid_lookup

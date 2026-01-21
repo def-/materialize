@@ -1460,3 +1460,484 @@ statement ok
 CREATE MATERIALIZED VIEW json_mv AS (
     SELECT * FROM jsons WHERE random_id = CAST(payload->>'my_field' AS uuid[])[random_index]
 )
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Array index boundary edge cases ###
+
+# Very large positive index
+query T
+SELECT ARRAY[1,2,3][2147483647]
+----
+NULL
+
+# Very large negative index
+query T
+SELECT ARRAY[1,2,3][-2147483648]
+----
+NULL
+
+# Index zero (arrays are 1-indexed)
+query T
+SELECT ARRAY[1,2,3][0]
+----
+NULL
+
+# NULL index
+query T
+SELECT ARRAY[1,2,3][NULL::int]
+----
+NULL
+
+# Index from expression that could overflow
+query T
+SELECT ARRAY[1,2,3][2147483646 + 1]
+----
+NULL
+
+# Multi-dimensional array with boundary indices
+query T
+SELECT ARRAY[[1,2],[3,4]][2147483647][1]
+----
+NULL
+
+query T
+SELECT ARRAY[[1,2],[3,4]][1][2147483647]
+----
+NULL
+
+query T
+SELECT ARRAY[[1,2],[3,4]][-2147483648][1]
+----
+NULL
+
+### Empty array edge cases ###
+
+# Operations on empty arrays
+query T
+SELECT ARRAY[]::int[] || ARRAY[]::int[]
+----
+{}
+
+query T
+SELECT ARRAY[]::text[] @> ARRAY[]::text[]
+----
+true
+
+query T
+SELECT ARRAY[]::text[] <@ ARRAY[]::text[]
+----
+true
+
+query I
+SELECT array_length(ARRAY[]::int[], 1)
+----
+NULL
+
+query I
+SELECT array_length(ARRAY[]::int[], 0)
+----
+NULL
+
+query I
+SELECT array_length(ARRAY[]::int[], -1)
+----
+NULL
+
+query I
+SELECT array_length(ARRAY[]::int[], 2147483647)
+----
+NULL
+
+# unnest empty array
+query I rowsort
+SELECT unnest FROM unnest(ARRAY[]::int[])
+----
+
+# array_agg with empty input
+query T
+SELECT array_agg(x) FROM (SELECT 1 WHERE false) AS t(x)
+----
+NULL
+
+### Array with all NULLs ###
+
+query T
+SELECT ARRAY[NULL, NULL, NULL]::int[]
+----
+{NULL,NULL,NULL}
+
+query I
+SELECT array_length(ARRAY[NULL, NULL, NULL]::int[], 1)
+----
+3
+
+query T
+SELECT ARRAY[NULL]::int[] || ARRAY[NULL]::int[]
+----
+{NULL,NULL}
+
+query T
+SELECT ARRAY[NULL, NULL]::int[] @> ARRAY[NULL]::int[]
+----
+false
+
+query I
+SELECT array_position(ARRAY[NULL, NULL]::int[], NULL)
+----
+NULL
+
+### Deep nesting edge cases (max 6 dimensions) ###
+
+# 6 dimensions - at the limit
+query T
+SELECT '{{{{{{1}}}}}}'::int[]
+----
+{{{{{{1}}}}}}
+
+# 6 dimensions with multiple elements
+query T
+SELECT '{{{{{{1,2}}}}}}'::int[]
+----
+{{{{{{1,2}}}}}}
+
+# Accessing deeply nested elements
+query I
+SELECT (ARRAY[[[[[[1,2],[3,4]],[[5,6],[7,8]]]]]]][1][1][1][1][1][2]
+----
+2
+
+# Empty arrays at max dimensions (consolidate to empty)
+query T
+SELECT '{{{{{{}}}}}}'::int[]
+----
+{}
+
+### Array length with various dimensions ###
+
+query I
+SELECT array_length(ARRAY[[[1,2],[3,4]],[[5,6],[7,8]]], 1)
+----
+2
+
+query I
+SELECT array_length(ARRAY[[[1,2],[3,4]],[[5,6],[7,8]]], 2)
+----
+2
+
+query I
+SELECT array_length(ARRAY[[[1,2],[3,4]],[[5,6],[7,8]]], 3)
+----
+2
+
+query I
+SELECT array_length(ARRAY[[[1,2],[3,4]],[[5,6],[7,8]]], 4)
+----
+NULL
+
+query I
+SELECT array_length(ARRAY[[[1,2],[3,4]],[[5,6],[7,8]]], 0)
+----
+NULL
+
+query I
+SELECT array_length(ARRAY[[[1,2],[3,4]],[[5,6],[7,8]]], -1)
+----
+NULL
+
+### array_remove edge cases ###
+
+query T
+SELECT array_remove(ARRAY[]::int[], 1)
+----
+{}
+
+query T
+SELECT array_remove(ARRAY[]::int[], NULL)
+----
+{}
+
+query T
+SELECT array_remove(ARRAY[NULL]::int[], 1)
+----
+{NULL}
+
+query T
+SELECT array_remove(ARRAY[1,1,1,1,1,1,1,1,1,1], 1)
+----
+{}
+
+### array_position edge cases ###
+
+query I
+SELECT array_position(ARRAY[]::int[], 1)
+----
+NULL
+
+query I
+SELECT array_position(ARRAY[]::int[], NULL)
+----
+NULL
+
+query I
+SELECT array_position(ARRAY[1,2,3], 1, 0)
+----
+1
+
+query I
+SELECT array_position(ARRAY[1,2,3], 1, -100)
+----
+1
+
+query I
+SELECT array_position(ARRAY[1,2,3], 1, 100)
+----
+NULL
+
+query I
+SELECT array_position(ARRAY[1,2,3], 1, 2147483647)
+----
+NULL
+
+query I
+SELECT array_position(ARRAY[1,2,3], 1, -2147483648)
+----
+1
+
+### array_to_string edge cases ###
+
+query T
+SELECT array_to_string(ARRAY[]::text[], ',')
+----
+(empty)
+
+query T
+SELECT array_to_string(ARRAY[NULL]::text[], ',')
+----
+(empty)
+
+query T
+SELECT array_to_string(ARRAY[NULL, NULL]::text[], ',')
+----
+(empty)
+
+query T
+SELECT array_to_string(ARRAY[NULL, NULL]::text[], ',', 'NULL')
+----
+NULL,NULL
+
+query T
+SELECT array_to_string(ARRAY['a', 'b'], '')
+----
+ab
+
+query T
+SELECT array_to_string(ARRAY['a', 'b'], NULL)
+----
+NULL
+
+### Array comparison edge cases ###
+
+# Comparing arrays of different lengths
+query B
+SELECT ARRAY[1] < ARRAY[1, 2]
+----
+true
+
+query B
+SELECT ARRAY[1, 2] < ARRAY[1]
+----
+false
+
+query B
+SELECT ARRAY[1, 2] < ARRAY[1, 2, 3]
+----
+true
+
+# Comparing with NULL elements
+query B
+SELECT ARRAY[1, NULL]::int[] < ARRAY[1, 2]
+----
+true
+
+query B
+SELECT ARRAY[1, 2] < ARRAY[1, NULL]::int[]
+----
+false
+
+# Empty array comparisons
+query B
+SELECT ARRAY[]::int[] < ARRAY[1]
+----
+true
+
+query B
+SELECT ARRAY[1] < ARRAY[]::int[]
+----
+false
+
+query B
+SELECT ARRAY[]::int[] < ARRAY[]::int[]
+----
+false
+
+query B
+SELECT ARRAY[]::int[] = ARRAY[]::int[]
+----
+true
+
+### Array concatenation edge cases ###
+
+# Concatenating many arrays
+query T
+SELECT ARRAY[1] || ARRAY[2] || ARRAY[3] || ARRAY[4] || ARRAY[5]
+----
+{1,2,3,4,5}
+
+# NULL array in concatenation
+query T
+SELECT NULL::int[] || ARRAY[1]
+----
+{1}
+
+query T
+SELECT ARRAY[1] || NULL::int[]
+----
+{1}
+
+query T
+SELECT NULL::int[] || NULL::int[]
+----
+NULL
+
+### Array containment edge cases ###
+
+# Large arrays containment check
+query B
+SELECT ARRAY[1,2,3,4,5,6,7,8,9,10] @> ARRAY[5]
+----
+true
+
+query B
+SELECT ARRAY[1,2,3,4,5,6,7,8,9,10] @> ARRAY[1,2,3,4,5,6,7,8,9,10]
+----
+true
+
+query B
+SELECT ARRAY[1] @> ARRAY[1,1,1,1,1,1,1,1,1,1]
+----
+true
+
+# Empty array containment
+query B
+SELECT ARRAY[1] @> ARRAY[]::int[]
+----
+true
+
+query B
+SELECT ARRAY[]::int[] @> ARRAY[1]
+----
+false
+
+### ANY/ALL with edge cases ###
+
+# ANY with empty array
+query B
+SELECT 1 = ANY(ARRAY[]::int[])
+----
+false
+
+query B
+SELECT 1 = ALL(ARRAY[]::int[])
+----
+true
+
+# ANY/ALL with NULL elements
+query B
+SELECT 1 = ANY(ARRAY[NULL]::int[])
+----
+NULL
+
+query B
+SELECT 1 = ALL(ARRAY[NULL]::int[])
+----
+NULL
+
+query B
+SELECT 1 = ANY(ARRAY[1, NULL]::int[])
+----
+true
+
+query B
+SELECT 1 = ALL(ARRAY[1, NULL]::int[])
+----
+NULL
+
+query B
+SELECT NULL = ANY(ARRAY[1, 2, 3])
+----
+NULL
+
+query B
+SELECT NULL = ALL(ARRAY[1, 2, 3])
+----
+NULL
+
+### Array slicing edge cases (if supported) ###
+
+# NULL values in slice bounds should return NULL
+query T
+SELECT (ARRAY[1,2,3,4,5])[1:NULL]
+----
+NULL
+
+query T
+SELECT (ARRAY[1,2,3,4,5])[NULL:3]
+----
+NULL
+
+query T
+SELECT (ARRAY[1,2,3,4,5])[NULL:NULL]
+----
+NULL
+
+# Out of bounds slices
+query T
+SELECT (ARRAY[1,2,3])[5:10]
+----
+{}
+
+query T
+SELECT (ARRAY[1,2,3])[-10:-5]
+----
+{}
+
+# Reversed bounds (start > end)
+query T
+SELECT (ARRAY[1,2,3])[3:1]
+----
+{}
+
+### Aggregate functions with arrays of special values ###
+
+query T
+SELECT array_agg(x ORDER BY x) FROM (VALUES (1), (2), (NULL::int), (3)) AS t(x)
+----
+{1,2,3,NULL}
+
+query T
+SELECT array_agg(x ORDER BY x DESC) FROM (VALUES (1), (2), (NULL::int), (3)) AS t(x)
+----
+{NULL,3,2,1}
+
+query T
+SELECT array_agg(x ORDER BY x NULLS FIRST) FROM (VALUES (1), (2), (NULL::int), (3)) AS t(x)
+----
+{NULL,1,2,3}
+
+query T
+SELECT array_agg(DISTINCT x ORDER BY x) FROM (VALUES (1), (1), (2), (2), (3), (3)) AS t(x)
+----
+{1,2,3}

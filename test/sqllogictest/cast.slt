@@ -138,3 +138,518 @@ SELECT (5 + 3)::text;
 
 query error db error: ERROR: operator does not exist: integer \+ text
 SELECT 5 + 3::text;
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Integer cast edge cases ###
+
+query I
+SELECT '2147483647'::int4
+----
+2147483647
+
+query I
+SELECT '-2147483648'::int4
+----
+-2147483648
+
+query error "2147483648" integer out of range
+SELECT '2147483648'::int4
+
+query error "-2147483649" integer out of range
+SELECT '-2147483649'::int4
+
+query I
+SELECT '32767'::int2
+----
+32767
+
+query I
+SELECT '-32768'::int2
+----
+-32768
+
+query error "32768" smallint out of range
+SELECT '32768'::int2
+
+query error "-32769" smallint out of range
+SELECT '-32769'::int2
+
+query I
+SELECT '9223372036854775807'::int8
+----
+9223372036854775807
+
+query I
+SELECT '-9223372036854775808'::int8
+----
+-9223372036854775808
+
+query error "9223372036854775808" bigint out of range
+SELECT '9223372036854775808'::int8
+
+query error "-9223372036854775809" bigint out of range
+SELECT '-9223372036854775809'::int8
+
+### Float cast edge cases ###
+
+query R
+SELECT 'NaN'::float
+----
+NaN
+
+query R
+SELECT 'Infinity'::float
+----
+inf
+
+query R
+SELECT '-Infinity'::float
+----
+-inf
+
+query R
+SELECT 'inf'::float
+----
+inf
+
+query R
+SELECT '-inf'::float
+----
+-inf
+
+query R
+SELECT '1e308'::float
+----
+100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+query error "1e309" real out of range
+SELECT '1e309'::float
+
+query R
+SELECT '1e-308'::float
+----
+0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+
+### Boolean cast edge cases ###
+
+query B
+SELECT 'true'::bool
+----
+true
+
+query B
+SELECT 'false'::bool
+----
+false
+
+query B
+SELECT 't'::bool
+----
+true
+
+query B
+SELECT 'f'::bool
+----
+false
+
+query B
+SELECT 'yes'::bool
+----
+true
+
+query B
+SELECT 'no'::bool
+----
+false
+
+query B
+SELECT 'on'::bool
+----
+true
+
+query B
+SELECT 'off'::bool
+----
+false
+
+query B
+SELECT '1'::bool
+----
+true
+
+query B
+SELECT '0'::bool
+----
+false
+
+query B
+SELECT 'TRUE'::bool
+----
+true
+
+query B
+SELECT 'FALSE'::bool
+----
+false
+
+query error invalid input syntax for type boolean
+SELECT 'invalid'::bool
+
+query error invalid input syntax for type boolean
+SELECT ''::bool
+
+query error invalid input syntax for type boolean
+SELECT '2'::bool
+
+### Numeric cast edge cases ###
+
+query R
+SELECT '123.456'::numeric
+----
+123.456
+
+query R
+SELECT '-123.456'::numeric
+----
+-123.456
+
+query R
+SELECT '0.000001'::numeric
+----
+0.000001
+
+query R
+SELECT 'NaN'::numeric
+----
+NaN
+
+query error invalid input syntax for type numeric
+SELECT 'Infinity'::numeric
+
+query error invalid input syntax for type numeric
+SELECT ''::numeric
+
+query error invalid input syntax for type numeric
+SELECT 'abc'::numeric
+
+### Text to integer truncation ###
+
+query I
+SELECT '123'::text::int
+----
+123
+
+query error invalid input syntax for type integer
+SELECT '123.45'::text::int
+
+query error invalid input syntax for type integer
+SELECT ''::int
+
+query error invalid input syntax for type integer
+SELECT 'abc'::int
+
+### Integer to float precision ###
+
+query R
+SELECT 9223372036854775807::int8::float
+----
+9223372036854776000
+
+query R
+SELECT 2147483647::int4::float
+----
+2147483647
+
+### Float to integer truncation ###
+
+query I
+SELECT 1.9::float::int
+----
+2
+
+query I
+SELECT 1.5::float::int
+----
+2
+
+query I
+SELECT 1.4::float::int
+----
+1
+
+query I
+SELECT -1.5::float::int
+----
+-2
+
+query I
+SELECT -1.4::float::int
+----
+-1
+
+query error integer out of range
+SELECT 'Infinity'::float::int
+
+query error integer out of range
+SELECT '-Infinity'::float::int
+
+query error cannot convert NaN to integer
+SELECT 'NaN'::float::int
+
+### Numeric to integer truncation ###
+
+query I
+SELECT 1.9::numeric::int
+----
+2
+
+query I
+SELECT 1.5::numeric::int
+----
+2
+
+query I
+SELECT 1.4::numeric::int
+----
+1
+
+query I
+SELECT -1.5::numeric::int
+----
+-2
+
+query error cannot convert NaN to integer
+SELECT 'NaN'::numeric::int
+
+### Chained casts ###
+
+query T
+SELECT 123::int::text
+----
+123
+
+query I
+SELECT '123'::text::int
+----
+123
+
+query R
+SELECT 123::int::float::numeric
+----
+123
+
+query T
+SELECT true::bool::text
+----
+true
+
+query I
+SELECT true::bool::int
+----
+1
+
+query I
+SELECT false::bool::int
+----
+0
+
+### NULL casting ###
+
+query I
+SELECT NULL::int
+----
+NULL
+
+query T
+SELECT NULL::text
+----
+NULL
+
+query B
+SELECT NULL::bool
+----
+NULL
+
+query R
+SELECT NULL::float
+----
+NULL
+
+query R
+SELECT NULL::numeric
+----
+NULL
+
+query T
+SELECT NULL::date
+----
+NULL
+
+query T
+SELECT NULL::timestamp
+----
+NULL
+
+### Date/Time casts ###
+
+query T
+SELECT '2000-01-01'::date::text
+----
+2000-01-01
+
+query T
+SELECT '2000-01-01'::date::timestamp::text
+----
+2000-01-01 00:00:00
+
+query T
+SELECT '2000-01-01 12:34:56'::timestamp::date::text
+----
+2000-01-01
+
+query T
+SELECT '12:34:56'::time::text
+----
+12:34:56
+
+query T
+SELECT '1 hour'::interval::text
+----
+01:00:00
+
+### Bytea casts ###
+
+query T
+SELECT 'hello'::bytea::text
+----
+\x68656c6c6f
+
+query T
+SELECT '\x68656c6c6f'::bytea::text
+----
+\x68656c6c6f
+
+### Array casts ###
+
+query T
+SELECT ARRAY[1, 2, 3]::text[]::text
+----
+{1,2,3}
+
+query T
+SELECT '{1,2,3}'::int[]::text
+----
+{1,2,3}
+
+query error CAST does not support casting from integer\[\] to date\[\]
+SELECT ARRAY[1, 2, 3]::date[]
+
+### Cast with expressions ###
+
+query I
+SELECT (1 + 2)::int
+----
+3
+
+query T
+SELECT (1 + 2)::text
+----
+3
+
+query R
+SELECT (1.5 + 2.5)::int::float
+----
+4
+
+### CAST vs :: syntax equivalence ###
+
+query I
+SELECT CAST(123 AS int)
+----
+123
+
+query I
+SELECT 123::int
+----
+123
+
+query T
+SELECT CAST(123 AS text)
+----
+123
+
+query T
+SELECT 123::text
+----
+123
+
+### Specific type precision casts ###
+
+query R
+SELECT 123.456::numeric(10, 2)
+----
+123.46
+
+query R
+SELECT 123.456::numeric(10, 1)
+----
+123.5
+
+query R
+SELECT 123.456::numeric(10, 0)
+----
+123
+
+query R
+SELECT 123.454::numeric(10, 2)
+----
+123.45
+
+query error numeric field overflow
+SELECT 123456::numeric(5, 2)
+
+### Varchar/char length casts ###
+
+query T
+SELECT 'hello'::varchar(3)
+----
+hel
+
+query T
+SELECT 'hi'::char(5)
+----
+hi
+
+query T
+SELECT 'hello world'::char(5)
+----
+hello
+
+### Empty string casts ###
+
+query T
+SELECT ''::text
+----
+(empty)
+
+query T
+SELECT ''::varchar
+----
+(empty)
+
+query T
+SELECT ''::char(5)
+----
+
+
+query error invalid input syntax
+SELECT ''::int
+
+query error invalid input syntax
+SELECT ''::float
+
+query error invalid input syntax
+SELECT ''::bool

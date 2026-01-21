@@ -55,3 +55,346 @@ Source materialize.public.abc
 Target cluster: quickstart
 
 EOF
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+mode cockroach
+
+### Basic DISTINCT ON edge cases ###
+
+statement ok
+INSERT INTO abc VALUES ('a1', 'b1', 'c1'), ('a2', 'b2', 'c1'), ('a3', 'b3', 'c2'), ('a4', 'b4', 'c2'), ('a5', 'b5', 'c3')
+
+query T rowsort
+SELECT DISTINCT ON (c) a FROM abc
+----
+a1
+a3
+a5
+
+query T
+SELECT DISTINCT ON (c) a FROM abc ORDER BY c
+----
+a1
+a3
+a5
+
+query T
+SELECT DISTINCT ON (c) a FROM abc ORDER BY c DESC
+----
+a5
+a3
+a1
+
+### DISTINCT ON with multiple columns ###
+
+query TT rowsort
+SELECT DISTINCT ON (c) a, b FROM abc
+----
+a1  b1
+a3  b3
+a5  b5
+
+query TTT rowsort
+SELECT DISTINCT ON (c) a, b, c FROM abc
+----
+a1  b1  c1
+a3  b3  c2
+a5  b5  c3
+
+### DISTINCT ON with ORDER BY on non-distinct columns ###
+
+query TT
+SELECT DISTINCT ON (c) a, b FROM abc ORDER BY c, a
+----
+a1  b1
+a3  b3
+a5  b5
+
+query TT
+SELECT DISTINCT ON (c) a, b FROM abc ORDER BY c, a DESC
+----
+a2  b2
+a4  b4
+a5  b5
+
+query TT
+SELECT DISTINCT ON (c) a, b FROM abc ORDER BY c, b DESC
+----
+a2  b2
+a4  b4
+a5  b5
+
+### DISTINCT ON with NULL values ###
+
+statement ok
+INSERT INTO abc VALUES (NULL, 'b6', 'c1'), ('a7', NULL, 'c2'), (NULL, NULL, 'c4')
+
+query T rowsort
+SELECT DISTINCT ON (c) a FROM abc
+----
+NULL
+a1
+a3
+a5
+
+query T
+SELECT DISTINCT ON (c) a FROM abc ORDER BY c, a NULLS FIRST
+----
+NULL
+a3
+a5
+NULL
+
+query T
+SELECT DISTINCT ON (c) a FROM abc ORDER BY c, a NULLS LAST
+----
+a1
+a3
+a5
+NULL
+
+### DISTINCT ON on NULL column ###
+
+statement ok
+CREATE TABLE distinct_null_test (x int, y text)
+
+statement ok
+INSERT INTO distinct_null_test VALUES (1, 'a'), (1, 'b'), (NULL, 'c'), (NULL, 'd'), (2, 'e')
+
+query IT rowsort
+SELECT DISTINCT ON (x) x, y FROM distinct_null_test
+----
+1     a
+2     e
+NULL  c
+
+query IT
+SELECT DISTINCT ON (x) x, y FROM distinct_null_test ORDER BY x NULLS FIRST
+----
+NULL  c
+1     a
+2     e
+
+query IT
+SELECT DISTINCT ON (x) x, y FROM distinct_null_test ORDER BY x NULLS LAST
+----
+1     a
+2     e
+NULL  c
+
+### DISTINCT ON with expressions ###
+
+statement ok
+CREATE TABLE distinct_expr_test (a int, b int)
+
+statement ok
+INSERT INTO distinct_expr_test VALUES (1, 10), (2, 10), (3, 20), (4, 20), (5, 30)
+
+query II rowsort
+SELECT DISTINCT ON (b / 10) a, b FROM distinct_expr_test
+----
+1  10
+3  20
+5  30
+
+query I rowsort
+SELECT DISTINCT ON (a % 2) a FROM distinct_expr_test
+----
+1
+2
+
+### DISTINCT ON with aggregates in subquery ###
+
+query I rowsort
+SELECT DISTINCT ON (x) x FROM (SELECT a % 2 as x FROM distinct_expr_test)
+----
+0
+1
+
+### DISTINCT ON with empty result ###
+
+query I
+SELECT DISTINCT ON (a) a FROM distinct_expr_test WHERE a > 100
+----
+
+### DISTINCT ON with single row ###
+
+query I
+SELECT DISTINCT ON (a) a FROM distinct_expr_test WHERE a = 3
+----
+3
+
+### DISTINCT ON with all same values in grouping column ###
+
+statement ok
+CREATE TABLE distinct_same_test (x int, y text)
+
+statement ok
+INSERT INTO distinct_same_test VALUES (1, 'a'), (1, 'b'), (1, 'c')
+
+query IT
+SELECT DISTINCT ON (x) x, y FROM distinct_same_test ORDER BY x, y
+----
+1  a
+
+query IT
+SELECT DISTINCT ON (x) x, y FROM distinct_same_test ORDER BY x, y DESC
+----
+1  c
+
+### DISTINCT ON with multiple grouping columns ###
+
+statement ok
+CREATE TABLE distinct_multi_test (a int, b int, c text)
+
+statement ok
+INSERT INTO distinct_multi_test VALUES
+    (1, 1, 'a'), (1, 1, 'b'), (1, 2, 'c'), (1, 2, 'd'),
+    (2, 1, 'e'), (2, 1, 'f'), (2, 2, 'g')
+
+query IIT rowsort
+SELECT DISTINCT ON (a, b) a, b, c FROM distinct_multi_test
+----
+1  1  a
+1  2  c
+2  1  e
+2  2  g
+
+query IIT
+SELECT DISTINCT ON (a, b) a, b, c FROM distinct_multi_test ORDER BY a, b, c DESC
+----
+1  1  b
+1  2  d
+2  1  f
+2  2  g
+
+### DISTINCT ON with joins ###
+
+statement ok
+CREATE TABLE d1 (id int, val text)
+
+statement ok
+CREATE TABLE d2 (id int, ref_id int, data text)
+
+statement ok
+INSERT INTO d1 VALUES (1, 'one'), (2, 'two'), (3, 'three')
+
+statement ok
+INSERT INTO d2 VALUES (10, 1, 'x'), (11, 1, 'y'), (12, 2, 'z'), (13, 2, 'w')
+
+query ITT rowsort
+SELECT DISTINCT ON (d1.id) d1.id, d1.val, d2.data
+FROM d1
+JOIN d2 ON d1.id = d2.ref_id
+----
+1  one  x
+2  two  z
+
+query ITT
+SELECT DISTINCT ON (d1.id) d1.id, d1.val, d2.data
+FROM d1
+JOIN d2 ON d1.id = d2.ref_id
+ORDER BY d1.id, d2.data DESC
+----
+1  one  y
+2  two  z
+
+### DISTINCT ON with LEFT JOIN ###
+
+query ITT rowsort
+SELECT DISTINCT ON (d1.id) d1.id, d1.val, d2.data
+FROM d1
+LEFT JOIN d2 ON d1.id = d2.ref_id
+----
+1  one    x
+2  two    z
+3  three  NULL
+
+### DISTINCT ON with subquery ###
+
+query IT rowsort
+SELECT DISTINCT ON (sub.id) sub.id, sub.val
+FROM (SELECT id, val FROM d1 UNION ALL SELECT id, val FROM d1) sub
+----
+1  one
+2  two
+3  three
+
+### DISTINCT ON with LIMIT ###
+
+query IT
+SELECT DISTINCT ON (x) x, y FROM distinct_null_test ORDER BY x LIMIT 2
+----
+1  a
+2  e
+
+### DISTINCT ON with OFFSET ###
+
+query IT
+SELECT DISTINCT ON (x) x, y FROM distinct_null_test ORDER BY x NULLS LAST OFFSET 1
+----
+2     e
+NULL  c
+
+### DISTINCT ON with LIMIT and OFFSET ###
+
+query IT
+SELECT DISTINCT ON (x) x, y FROM distinct_null_test ORDER BY x NULLS LAST LIMIT 1 OFFSET 1
+----
+2  e
+
+### DISTINCT ON in CTE ###
+
+query IT rowsort
+WITH cte AS (SELECT DISTINCT ON (x) x, y FROM distinct_null_test)
+SELECT * FROM cte
+----
+1     a
+2     e
+NULL  c
+
+### DISTINCT ON in view ###
+
+statement ok
+CREATE VIEW distinct_view AS SELECT DISTINCT ON (x) x, y FROM distinct_null_test ORDER BY x NULLS LAST
+
+query IT
+SELECT * FROM distinct_view
+----
+1     a
+2     e
+NULL  c
+
+### DISTINCT ON error cases ###
+
+query error SELECT DISTINCT ON expressions must match initial ORDER BY expressions
+SELECT DISTINCT ON (a) a, b FROM distinct_multi_test ORDER BY b
+
+query error SELECT DISTINCT ON expressions must match initial ORDER BY expressions
+SELECT DISTINCT ON (a, b) a, b FROM distinct_multi_test ORDER BY b, a
+
+### Cleanup ###
+
+statement ok
+DROP VIEW distinct_view
+
+statement ok
+DROP TABLE distinct_null_test
+
+statement ok
+DROP TABLE distinct_expr_test
+
+statement ok
+DROP TABLE distinct_same_test
+
+statement ok
+DROP TABLE distinct_multi_test
+
+statement ok
+DROP TABLE d1
+
+statement ok
+DROP TABLE d2

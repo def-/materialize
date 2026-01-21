@@ -1838,3 +1838,622 @@ query error
 select string_to_array('hello world', 0) from string_to_array_words;
 
 # string_to_array - end.
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### ASCII function edge cases ###
+
+query I
+SELECT ascii('')
+----
+0
+
+query I
+SELECT ascii(NULL)
+----
+NULL
+
+# Multi-byte UTF-8 character (should return code of first byte)
+query I
+SELECT ascii('é')
+----
+233
+
+query I
+SELECT ascii('😀')
+----
+128512
+
+### CHR function edge cases ###
+
+query T
+SELECT chr(0)
+----
+(empty)
+
+query T
+SELECT chr(65)
+----
+A
+
+query T
+SELECT chr(127)
+----
+
+
+query T
+SELECT chr(128)
+----
+€
+
+query T
+SELECT chr(255)
+----
+ÿ
+
+query error requested character too large for encoding
+SELECT chr(1114112)
+
+query error requested character not valid for encoding
+SELECT chr(-1)
+
+query T
+SELECT chr(NULL)
+----
+NULL
+
+### CONCAT edge cases ###
+
+query T
+SELECT concat()
+----
+(empty)
+
+query T
+SELECT concat(NULL)
+----
+(empty)
+
+query T
+SELECT concat(NULL, NULL, NULL)
+----
+(empty)
+
+query T
+SELECT concat('a', NULL, 'b')
+----
+ab
+
+query T
+SELECT concat('', '', '')
+----
+(empty)
+
+### CONCAT_WS edge cases ###
+
+query T
+SELECT concat_ws(',')
+----
+(empty)
+
+query T
+SELECT concat_ws(',', NULL)
+----
+(empty)
+
+query T
+SELECT concat_ws(NULL, 'a', 'b')
+----
+NULL
+
+query T
+SELECT concat_ws(',', NULL, NULL, NULL)
+----
+(empty)
+
+query T
+SELECT concat_ws('', 'a', 'b', 'c')
+----
+abc
+
+query T
+SELECT concat_ws(',', 'a')
+----
+a
+
+### FORMAT function edge cases ###
+
+query T
+SELECT format('%s', NULL)
+----
+(empty)
+
+query T
+SELECT format('%I', '')
+----
+""
+
+query T
+SELECT format('%I', 'table')
+----
+"table"
+
+query T
+SELECT format('%L', NULL)
+----
+NULL
+
+query T
+SELECT format('%L', '')
+----
+''
+
+query T
+SELECT format('%L', E'it\'s')
+----
+'it''s'
+
+query T
+SELECT format('%%')
+----
+%
+
+query error too few arguments
+SELECT format('%s %s', 'only one')
+
+### INITCAP edge cases ###
+
+query T
+SELECT initcap('')
+----
+(empty)
+
+query T
+SELECT initcap(NULL)
+----
+NULL
+
+query T
+SELECT initcap('123abc')
+----
+123Abc
+
+query T
+SELECT initcap('   spaces   ')
+----
+   Spaces
+
+query T
+SELECT initcap('ALREADY CAPS')
+----
+Already Caps
+
+### POSITION edge cases ###
+
+query I
+SELECT position('' in 'hello')
+----
+1
+
+query I
+SELECT position('x' in '')
+----
+0
+
+query I
+SELECT position('' in '')
+----
+1
+
+query I
+SELECT position('hello' in 'hel')
+----
+0
+
+query I
+SELECT position(NULL in 'hello')
+----
+NULL
+
+query I
+SELECT position('hello' in NULL)
+----
+NULL
+
+### OVERLAY edge cases ###
+
+query T
+SELECT overlay('hello' placing 'XX' from 0)
+----
+XXello
+
+query T
+SELECT overlay('hello' placing 'XX' from -5)
+----
+XXhello
+
+query T
+SELECT overlay('hello' placing 'XX' from 100)
+----
+helloXX
+
+query T
+SELECT overlay('hello' placing '' from 2 for 3)
+----
+ho
+
+query T
+SELECT overlay('' placing 'XX' from 1)
+----
+XX
+
+query T
+SELECT overlay('hello' placing 'XX' from 1 for 0)
+----
+XXhello
+
+query T
+SELECT overlay('hello' placing 'XX' from 1 for -1)
+----
+XXhello
+
+### REVERSE edge cases ###
+
+query T
+SELECT reverse('')
+----
+(empty)
+
+query T
+SELECT reverse(NULL)
+----
+NULL
+
+query T
+SELECT reverse('a')
+----
+a
+
+query T
+SELECT reverse('abcdef')
+----
+fedcba
+
+# Unicode reverse
+query T
+SELECT reverse('héllo')
+----
+olléh
+
+### BTRIM/LTRIM/RTRIM edge cases ###
+
+query T
+SELECT btrim('')
+----
+(empty)
+
+query T
+SELECT btrim('   ')
+----
+(empty)
+
+query T
+SELECT btrim(NULL)
+----
+NULL
+
+query T
+SELECT btrim('xxxhelloxxx', 'x')
+----
+hello
+
+query T
+SELECT btrim('hello', '')
+----
+hello
+
+query T
+SELECT ltrim('', 'x')
+----
+(empty)
+
+query T
+SELECT rtrim('', 'x')
+----
+(empty)
+
+### UPPER/LOWER edge cases ###
+
+query T
+SELECT upper('')
+----
+(empty)
+
+query T
+SELECT upper(NULL)
+----
+NULL
+
+query T
+SELECT lower('')
+----
+(empty)
+
+query T
+SELECT lower(NULL)
+----
+NULL
+
+# Unicode case conversion
+query T
+SELECT upper('héllo')
+----
+HÉLLO
+
+query T
+SELECT lower('HÉLLO')
+----
+héllo
+
+### MD5 edge cases ###
+
+query T
+SELECT md5('')
+----
+d41d8cd98f00b204e9800998ecf8427e
+
+query T
+SELECT md5(NULL)
+----
+NULL
+
+### ENCODE/DECODE edge cases ###
+
+query T
+SELECT encode(''::bytea, 'hex')
+----
+(empty)
+
+query T
+SELECT encode(NULL::bytea, 'hex')
+----
+NULL
+
+query T
+SELECT decode('', 'hex')
+----
+
+query T
+SELECT decode(NULL, 'hex')
+----
+NULL
+
+query error invalid hexadecimal digit
+SELECT decode('zz', 'hex')
+
+query error invalid input length
+SELECT decode('abc', 'base64')
+
+### BIT_LENGTH/OCTET_LENGTH edge cases ###
+
+query I
+SELECT bit_length('')
+----
+0
+
+query I
+SELECT bit_length(NULL)
+----
+NULL
+
+query I
+SELECT octet_length('')
+----
+0
+
+query I
+SELECT octet_length(NULL)
+----
+NULL
+
+# Multi-byte UTF-8
+query I
+SELECT octet_length('é')
+----
+2
+
+query I
+SELECT bit_length('é')
+----
+16
+
+### CHAR_LENGTH/CHARACTER_LENGTH edge cases ###
+
+query I
+SELECT char_length('')
+----
+0
+
+query I
+SELECT char_length(NULL)
+----
+NULL
+
+# Multi-byte UTF-8 - counts characters not bytes
+query I
+SELECT char_length('héllo')
+----
+5
+
+### REGEXP_SPLIT_TO_ARRAY edge cases ###
+
+query T
+SELECT regexp_split_to_array('', '.')
+----
+{""}
+
+query T
+SELECT regexp_split_to_array('hello', '')
+----
+{h,e,l,l,o}
+
+query T
+SELECT regexp_split_to_array(NULL, '.')
+----
+NULL
+
+query T
+SELECT regexp_split_to_array('hello', NULL)
+----
+NULL
+
+query T
+SELECT regexp_split_to_array('a,b,,c', ',')
+----
+{a,b,"",c}
+
+### TO_HEX edge cases ###
+
+query T
+SELECT to_hex(0)
+----
+0
+
+query T
+SELECT to_hex(-1)
+----
+ffffffffffffffff
+
+query T
+SELECT to_hex(2147483647)
+----
+7fffffff
+
+query T
+SELECT to_hex(-2147483648)
+----
+ffffffff80000000
+
+query T
+SELECT to_hex(9223372036854775807)
+----
+7fffffffffffffff
+
+### CONVERT_FROM/TO edge cases ###
+
+query T
+SELECT convert_from(''::bytea, 'UTF8')
+----
+(empty)
+
+query T
+SELECT convert_from(NULL::bytea, 'UTF8')
+----
+NULL
+
+query error invalid byte sequence for encoding
+SELECT convert_from('\x80'::bytea, 'UTF8')
+
+query T
+SELECT convert_to('', 'UTF8')
+----
+
+query T
+SELECT convert_to(NULL, 'UTF8')
+----
+NULL
+
+### TRANSLATE edge cases ###
+
+query T
+SELECT translate('', 'abc', 'xyz')
+----
+(empty)
+
+query T
+SELECT translate(NULL, 'abc', 'xyz')
+----
+NULL
+
+query T
+SELECT translate('hello', '', 'xyz')
+----
+hello
+
+query T
+SELECT translate('hello', 'helo', '')
+----
+(empty)
+
+query T
+SELECT translate('hello', 'abc', 'xy')
+----
+hello
+
+### PARSE_IDENT edge cases ###
+
+query T
+SELECT parse_ident('')
+----
+{""}
+
+query T
+SELECT parse_ident(NULL)
+----
+NULL
+
+query T
+SELECT parse_ident('schema.table')
+----
+{schema,table}
+
+query T
+SELECT parse_ident('"schema"."table"')
+----
+{schema,table}
+
+query T
+SELECT parse_ident('a.b.c.d')
+----
+{a,b,c,d}
+
+### Very long strings ###
+
+query I
+SELECT length(repeat('a', 100000))
+----
+100000
+
+query T
+SELECT left(repeat('a', 100000), 5)
+----
+aaaaa
+
+query T
+SELECT right(repeat('a', 100000), 5)
+----
+aaaaa
+
+### Empty string vs NULL distinction ###
+
+query B
+SELECT '' = ''
+----
+true
+
+query B
+SELECT '' IS NULL
+----
+false
+
+query B
+SELECT NULL IS NULL
+----
+true
+
+query B
+SELECT '' = NULL
+----
+NULL

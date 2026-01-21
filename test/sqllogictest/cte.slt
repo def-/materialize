@@ -249,3 +249,286 @@ WITH count AS (VALUES (9)) SELECT count(*) FROM count;
 ----
 count
 1
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Basic CTE edge cases ###
+
+query I
+WITH cte AS (SELECT 1 AS x) SELECT * FROM cte
+----
+1
+
+query I
+WITH cte AS (SELECT NULL::int AS x) SELECT * FROM cte
+----
+NULL
+
+query II
+WITH cte AS (SELECT 1 AS a, 2 AS b) SELECT a, b FROM cte
+----
+1  2
+
+### Multiple CTEs edge cases ###
+
+query II
+WITH
+    cte1 AS (SELECT 1 AS x),
+    cte2 AS (SELECT 2 AS y)
+SELECT * FROM cte1, cte2
+----
+1  2
+
+query I
+WITH
+    cte1 AS (SELECT 1 AS x),
+    cte2 AS (SELECT x + 1 AS y FROM cte1)
+SELECT y FROM cte2
+----
+2
+
+query I
+WITH
+    cte1 AS (SELECT 1 AS x),
+    cte2 AS (SELECT x + 1 AS y FROM cte1),
+    cte3 AS (SELECT y + 1 AS z FROM cte2)
+SELECT z FROM cte3
+----
+3
+
+### CTE referenced multiple times ###
+
+query II
+WITH cte AS (SELECT 1 AS x)
+SELECT a.x, b.x FROM cte a, cte b
+----
+1  1
+
+query I
+WITH cte AS (SELECT 1 AS x)
+SELECT (SELECT x FROM cte) + (SELECT x FROM cte)
+----
+2
+
+### CTE with subquery edge cases ###
+
+query I
+WITH cte AS (SELECT * FROM (SELECT 1 AS x) sub)
+SELECT * FROM cte
+----
+1
+
+query I
+WITH cte AS (SELECT 1 AS x)
+SELECT * FROM (SELECT * FROM cte) sub
+----
+1
+
+### CTE with UNION edge cases ###
+
+query I
+WITH cte AS (SELECT 1 AS x UNION SELECT 2)
+SELECT * FROM cte ORDER BY x
+----
+1
+2
+
+query I
+WITH cte AS (SELECT 1 AS x UNION ALL SELECT 1)
+SELECT * FROM cte ORDER BY x
+----
+1
+1
+
+### CTE with JOIN edge cases ###
+
+statement ok
+CREATE TABLE cte_test1 (id int, val text)
+
+statement ok
+CREATE TABLE cte_test2 (id int, val text)
+
+statement ok
+INSERT INTO cte_test1 VALUES (1, 'a'), (2, 'b'), (3, 'c')
+
+statement ok
+INSERT INTO cte_test2 VALUES (2, 'x'), (3, 'y'), (4, 'z')
+
+query ITT
+WITH cte AS (SELECT * FROM cte_test1)
+SELECT cte.id, cte.val, t2.val
+FROM cte
+JOIN cte_test2 t2 ON cte.id = t2.id
+ORDER BY cte.id
+----
+2  b  x
+3  c  y
+
+### CTE with aggregates edge cases ###
+
+query IR
+WITH cte AS (SELECT id, val FROM cte_test1)
+SELECT COUNT(*), AVG(id) FROM cte
+----
+3  2
+
+query TI
+WITH cte AS (SELECT val, COUNT(*) as cnt FROM cte_test1 GROUP BY val)
+SELECT * FROM cte ORDER BY val
+----
+a  1
+b  1
+c  1
+
+### CTE with ORDER BY and LIMIT edge cases ###
+
+query I
+WITH cte AS (SELECT id FROM cte_test1 ORDER BY id DESC)
+SELECT * FROM cte ORDER BY id
+----
+1
+2
+3
+
+query I
+WITH cte AS (SELECT id FROM cte_test1)
+SELECT * FROM cte ORDER BY id LIMIT 2
+----
+1
+2
+
+query I
+WITH cte AS (SELECT id FROM cte_test1 ORDER BY id)
+SELECT * FROM cte LIMIT 1
+----
+1
+
+### CTE with NULL handling edge cases ###
+
+statement ok
+INSERT INTO cte_test1 VALUES (NULL, NULL)
+
+query II
+WITH cte AS (SELECT id, id * 2 as doubled FROM cte_test1)
+SELECT * FROM cte WHERE id IS NOT NULL ORDER BY id
+----
+1  2
+2  4
+3  6
+
+query II
+WITH cte AS (SELECT id, id * 2 as doubled FROM cte_test1)
+SELECT * FROM cte WHERE id IS NULL
+----
+NULL  NULL
+
+### CTE with DISTINCT edge cases ###
+
+statement ok
+INSERT INTO cte_test1 VALUES (1, 'a')
+
+query I
+WITH cte AS (SELECT DISTINCT id FROM cte_test1)
+SELECT * FROM cte WHERE id IS NOT NULL ORDER BY id
+----
+1
+2
+3
+
+### CTE shadowing edge cases ###
+
+query I
+WITH cte AS (SELECT 1 AS x)
+SELECT * FROM (
+    WITH cte AS (SELECT 2 AS x)
+    SELECT * FROM cte
+)
+----
+2
+
+### CTE with empty result edge cases ###
+
+query I
+WITH cte AS (SELECT id FROM cte_test1 WHERE false)
+SELECT * FROM cte
+----
+
+query I
+WITH cte AS (SELECT id FROM cte_test1 WHERE false)
+SELECT COUNT(*) FROM cte
+----
+0
+
+### CTE with complex expressions ###
+
+query I
+WITH cte AS (
+    SELECT
+        CASE WHEN id > 2 THEN id * 2 ELSE id END as computed
+    FROM cte_test1
+    WHERE id IS NOT NULL
+)
+SELECT * FROM cte ORDER BY computed
+----
+1
+2
+6
+
+### CTE with column aliases ###
+
+query II
+WITH cte(col1, col2) AS (SELECT 1, 2)
+SELECT col1, col2 FROM cte
+----
+1  2
+
+query II
+WITH cte(a, b) AS (SELECT id, val FROM cte_test1 WHERE id = 1)
+SELECT a, b FROM cte
+----
+1  a
+
+### Nested CTE edge cases ###
+
+query I
+WITH outer_cte AS (
+    WITH inner_cte AS (SELECT 1 AS x)
+    SELECT x + 1 AS y FROM inner_cte
+)
+SELECT y FROM outer_cte
+----
+2
+
+### CTE with EXISTS edge cases ###
+
+query B
+WITH cte AS (SELECT 1 AS x)
+SELECT EXISTS (SELECT 1 FROM cte)
+----
+true
+
+query B
+WITH cte AS (SELECT 1 AS x WHERE false)
+SELECT EXISTS (SELECT 1 FROM cte)
+----
+false
+
+### CTE with IN edge cases ###
+
+query I
+WITH cte AS (SELECT 1 AS x UNION SELECT 2 UNION SELECT 3)
+SELECT id FROM cte_test1 WHERE id IN (SELECT x FROM cte) ORDER BY id
+----
+1
+2
+3
+
+### Cleanup ###
+
+statement ok
+DROP TABLE cte_test1
+
+statement ok
+DROP TABLE cte_test2

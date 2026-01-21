@@ -110,3 +110,361 @@ query T
 SELECT decode(encode('se', 'base64'), 'base64')
 ----
 se
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Base64 edge cases ###
+
+query T
+SELECT encode('', 'base64')
+----
+(empty)
+
+query T
+SELECT decode('', 'base64')
+----
+(empty)
+
+query T
+SELECT encode('\x00', 'base64')
+----
+AA==
+
+query T
+SELECT encode('\xff', 'base64')
+----
+/w==
+
+query T
+SELECT encode('\x00\x00\x00', 'base64')
+----
+AAAA
+
+query T
+SELECT decode('AAAA', 'base64')
+----
+[0,␠0,␠0]
+
+query T
+SELECT encode('a', 'base64')
+----
+YQ==
+
+query T
+SELECT encode('aa', 'base64')
+----
+YWE=
+
+query T
+SELECT encode('aaa', 'base64')
+----
+YWFh
+
+query T
+SELECT encode('aaaa', 'base64')
+----
+YWFhYQ==
+
+# Base64 decode with whitespace
+query T
+SELECT decode('Y W F h', 'base64')
+----
+aaa
+
+query T
+SELECT decode(E'YWFh\nYQ==', 'base64')
+----
+aaaa
+
+# Base64 padding edge cases
+query error invalid base64 end sequence
+SELECT decode('YQ', 'base64')
+
+query error invalid base64 end sequence
+SELECT decode('YWE', 'base64')
+
+query error unexpected "=" while decoding base64 sequence
+SELECT decode('====', 'base64')
+
+### Hex encoding edge cases ###
+
+query T
+SELECT encode('', 'hex')
+----
+(empty)
+
+query T
+SELECT decode('', 'hex')
+----
+(empty)
+
+query T
+SELECT encode('\x00', 'hex')
+----
+00
+
+query T
+SELECT encode('\xff', 'hex')
+----
+ff
+
+query T
+SELECT encode('\x0f', 'hex')
+----
+0f
+
+query T
+SELECT encode('\xf0', 'hex')
+----
+f0
+
+query T
+SELECT decode('00', 'hex')
+----
+[0]
+
+query T
+SELECT decode('ff', 'hex')
+----
+[255]
+
+query T
+SELECT decode('FF', 'hex')
+----
+[255]
+
+query T
+SELECT decode('Ff', 'hex')
+----
+[255]
+
+query T
+SELECT decode('fF', 'hex')
+----
+[255]
+
+query T
+SELECT decode('00ff', 'hex')
+----
+[0,␠255]
+
+# Hex with whitespace
+query T
+SELECT decode(E'00\t01\n02', 'hex')
+----
+[0,␠1,␠2]
+
+# Hex error cases
+query error invalid hexadecimal data: odd number of digits
+SELECT decode('f', 'hex')
+
+query error invalid hexadecimal data: odd number of digits
+SELECT decode('fff', 'hex')
+
+query error invalid hexadecimal digit: "g"
+SELECT decode('gg', 'hex')
+
+query error invalid hexadecimal digit: "G"
+SELECT decode('GG', 'hex')
+
+### Escape encoding edge cases ###
+
+query T
+SELECT encode('', 'escape')
+----
+(empty)
+
+query T
+SELECT decode('', 'escape')
+----
+(empty)
+
+query T
+SELECT encode('hello', 'escape')
+----
+hello
+
+query T
+SELECT decode('hello', 'escape')
+----
+hello
+
+query T
+SELECT encode('\x00', 'escape')
+----
+\000
+
+query T
+SELECT encode('\x01', 'escape')
+----
+\001
+
+query T
+SELECT encode('\x1f', 'escape')
+----
+\037
+
+query T
+SELECT encode('\x7f', 'escape')
+----
+\177
+
+query T
+SELECT encode('\xff', 'escape')
+----
+\377
+
+query T
+SELECT encode('\\', 'escape')
+----
+\\
+
+query T
+SELECT decode('\\\\', 'escape')
+----
+\\
+
+query T
+SELECT decode('\\000', 'escape')
+----
+[0]
+
+query T
+SELECT decode('\\377', 'escape')
+----
+[255]
+
+# Mixed printable and non-printable
+query T
+SELECT encode('A\x00B', 'escape')
+----
+A\000B
+
+query T
+SELECT decode('A\\000B', 'escape')
+----
+A[0]B
+
+# Escape error cases
+query error invalid input syntax for type bytea
+SELECT decode('\\', 'escape')
+
+query error invalid input syntax for type bytea
+SELECT decode('\\0', 'escape')
+
+query error invalid input syntax for type bytea
+SELECT decode('\\00', 'escape')
+
+query error invalid input syntax for type bytea
+SELECT decode('\\400', 'escape')
+
+### Unknown format edge cases ###
+
+query error unrecognized encoding: ""
+SELECT encode('test', '')
+
+query error unrecognized encoding: "unknown"
+SELECT encode('test', 'unknown')
+
+query error unrecognized encoding: "BASE64"
+SELECT encode('test', 'BASE64')
+
+query error unrecognized encoding: "HEX"
+SELECT encode('test', 'HEX')
+
+### NULL handling edge cases ###
+
+query T
+SELECT encode(NULL, 'base64')
+----
+NULL
+
+query T
+SELECT decode(NULL, 'base64')
+----
+NULL
+
+query T
+SELECT encode(NULL, 'hex')
+----
+NULL
+
+query T
+SELECT decode(NULL, 'hex')
+----
+NULL
+
+query T
+SELECT encode(NULL, 'escape')
+----
+NULL
+
+query T
+SELECT decode(NULL, 'escape')
+----
+NULL
+
+### Round-trip edge cases ###
+
+query B
+SELECT decode(encode('\x00\x01\x02\xfd\xfe\xff', 'base64'), 'base64') = '\x00\x01\x02\xfd\xfe\xff'
+----
+true
+
+query B
+SELECT decode(encode('\x00\x01\x02\xfd\xfe\xff', 'hex'), 'hex') = '\x00\x01\x02\xfd\xfe\xff'
+----
+true
+
+query B
+SELECT decode(encode('\x00\x01\x02\xfd\xfe\xff', 'escape'), 'escape') = '\x00\x01\x02\xfd\xfe\xff'
+----
+true
+
+### Encoding in expressions ###
+
+query T
+SELECT CASE WHEN true THEN encode('test', 'hex') ELSE encode('other', 'hex') END
+----
+74657374
+
+query T
+SELECT COALESCE(encode(NULL, 'hex'), 'default')
+----
+default
+
+### Encoding with table data ###
+
+query T
+SELECT encode(val, 'base64') FROM unencoded WHERE val IS NOT NULL ORDER BY val LIMIT 1
+----
+AP/+ZQ==
+
+query T
+SELECT encode(val, 'hex') FROM unencoded WHERE val IS NOT NULL ORDER BY val LIMIT 1
+----
+00fffe65
+
+query T
+SELECT encode(val, 'escape') FROM unencoded WHERE val IS NOT NULL ORDER BY val LIMIT 1
+----
+\000\377\376e
+
+### Large data encoding ###
+
+query I
+SELECT length(encode(repeat('x', 1000)::bytea, 'base64'))
+----
+1360
+
+query I
+SELECT length(encode(repeat('x', 1000)::bytea, 'hex'))
+----
+2000
+
+query I
+SELECT length(encode(repeat('x', 1000)::bytea, 'escape'))
+----
+1000

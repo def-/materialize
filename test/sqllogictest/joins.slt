@@ -1284,3 +1284,427 @@ select
   where (select "id" from mz_internal.mz_comments limit 1)
        = subq_7."c0";
 ----
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### CROSS JOIN edge cases ###
+
+statement ok
+CREATE TABLE join_a (a int, val text)
+
+statement ok
+CREATE TABLE join_b (b int, val text)
+
+statement ok
+INSERT INTO join_a VALUES (1, 'a1'), (2, 'a2'), (3, 'a3')
+
+statement ok
+INSERT INTO join_b VALUES (10, 'b1'), (20, 'b2')
+
+query ITIT rowsort
+SELECT * FROM join_a CROSS JOIN join_b
+----
+1  a1  10  b1
+1  a1  20  b2
+2  a2  10  b1
+2  a2  20  b2
+3  a3  10  b1
+3  a3  20  b2
+
+query ITIT rowsort
+SELECT * FROM join_a, join_b
+----
+1  a1  10  b1
+1  a1  20  b2
+2  a2  10  b1
+2  a2  20  b2
+3  a3  10  b1
+3  a3  20  b2
+
+### CROSS JOIN with empty table ###
+
+statement ok
+CREATE TABLE join_empty (x int)
+
+query IT
+SELECT * FROM join_a CROSS JOIN join_empty
+----
+
+query IT
+SELECT * FROM join_empty CROSS JOIN join_a
+----
+
+### INNER JOIN edge cases ###
+
+statement ok
+INSERT INTO join_b VALUES (1, 'b_match1'), (2, 'b_match2'), (1, 'b_match3')
+
+query ITIT rowsort
+SELECT * FROM join_a INNER JOIN join_b ON join_a.a = join_b.b
+----
+1  a1  1  b_match1
+1  a1  1  b_match3
+2  a2  2  b_match2
+
+### INNER JOIN with no matches ###
+
+query ITIT
+SELECT * FROM join_a INNER JOIN join_b ON join_a.a = join_b.b AND join_a.a > 100
+----
+
+### INNER JOIN with multiple conditions ###
+
+query ITIT rowsort
+SELECT * FROM join_a INNER JOIN join_b ON join_a.a = join_b.b AND length(join_a.val) = length(join_b.val)
+----
+
+### LEFT JOIN edge cases ###
+
+statement ok
+DELETE FROM join_b WHERE b IN (1, 2)
+
+query ITIT rowsort
+SELECT * FROM join_a LEFT JOIN join_b ON join_a.a = join_b.b
+----
+1  a1  NULL  NULL
+2  a2  NULL  NULL
+3  a3  NULL  NULL
+
+### LEFT JOIN with all matches ###
+
+statement ok
+INSERT INTO join_b VALUES (1, 'match1'), (2, 'match2'), (3, 'match3')
+
+query ITIT rowsort
+SELECT * FROM join_a LEFT JOIN join_b ON join_a.a = join_b.b
+----
+1  a1  1  match1
+2  a2  2  match2
+3  a3  3  match3
+
+### LEFT JOIN with multiple matches on right ###
+
+statement ok
+INSERT INTO join_b VALUES (1, 'match1_dup')
+
+query ITIT rowsort
+SELECT * FROM join_a LEFT JOIN join_b ON join_a.a = join_b.b
+----
+1  a1  1  match1
+1  a1  1  match1_dup
+2  a2  2  match2
+3  a3  3  match3
+
+### RIGHT JOIN edge cases ###
+
+statement ok
+INSERT INTO join_b VALUES (100, 'no_match')
+
+query ITIT rowsort
+SELECT * FROM join_a RIGHT JOIN join_b ON join_a.a = join_b.b
+----
+1     a1    1    match1
+1     a1    1    match1_dup
+2     a2    2    match2
+3     a3    3    match3
+NULL  NULL  10   b1
+NULL  NULL  20   b2
+NULL  NULL  100  no_match
+
+### FULL OUTER JOIN edge cases ###
+
+statement ok
+INSERT INTO join_a VALUES (200, 'no_match_a')
+
+query ITIT rowsort
+SELECT * FROM join_a FULL OUTER JOIN join_b ON join_a.a = join_b.b
+----
+1     a1          1    match1
+1     a1          1    match1_dup
+2     a2          2    match2
+3     a3          3    match3
+200   no_match_a  NULL  NULL
+NULL  NULL        10   b1
+NULL  NULL        20   b2
+NULL  NULL        100  no_match
+
+### NATURAL JOIN edge cases ###
+
+statement ok
+CREATE TABLE nat_a (id int, name text, val int)
+
+statement ok
+CREATE TABLE nat_b (id int, name text, score int)
+
+statement ok
+INSERT INTO nat_a VALUES (1, 'alice', 10), (2, 'bob', 20), (3, 'charlie', 30)
+
+statement ok
+INSERT INTO nat_b VALUES (1, 'alice', 100), (2, 'bob', 200), (4, 'dave', 400)
+
+query ITII rowsort
+SELECT * FROM nat_a NATURAL JOIN nat_b
+----
+1  alice  10  100
+2  bob    20  200
+
+query ITII rowsort
+SELECT * FROM nat_a NATURAL LEFT JOIN nat_b
+----
+1  alice    10  100
+2  bob      20  200
+3  charlie  30  NULL
+
+query ITII rowsort
+SELECT * FROM nat_a NATURAL RIGHT JOIN nat_b
+----
+1  alice  10    100
+2  bob    20    200
+4  dave   NULL  400
+
+query ITII rowsort
+SELECT * FROM nat_a NATURAL FULL JOIN nat_b
+----
+1  alice    10    100
+2  bob      20    200
+3  charlie  30    NULL
+4  dave     NULL  400
+
+### JOIN with NULL keys ###
+
+statement ok
+CREATE TABLE null_key_a (k int, v text)
+
+statement ok
+CREATE TABLE null_key_b (k int, v text)
+
+statement ok
+INSERT INTO null_key_a VALUES (1, 'a1'), (NULL, 'a_null'), (2, 'a2')
+
+statement ok
+INSERT INTO null_key_b VALUES (1, 'b1'), (NULL, 'b_null'), (3, 'b3')
+
+query ITIT rowsort
+SELECT * FROM null_key_a INNER JOIN null_key_b ON null_key_a.k = null_key_b.k
+----
+1  a1  1  b1
+
+query ITIT rowsort
+SELECT * FROM null_key_a LEFT JOIN null_key_b ON null_key_a.k = null_key_b.k
+----
+1     a1      1     b1
+2     a2      NULL  NULL
+NULL  a_null  NULL  NULL
+
+query ITIT rowsort
+SELECT * FROM null_key_a FULL JOIN null_key_b ON null_key_a.k = null_key_b.k
+----
+1     a1      1     b1
+2     a2      NULL  NULL
+3     NULL    NULL  b3
+NULL  a_null  NULL  NULL
+NULL  NULL    NULL  b_null
+
+### JOIN with IS NOT DISTINCT FROM ###
+
+query ITIT rowsort
+SELECT * FROM null_key_a INNER JOIN null_key_b ON null_key_a.k IS NOT DISTINCT FROM null_key_b.k
+----
+1     a1      1     b1
+NULL  a_null  NULL  b_null
+
+### Self-join edge cases ###
+
+query ITIT rowsort
+SELECT a1.*, a2.* FROM join_a a1 INNER JOIN join_a a2 ON a1.a = a2.a
+----
+1    a1          1    a1
+2    a2          2    a2
+200  no_match_a  200  no_match_a
+3    a3          3    a3
+
+query ITIT rowsort
+SELECT a1.*, a2.* FROM join_a a1 INNER JOIN join_a a2 ON a1.a < a2.a
+ORDER BY a1.a, a2.a
+----
+1  a1  2    a2
+1  a1  200  no_match_a
+1  a1  3    a3
+2  a2  200  no_match_a
+2  a2  3    a3
+3  a3  200  no_match_a
+
+### Multiple joins ###
+
+statement ok
+CREATE TABLE join_c (c int, val text)
+
+statement ok
+INSERT INTO join_c VALUES (1, 'c1'), (2, 'c2'), (3, 'c3')
+
+query ITITIT rowsort
+SELECT * FROM join_a
+INNER JOIN join_b ON join_a.a = join_b.b
+INNER JOIN join_c ON join_a.a = join_c.c
+----
+1  a1  1  match1      1  c1
+1  a1  1  match1_dup  1  c1
+2  a2  2  match2      2  c2
+3  a3  3  match3      3  c3
+
+### JOIN with expressions in ON clause ###
+
+query ITIT rowsort
+SELECT * FROM join_a
+INNER JOIN join_b ON join_a.a + 9 = join_b.b
+----
+1  a1  10  b1
+
+query ITIT rowsort
+SELECT * FROM join_a
+INNER JOIN join_b ON join_a.a * 10 = join_b.b
+----
+1  a1  10  b1
+2  a2  20  b2
+
+### JOIN with OR in ON clause ###
+
+query ITIT rowsort
+SELECT * FROM join_a
+INNER JOIN join_b ON join_a.a = join_b.b OR join_a.a * 10 = join_b.b
+----
+1  a1  1       match1
+1  a1  1       match1_dup
+1  a1  10      b1
+2  a2  2       match2
+2  a2  20      b2
+3  a3  3       match3
+
+### JOIN with subquery ###
+
+query ITIT rowsort
+SELECT * FROM join_a
+INNER JOIN (SELECT * FROM join_b WHERE b < 10) sub ON join_a.a = sub.b
+----
+1  a1  1  match1
+1  a1  1  match1_dup
+2  a2  2  match2
+3  a3  3  match3
+
+### LATERAL JOIN edge cases ###
+
+query ITI rowsort
+SELECT a.*, lat.cnt
+FROM join_a a,
+LATERAL (SELECT count(*) as cnt FROM join_b WHERE join_b.b = a.a) lat
+----
+1    a1          2
+2    a2          1
+200  no_match_a  0
+3    a3          1
+
+query ITT rowsort
+SELECT a.*, lat.first_val
+FROM join_a a,
+LATERAL (SELECT val as first_val FROM join_b WHERE join_b.b = a.a LIMIT 1) lat
+----
+1  a1  match1
+2  a2  match2
+3  a3  match3
+
+### Anti-join pattern (LEFT JOIN + NULL check) ###
+
+query IT rowsort
+SELECT a.* FROM join_a a
+LEFT JOIN join_b b ON a.a = b.b
+WHERE b.b IS NULL
+----
+200  no_match_a
+
+### Semi-join pattern (EXISTS) ###
+
+query IT rowsort
+SELECT * FROM join_a
+WHERE EXISTS (SELECT 1 FROM join_b WHERE join_b.b = join_a.a)
+----
+1  a1
+2  a2
+3  a3
+
+query IT rowsort
+SELECT * FROM join_a
+WHERE NOT EXISTS (SELECT 1 FROM join_b WHERE join_b.b = join_a.a)
+----
+200  no_match_a
+
+### JOIN with DISTINCT ###
+
+query I rowsort
+SELECT DISTINCT a.a FROM join_a a
+INNER JOIN join_b b ON a.a = b.b
+----
+1
+2
+3
+
+### JOIN with aggregation ###
+
+query II rowsort
+SELECT a.a, count(b.b) FROM join_a a
+LEFT JOIN join_b b ON a.a = b.b
+GROUP BY a.a
+----
+1    2
+2    1
+200  0
+3    1
+
+### JOIN with CTE ###
+
+query ITIT rowsort
+WITH cte AS (SELECT * FROM join_a WHERE a < 3)
+SELECT * FROM cte INNER JOIN join_b ON cte.a = join_b.b
+----
+1  a1  1  match1
+1  a1  1  match1_dup
+2  a2  2  match2
+
+### JOIN ordering ###
+
+query ITIT rowsort
+SELECT * FROM join_a
+INNER JOIN join_b ON join_a.a = join_b.b
+ORDER BY join_a.a, join_b.val
+----
+1  a1  1  match1
+1  a1  1  match1_dup
+2  a2  2  match2
+3  a3  3  match3
+
+### Cleanup ###
+
+statement ok
+DROP TABLE join_a
+
+statement ok
+DROP TABLE join_b
+
+statement ok
+DROP TABLE join_c
+
+statement ok
+DROP TABLE join_empty
+
+statement ok
+DROP TABLE nat_a
+
+statement ok
+DROP TABLE nat_b
+
+statement ok
+DROP TABLE null_key_a
+
+statement ok
+DROP TABLE null_key_b

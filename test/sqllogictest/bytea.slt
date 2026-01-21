@@ -278,3 +278,846 @@ SELECT
 NULL
 NULL
 NULL
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Empty bytea edge cases ###
+
+query I
+SELECT length(''::bytea)
+----
+0
+
+query I
+SELECT bit_length(''::bytea)
+----
+0
+
+query I
+SELECT octet_length(''::bytea)
+----
+0
+
+query I
+SELECT bit_count(''::bytea)
+----
+0
+
+query T
+SELECT ''::bytea::text
+----
+\x
+
+query T
+SELECT convert_from(''::bytea, 'utf-8')
+----
+(empty)
+
+### Bytea concatenation edge cases ###
+
+query T
+SELECT ''::bytea || ''::bytea
+----
+\x
+
+query T
+SELECT 'hello'::bytea || ''::bytea
+----
+\x68656c6c6f
+
+query T
+SELECT ''::bytea || 'world'::bytea
+----
+\x776f726c64
+
+query T
+SELECT '\xDEAD'::bytea || '\xBEEF'::bytea
+----
+\xdeadbeef
+
+query T
+SELECT 'a'::bytea || 'b'::bytea || 'c'::bytea
+----
+\x616263
+
+query T
+SELECT NULL::bytea || 'hello'::bytea
+----
+NULL
+
+query T
+SELECT 'hello'::bytea || NULL::bytea
+----
+NULL
+
+### Bytea comparison edge cases ###
+
+query B
+SELECT '\x00'::bytea = '\x00'::bytea
+----
+true
+
+query B
+SELECT ''::bytea = ''::bytea
+----
+true
+
+query B
+SELECT ''::bytea < '\x00'::bytea
+----
+true
+
+query B
+SELECT '\x00'::bytea < '\x01'::bytea
+----
+true
+
+query B
+SELECT '\xFF'::bytea > '\xFE'::bytea
+----
+true
+
+query B
+SELECT '\x00FF'::bytea > '\x00FE'::bytea
+----
+true
+
+query B
+SELECT '\x00'::bytea <> '\x0000'::bytea
+----
+true
+
+query B
+SELECT 'abc'::bytea < 'abd'::bytea
+----
+true
+
+query B
+SELECT 'abc'::bytea < 'abcd'::bytea
+----
+true
+
+### Bytea hex encoding edge cases ###
+
+query T
+SELECT '\x'::bytea
+----
+\x
+
+query T
+SELECT '\x00'::bytea::text
+----
+\x00
+
+query T
+SELECT '\xFF'::bytea::text
+----
+\xff
+
+query T
+SELECT '\x0000000000'::bytea::text
+----
+\x0000000000
+
+query T
+SELECT '\xFFFFFFFFFF'::bytea::text
+----
+\xffffffffff
+
+query T
+SELECT '\xDeAdBeEf'::bytea::text
+----
+\xdeadbeef
+
+### Bytea substring edge cases ###
+
+query T
+SELECT substring('\x1234567890'::bytea FROM 1 FOR 2)
+----
+\x1234
+
+query T
+SELECT substring('\x1234567890'::bytea FROM 3 FOR 2)
+----
+\x5678
+
+query T
+SELECT substring('\x1234567890'::bytea FROM 1 FOR 0)
+----
+\x
+
+query T
+SELECT substring('\x1234567890'::bytea FROM 1 FOR 100)
+----
+\x1234567890
+
+query T
+SELECT substring('\x1234567890'::bytea FROM 100 FOR 2)
+----
+\x
+
+query T
+SELECT substring(''::bytea FROM 1 FOR 2)
+----
+\x
+
+query T
+SELECT substring('\x1234567890'::bytea FROM 0 FOR 3)
+----
+\x1234
+
+query T
+SELECT substring('\x1234567890'::bytea FROM -1 FOR 5)
+----
+\x1234
+
+### Bytea position edge cases ###
+
+query I
+SELECT position('\x34'::bytea IN '\x1234567890'::bytea)
+----
+2
+
+query I
+SELECT position('\x00'::bytea IN '\x0012340056'::bytea)
+----
+1
+
+query I
+SELECT position(''::bytea IN '\x1234'::bytea)
+----
+1
+
+query I
+SELECT position('\xFF'::bytea IN '\x1234'::bytea)
+----
+0
+
+query I
+SELECT position('\x1234'::bytea IN '\x1234'::bytea)
+----
+1
+
+query I
+SELECT position('\x1234567890'::bytea IN '\x1234'::bytea)
+----
+0
+
+query I
+SELECT position(''::bytea IN ''::bytea)
+----
+1
+
+### Bytea overlay edge cases ###
+
+query T
+SELECT overlay('\x1234567890'::bytea PLACING '\xFF'::bytea FROM 1)
+----
+\xff34567890
+
+query T
+SELECT overlay('\x1234567890'::bytea PLACING '\xFF'::bytea FROM 1 FOR 2)
+----
+\xff567890
+
+query T
+SELECT overlay('\x1234567890'::bytea PLACING ''::bytea FROM 1 FOR 2)
+----
+\x567890
+
+query T
+SELECT overlay('\x1234567890'::bytea PLACING '\xAAAABBBB'::bytea FROM 3)
+----
+\x1234aaaabbbb
+
+query T
+SELECT overlay(''::bytea PLACING '\xFF'::bytea FROM 1)
+----
+\xff
+
+### Encode/Decode edge cases ###
+
+query T
+SELECT encode('\xDEADBEEF'::bytea, 'hex')
+----
+deadbeef
+
+query T
+SELECT encode(''::bytea, 'hex')
+----
+(empty)
+
+query T
+SELECT encode('\x00'::bytea, 'hex')
+----
+00
+
+query T
+SELECT decode('deadbeef', 'hex')
+----
+\xdeadbeef
+
+query T
+SELECT decode('', 'hex')
+----
+\x
+
+query T
+SELECT decode('00', 'hex')
+----
+\x00
+
+query error invalid hexadecimal digit
+SELECT decode('zz', 'hex')
+
+query error invalid hexadecimal data: odd number of digits
+SELECT decode('abc', 'hex')
+
+query T
+SELECT encode('hello'::bytea, 'base64')
+----
+aGVsbG8=
+
+query T
+SELECT decode('aGVsbG8=', 'base64')
+----
+\x68656c6c6f
+
+query T
+SELECT encode(''::bytea, 'base64')
+----
+(empty)
+
+query T
+SELECT decode('', 'base64')
+----
+\x
+
+query T
+SELECT encode('\x00\x01\x02'::bytea, 'base64')
+----
+AAEC
+
+query T
+SELECT decode('AAEC', 'base64')
+----
+\x000102
+
+query T
+SELECT encode('hello'::bytea, 'escape')
+----
+hello
+
+query T
+SELECT decode('hello', 'escape')
+----
+\x68656c6c6f
+
+query T
+SELECT encode('\x00'::bytea, 'escape')
+----
+\000
+
+query T
+SELECT decode('\\000', 'escape')
+----
+\x00
+
+query error unrecognized encoding: "invalid"
+SELECT encode('hello'::bytea, 'invalid')
+
+query error unrecognized encoding: "invalid"
+SELECT decode('hello', 'invalid')
+
+### set_byte edge cases ###
+
+query T
+SELECT set_byte('\x1234567890'::bytea, 0, 255)
+----
+\xff34567890
+
+query T
+SELECT set_byte('\x1234567890'::bytea, 4, 0)
+----
+\x1234567800
+
+query error index -1 out of valid range, 0..4
+SELECT set_byte('\x1234567890'::bytea, -1, 0)
+
+query error index 5 out of valid range, 0..4
+SELECT set_byte('\x1234567890'::bytea, 5, 0)
+
+query error index 0 out of valid range, 0..-1
+SELECT set_byte(''::bytea, 0, 0)
+
+query T
+SELECT set_byte('\xFF'::bytea, 0, 0)
+----
+\x00
+
+query T
+SELECT set_byte('\x00'::bytea, 0, 255)
+----
+\xff
+
+### set_bit edge cases ###
+
+query T
+SELECT set_bit('\xF0'::bytea, 0, 0)
+----
+\x70
+
+query T
+SELECT set_bit('\xF0'::bytea, 7, 1)
+----
+\xf1
+
+query T
+SELECT set_bit('\x00'::bytea, 0, 1)
+----
+\x80
+
+query T
+SELECT set_bit('\x00'::bytea, 7, 1)
+----
+\x01
+
+query T
+SELECT set_bit('\xFF'::bytea, 0, 0)
+----
+\x7f
+
+query T
+SELECT set_bit('\xFF'::bytea, 7, 0)
+----
+\xfe
+
+query error index -1 out of valid range, 0..7
+SELECT set_bit('\xFF'::bytea, -1, 0)
+
+query error index 8 out of valid range, 0..7
+SELECT set_bit('\xFF'::bytea, 8, 0)
+
+query error index 0 out of valid range, 0..-1
+SELECT set_bit(''::bytea, 0, 0)
+
+### Bytea trim edge cases ###
+
+query T
+SELECT btrim('\x001234560000'::bytea, '\x00'::bytea)
+----
+\x12345600
+
+query T
+SELECT btrim('\x00001234567800'::bytea, '\x00'::bytea)
+----
+\x12345678
+
+query T
+SELECT btrim(''::bytea, '\x00'::bytea)
+----
+\x
+
+query T
+SELECT btrim('\x0000'::bytea, '\x00'::bytea)
+----
+\x
+
+query T
+SELECT ltrim('\x0000123456'::bytea, '\x00'::bytea)
+----
+\x123456
+
+query T
+SELECT ltrim('\x123456'::bytea, '\x00'::bytea)
+----
+\x123456
+
+query T
+SELECT rtrim('\x1234560000'::bytea, '\x00'::bytea)
+----
+\x123456
+
+query T
+SELECT rtrim('\x123456'::bytea, '\x00'::bytea)
+----
+\x123456
+
+### Bytea SHA functions edge cases ###
+
+query T
+SELECT sha256(''::bytea)
+----
+\xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+query T
+SELECT sha256('\x00'::bytea)
+----
+\x6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d
+
+query T
+SELECT sha256('hello'::bytea)
+----
+\x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+
+query T
+SELECT sha512(''::bytea)
+----
+\xcf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e
+
+query T
+SELECT sha512('hello'::bytea)
+----
+\x9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043
+
+query T
+SELECT md5('hello'::bytea)
+----
+5d41402abc4b2a76b9719d911017c592
+
+query T
+SELECT md5(''::bytea)
+----
+d41d8cd98f00b204e9800998ecf8427e
+
+### Bytea digest function edge cases ###
+
+query T
+SELECT digest('hello'::bytea, 'md5')
+----
+\x5d41402abc4b2a76b9719d911017c592
+
+query T
+SELECT digest('hello'::bytea, 'sha1')
+----
+\xaaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+
+query T
+SELECT digest('hello'::bytea, 'sha256')
+----
+\x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+
+query T
+SELECT digest(''::bytea, 'sha256')
+----
+\xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+query error invalid hash algorithm
+SELECT digest('hello'::bytea, 'invalid')
+
+### Bytea hmac function edge cases ###
+
+query T
+SELECT hmac('hello'::bytea, 'key'::bytea, 'sha256')
+----
+\x9307b3b915efb5171ff14d8cb55fbcc798c6c0ef1456d66ded1a6aa723a58571
+
+query T
+SELECT hmac(''::bytea, 'key'::bytea, 'sha256')
+----
+\x5d5d139563c95b5967b9bd9a8c9b233a9dedb45072794cd232dc1b74832607d0
+
+query T
+SELECT hmac('hello'::bytea, ''::bytea, 'sha256')
+----
+\x1f810a6c54ab8293e8c89645e5092e5e7082c9f243c87da1d65d760c9e6f8988
+
+query error invalid hash algorithm
+SELECT hmac('hello'::bytea, 'key'::bytea, 'invalid')
+
+### NULL bytea handling ###
+
+query T
+SELECT NULL::bytea || NULL::bytea
+----
+NULL
+
+query I
+SELECT length(NULL::bytea)
+----
+NULL
+
+query I
+SELECT bit_length(NULL::bytea)
+----
+NULL
+
+query I
+SELECT get_byte(NULL::bytea, 0)
+----
+NULL
+
+query I
+SELECT get_bit(NULL::bytea, 0)
+----
+NULL
+
+query T
+SELECT set_byte(NULL::bytea, 0, 0)
+----
+NULL
+
+query T
+SELECT set_bit(NULL::bytea, 0, 0)
+----
+NULL
+
+query T
+SELECT encode(NULL::bytea, 'hex')
+----
+NULL
+
+query T
+SELECT decode(NULL::text, 'hex')
+----
+NULL
+
+query T
+SELECT sha256(NULL::bytea)
+----
+NULL
+
+query T
+SELECT md5(NULL::bytea)
+----
+NULL
+
+query T
+SELECT substring(NULL::bytea FROM 1 FOR 2)
+----
+NULL
+
+### Bytea aggregation edge cases ###
+
+statement ok
+CREATE TABLE bytea_agg_test (val bytea)
+
+statement ok
+INSERT INTO bytea_agg_test VALUES ('\x01'), ('\x02'), ('\x03'), (NULL)
+
+query I
+SELECT COUNT(val) FROM bytea_agg_test
+----
+3
+
+query I
+SELECT COUNT(*) FROM bytea_agg_test
+----
+4
+
+query T
+SELECT MIN(val) FROM bytea_agg_test
+----
+\x01
+
+query T
+SELECT MAX(val) FROM bytea_agg_test
+----
+\x03
+
+statement ok
+DELETE FROM bytea_agg_test
+
+statement ok
+INSERT INTO bytea_agg_test VALUES (NULL), (NULL)
+
+query T
+SELECT MIN(val) FROM bytea_agg_test
+----
+NULL
+
+query T
+SELECT MAX(val) FROM bytea_agg_test
+----
+NULL
+
+statement ok
+DROP TABLE bytea_agg_test
+
+### Bytea DISTINCT edge cases ###
+
+query B
+SELECT '\x00'::bytea IS DISTINCT FROM ''::bytea
+----
+true
+
+query B
+SELECT '\x00'::bytea IS DISTINCT FROM '\x00'::bytea
+----
+false
+
+query B
+SELECT NULL::bytea IS DISTINCT FROM NULL::bytea
+----
+false
+
+query B
+SELECT NULL::bytea IS DISTINCT FROM '\x00'::bytea
+----
+true
+
+### Bytea IN list edge cases ###
+
+query B
+SELECT '\x01'::bytea IN ('\x01'::bytea, '\x02'::bytea, '\x03'::bytea)
+----
+true
+
+query B
+SELECT '\x04'::bytea IN ('\x01'::bytea, '\x02'::bytea, '\x03'::bytea)
+----
+false
+
+query B
+SELECT NULL::bytea IN ('\x01'::bytea, '\x02'::bytea)
+----
+NULL
+
+query B
+SELECT '\x01'::bytea IN ('\x01'::bytea, NULL::bytea)
+----
+true
+
+query B
+SELECT '\x04'::bytea IN ('\x01'::bytea, NULL::bytea)
+----
+NULL
+
+### Bytea COALESCE edge cases ###
+
+query T
+SELECT COALESCE(NULL::bytea, '\x01'::bytea)
+----
+\x01
+
+query T
+SELECT COALESCE('\x01'::bytea, '\x02'::bytea)
+----
+\x01
+
+query T
+SELECT COALESCE(NULL::bytea, NULL::bytea, '\x03'::bytea)
+----
+\x03
+
+### Bytea NULLIF edge cases ###
+
+query T
+SELECT NULLIF('\x01'::bytea, '\x01'::bytea)
+----
+NULL
+
+query T
+SELECT NULLIF('\x01'::bytea, '\x02'::bytea)
+----
+\x01
+
+query T
+SELECT NULLIF(''::bytea, ''::bytea)
+----
+NULL
+
+### Bytea CASE expression edge cases ###
+
+query T
+SELECT CASE WHEN true THEN '\x01'::bytea ELSE '\x02'::bytea END
+----
+\x01
+
+query T
+SELECT CASE WHEN false THEN '\x01'::bytea ELSE '\x02'::bytea END
+----
+\x02
+
+query T
+SELECT CASE '\x01'::bytea WHEN '\x01'::bytea THEN 'match'::bytea ELSE 'no match'::bytea END
+----
+\x6d61746368
+
+### Bytea ORDER BY edge cases ###
+
+statement ok
+CREATE TABLE bytea_order_test (val bytea)
+
+statement ok
+INSERT INTO bytea_order_test VALUES (NULL), ('\x00'), ('\xFF'), ('\x01'), ('')
+
+query T
+SELECT val FROM bytea_order_test ORDER BY val
+----
+\x
+\x00
+\x01
+\xff
+NULL
+
+query T
+SELECT val FROM bytea_order_test ORDER BY val DESC
+----
+NULL
+\xff
+\x01
+\x00
+\x
+
+statement ok
+DROP TABLE bytea_order_test
+
+### Bytea conversion edge cases ###
+
+query T
+SELECT 'hello'::text::bytea::text
+----
+\x68656c6c6f
+
+query T
+SELECT convert_from('\x68656c6c6f'::bytea, 'utf-8')
+----
+hello
+
+query error invalid utf-8 sequence
+SELECT convert_from('\x80'::bytea, 'utf-8')
+
+query error invalid utf-8 sequence
+SELECT convert_from('\xC0\xC1'::bytea, 'utf-8')
+
+query T
+SELECT convert_to('hello', 'utf-8')
+----
+\x68656c6c6f
+
+query T
+SELECT convert_to('', 'utf-8')
+----
+\x
+
+### Bytea repeat edge cases ###
+
+query T
+SELECT repeat('\x01'::text, 3)::bytea
+----
+\x010101
+
+query T
+SELECT repeat('\x01'::text, 0)::bytea
+----
+\x
+
+query T
+SELECT repeat('\x01'::text, -1)::bytea
+----
+\x
+
+### Large bytea edge cases ###
+
+query I
+SELECT length(repeat('\x00'::text, 10000)::bytea)
+----
+20000
+
+query I
+SELECT bit_length(repeat('\x00'::text, 1000)::bytea)
+----
+16000

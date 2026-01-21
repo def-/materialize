@@ -80,3 +80,607 @@ false
 
 query error clause must have type boolean
 select 2 is true
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Equality comparison edge cases ###
+
+query B
+SELECT 1 = 1
+----
+true
+
+query B
+SELECT 1 = 2
+----
+false
+
+query B
+SELECT 1 = NULL
+----
+NULL
+
+query B
+SELECT NULL = NULL
+----
+NULL
+
+query B
+SELECT 'a' = 'a'
+----
+true
+
+query B
+SELECT 'a' = 'b'
+----
+false
+
+query B
+SELECT '' = ''
+----
+true
+
+### Inequality comparison edge cases ###
+
+query B
+SELECT 1 <> 1
+----
+false
+
+query B
+SELECT 1 <> 2
+----
+true
+
+query B
+SELECT 1 <> NULL
+----
+NULL
+
+query B
+SELECT NULL <> NULL
+----
+NULL
+
+query B
+SELECT 1 != 2
+----
+true
+
+### Less than comparison edge cases ###
+
+query B
+SELECT 1 < 2
+----
+true
+
+query B
+SELECT 2 < 1
+----
+false
+
+query B
+SELECT 1 < 1
+----
+false
+
+query B
+SELECT 1 < NULL
+----
+NULL
+
+query B
+SELECT NULL < 1
+----
+NULL
+
+query B
+SELECT 'a' < 'b'
+----
+true
+
+query B
+SELECT 'b' < 'a'
+----
+false
+
+query B
+SELECT '' < 'a'
+----
+true
+
+### Greater than comparison edge cases ###
+
+query B
+SELECT 2 > 1
+----
+true
+
+query B
+SELECT 1 > 2
+----
+false
+
+query B
+SELECT 1 > 1
+----
+false
+
+query B
+SELECT 1 > NULL
+----
+NULL
+
+query B
+SELECT NULL > 1
+----
+NULL
+
+### Less than or equal comparison edge cases ###
+
+query B
+SELECT 1 <= 2
+----
+true
+
+query B
+SELECT 1 <= 1
+----
+true
+
+query B
+SELECT 2 <= 1
+----
+false
+
+query B
+SELECT 1 <= NULL
+----
+NULL
+
+### Greater than or equal comparison edge cases ###
+
+query B
+SELECT 2 >= 1
+----
+true
+
+query B
+SELECT 1 >= 1
+----
+true
+
+query B
+SELECT 1 >= 2
+----
+false
+
+query B
+SELECT 1 >= NULL
+----
+NULL
+
+### BETWEEN comparison edge cases ###
+
+query B
+SELECT 5 BETWEEN 1 AND 10
+----
+true
+
+query B
+SELECT 1 BETWEEN 1 AND 10
+----
+true
+
+query B
+SELECT 10 BETWEEN 1 AND 10
+----
+true
+
+query B
+SELECT 0 BETWEEN 1 AND 10
+----
+false
+
+query B
+SELECT 11 BETWEEN 1 AND 10
+----
+false
+
+query B
+SELECT NULL BETWEEN 1 AND 10
+----
+NULL
+
+query B
+SELECT 5 BETWEEN NULL AND 10
+----
+NULL
+
+query B
+SELECT 5 BETWEEN 1 AND NULL
+----
+NULL
+
+query B
+SELECT 5 NOT BETWEEN 1 AND 10
+----
+false
+
+query B
+SELECT 0 NOT BETWEEN 1 AND 10
+----
+true
+
+query B
+SELECT 'b' BETWEEN 'a' AND 'c'
+----
+true
+
+### BETWEEN SYMMETRIC edge cases ###
+
+query B
+SELECT 5 BETWEEN SYMMETRIC 10 AND 1
+----
+true
+
+query B
+SELECT 5 BETWEEN SYMMETRIC 1 AND 10
+----
+true
+
+query B
+SELECT 0 BETWEEN SYMMETRIC 10 AND 1
+----
+false
+
+### IN comparison edge cases ###
+
+query B
+SELECT 1 IN (1, 2, 3)
+----
+true
+
+query B
+SELECT 4 IN (1, 2, 3)
+----
+false
+
+query B
+SELECT NULL IN (1, 2, 3)
+----
+NULL
+
+query B
+SELECT 1 IN (1, NULL)
+----
+true
+
+query B
+SELECT 2 IN (1, NULL)
+----
+NULL
+
+query B
+SELECT 1 IN (NULL)
+----
+NULL
+
+query B
+SELECT 1 NOT IN (1, 2, 3)
+----
+false
+
+query B
+SELECT 4 NOT IN (1, 2, 3)
+----
+true
+
+query B
+SELECT 4 NOT IN (1, NULL)
+----
+NULL
+
+query B
+SELECT 'a' IN ('a', 'b', 'c')
+----
+true
+
+query B
+SELECT 'x' IN ('a', 'b', 'c')
+----
+false
+
+### Comparison with different types ###
+
+query B
+SELECT 1 = 1.0
+----
+true
+
+query B
+SELECT 1::int = 1::bigint
+----
+true
+
+query B
+SELECT 1::int < 2::bigint
+----
+true
+
+### Float comparison edge cases ###
+
+query B
+SELECT 'NaN'::float = 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float <> 'NaN'::float
+----
+true
+
+query B
+SELECT 'NaN'::float < 1
+----
+false
+
+query B
+SELECT 'NaN'::float > 1
+----
+false
+
+query B
+SELECT 'Infinity'::float = 'Infinity'::float
+----
+true
+
+query B
+SELECT 'Infinity'::float > 1e308
+----
+true
+
+query B
+SELECT '-Infinity'::float < -1e308
+----
+true
+
+query B
+SELECT 0.0 = -0.0
+----
+true
+
+### String comparison edge cases ###
+
+query B
+SELECT 'abc' = 'abc'
+----
+true
+
+query B
+SELECT 'abc' = 'ABC'
+----
+false
+
+query B
+SELECT '' = ''
+----
+true
+
+query B
+SELECT '' < 'a'
+----
+true
+
+query B
+SELECT 'a' < 'aa'
+----
+true
+
+query B
+SELECT 'a' < 'b'
+----
+true
+
+query B
+SELECT 'abc' < 'abd'
+----
+true
+
+### NULL comparison edge cases ###
+
+query B
+SELECT NULL IS NULL
+----
+true
+
+query B
+SELECT 1 IS NULL
+----
+false
+
+query B
+SELECT NULL IS NOT NULL
+----
+false
+
+query B
+SELECT 1 IS NOT NULL
+----
+true
+
+### Comparison with GREATEST/LEAST ###
+
+query I
+SELECT GREATEST(1, 2, 3)
+----
+3
+
+query I
+SELECT LEAST(1, 2, 3)
+----
+1
+
+query I
+SELECT GREATEST(1, NULL, 3)
+----
+3
+
+query I
+SELECT LEAST(1, NULL, 3)
+----
+1
+
+query I
+SELECT GREATEST(NULL::int, NULL::int)
+----
+NULL
+
+query I
+SELECT LEAST(NULL::int, NULL::int)
+----
+NULL
+
+query T
+SELECT GREATEST('a', 'b', 'c')
+----
+c
+
+query T
+SELECT LEAST('a', 'b', 'c')
+----
+a
+
+### Comparison with NULLIF ###
+
+query I
+SELECT NULLIF(1, 1)
+----
+NULL
+
+query I
+SELECT NULLIF(1, 2)
+----
+1
+
+query I
+SELECT NULLIF(NULL, 1)
+----
+NULL
+
+query I
+SELECT NULLIF(1, NULL)
+----
+1
+
+### Comparison chaining ###
+
+query B
+SELECT 1 < 2 AND 2 < 3
+----
+true
+
+query B
+SELECT 1 = 1 AND 2 = 2 AND 3 = 3
+----
+true
+
+### Array comparison edge cases ###
+
+query B
+SELECT ARRAY[1, 2, 3] = ARRAY[1, 2, 3]
+----
+true
+
+query B
+SELECT ARRAY[1, 2, 3] = ARRAY[1, 2, 4]
+----
+false
+
+query B
+SELECT ARRAY[1, 2] < ARRAY[1, 2, 3]
+----
+true
+
+query B
+SELECT ARRAY[1, 2, 3] < ARRAY[1, 2]
+----
+false
+
+query B
+SELECT ARRAY[1, 2] < ARRAY[1, 3]
+----
+true
+
+### Row comparison edge cases ###
+
+query B
+SELECT (1, 2) = (1, 2)
+----
+true
+
+query B
+SELECT (1, 2) = (1, 3)
+----
+false
+
+query B
+SELECT (1, 2) < (1, 3)
+----
+true
+
+query B
+SELECT (1, 2) < (2, 1)
+----
+true
+
+query B
+SELECT (1, NULL) = (1, NULL)
+----
+NULL
+
+query B
+SELECT (1, 2) = (1, NULL)
+----
+NULL
+
+### Comparison in WHERE clause ###
+
+statement ok
+CREATE TABLE comp_test (a int, b int)
+
+statement ok
+INSERT INTO comp_test VALUES (1, 2), (2, 2), (3, 1), (NULL, 2), (1, NULL)
+
+query II
+SELECT * FROM comp_test WHERE a = b ORDER BY a
+----
+2  2
+
+query II
+SELECT * FROM comp_test WHERE a < b ORDER BY a
+----
+1  2
+
+query II
+SELECT * FROM comp_test WHERE a > b ORDER BY a
+----
+3  1
+
+query II
+SELECT * FROM comp_test WHERE a IS NULL ORDER BY b
+----
+NULL  2
+
+query II
+SELECT * FROM comp_test WHERE a IS NOT NULL ORDER BY a
+----
+1  2
+1  NULL
+2  2
+3  1
+
+statement ok
+DROP TABLE comp_test

@@ -984,3 +984,356 @@ query T
 SELECT unnest('{a=>NULL}'::map[text=>int4]);
 ----
 (a,)
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Empty map edge cases ###
+
+query T
+SELECT '{}'::map[text=>int]
+----
+{}
+
+query I
+SELECT map_length('{}'::map[text=>int])
+----
+0
+
+query T
+SELECT '{}'::map[text=>int] -> 'a'
+----
+NULL
+
+query B
+SELECT '{}'::map[text=>int] = '{}'::map[text=>int]
+----
+true
+
+### NULL key/value edge cases ###
+
+query T
+SELECT '{a=>NULL}'::map[text=>int]
+----
+{a=>NULL}
+
+query I
+SELECT '{a=>NULL}'::map[text=>int] -> 'a'
+----
+NULL
+
+query B
+SELECT '{a=>NULL}'::map[text=>int] ? 'a'
+----
+true
+
+query B
+SELECT '{a=>NULL}'::map[text=>int] ? 'b'
+----
+false
+
+### Map access edge cases ###
+
+query I
+SELECT '{a=>1,b=>2,c=>3}'::map[text=>int] -> 'a'
+----
+1
+
+query I
+SELECT '{a=>1,b=>2,c=>3}'::map[text=>int] -> 'b'
+----
+2
+
+query I
+SELECT '{a=>1,b=>2,c=>3}'::map[text=>int] -> 'z'
+----
+NULL
+
+query I
+SELECT '{a=>1}'::map[text=>int] -> NULL
+----
+NULL
+
+query I
+SELECT NULL::map[text=>int] -> 'a'
+----
+NULL
+
+### Map length edge cases ###
+
+query I
+SELECT map_length('{a=>1}'::map[text=>int])
+----
+1
+
+query I
+SELECT map_length('{a=>1,b=>2,c=>3}'::map[text=>int])
+----
+3
+
+query I
+SELECT map_length(NULL::map[text=>int])
+----
+NULL
+
+### Map contains key edge cases ###
+
+query B
+SELECT '{a=>1,b=>2}'::map[text=>int] ? 'a'
+----
+true
+
+query B
+SELECT '{a=>1,b=>2}'::map[text=>int] ? 'c'
+----
+false
+
+query B
+SELECT '{}'::map[text=>int] ? 'a'
+----
+false
+
+query B
+SELECT NULL::map[text=>int] ? 'a'
+----
+NULL
+
+query B
+SELECT '{a=>1}'::map[text=>int] ? NULL
+----
+NULL
+
+### Map comparison edge cases ###
+
+query B
+SELECT '{a=>1}'::map[text=>int] = '{a=>1}'::map[text=>int]
+----
+true
+
+query B
+SELECT '{a=>1}'::map[text=>int] = '{a=>2}'::map[text=>int]
+----
+false
+
+query B
+SELECT '{a=>1}'::map[text=>int] = '{b=>1}'::map[text=>int]
+----
+false
+
+query B
+SELECT '{a=>1,b=>2}'::map[text=>int] = '{b=>2,a=>1}'::map[text=>int]
+----
+true
+
+query B
+SELECT '{a=>1}'::map[text=>int] <> '{a=>2}'::map[text=>int]
+----
+true
+
+query B
+SELECT NULL::map[text=>int] = NULL::map[text=>int]
+----
+NULL
+
+query B
+SELECT '{a=>NULL}'::map[text=>int] = '{a=>NULL}'::map[text=>int]
+----
+false
+
+### Map with different value types ###
+
+query T
+SELECT '{a=>hello,b=>world}'::map[text=>text]
+----
+{a=>hello,b=>world}
+
+query T
+SELECT '{a=>true,b=>false}'::map[text=>bool]
+----
+{a=>t,b=>f}
+
+query T
+SELECT '{a=>1.5,b=>2.5}'::map[text=>float]
+----
+{a=>1.5,b=>2.5}
+
+### Map COALESCE edge cases ###
+
+query T
+SELECT COALESCE(NULL::map[text=>int], '{a=>1}'::map[text=>int])
+----
+{a=>1}
+
+query T
+SELECT COALESCE('{a=>1}'::map[text=>int], '{b=>2}'::map[text=>int])
+----
+{a=>1}
+
+### Map NULLIF edge cases ###
+
+query T
+SELECT NULLIF('{a=>1}'::map[text=>int], '{a=>1}'::map[text=>int])
+----
+NULL
+
+query T
+SELECT NULLIF('{a=>1}'::map[text=>int], '{a=>2}'::map[text=>int])
+----
+{a=>1}
+
+### Map IS DISTINCT FROM edge cases ###
+
+query B
+SELECT '{a=>1}'::map[text=>int] IS DISTINCT FROM '{a=>1}'::map[text=>int]
+----
+false
+
+query B
+SELECT '{a=>1}'::map[text=>int] IS DISTINCT FROM '{a=>2}'::map[text=>int]
+----
+true
+
+query B
+SELECT '{a=>1}'::map[text=>int] IS DISTINCT FROM NULL
+----
+true
+
+query B
+SELECT NULL::map[text=>int] IS DISTINCT FROM NULL::map[text=>int]
+----
+false
+
+### Map in table edge cases ###
+
+statement ok
+CREATE TABLE map_test (id int, data map[text=>int])
+
+statement ok
+INSERT INTO map_test VALUES (1, '{a=>1,b=>2}'), (2, '{c=>3}'), (3, NULL), (4, '{}')
+
+query II
+SELECT id, data -> 'a' FROM map_test ORDER BY id
+----
+1  1
+2  NULL
+3  NULL
+4  NULL
+
+query IB
+SELECT id, data ? 'a' FROM map_test ORDER BY id
+----
+1  true
+2  false
+3  NULL
+4  false
+
+query II
+SELECT id, map_length(data) FROM map_test ORDER BY id
+----
+1  2
+2  1
+3  NULL
+4  0
+
+statement ok
+DROP TABLE map_test
+
+### Map aggregate edge cases ###
+
+statement ok
+CREATE TABLE map_agg_src (k text, v int)
+
+statement ok
+INSERT INTO map_agg_src VALUES ('a', 1), ('b', 2), ('c', 3)
+
+query T
+SELECT map_agg(k, v)::text FROM map_agg_src
+----
+{a=>1,b=>2,c=>3}
+
+query T
+SELECT map_agg(k, v)::text FROM map_agg_src WHERE false
+----
+NULL
+
+statement ok
+INSERT INTO map_agg_src VALUES ('a', 10)
+
+query T
+SELECT map_agg(k, v ORDER BY v DESC)::text FROM map_agg_src
+----
+{a=>1,b=>2,c=>3}
+
+statement ok
+DROP TABLE map_agg_src
+
+### Map with special characters in keys ###
+
+query T
+SELECT '{hello world=>1}'::map[text=>int]
+----
+{"hello world"=>1}
+
+query I
+SELECT '{hello world=>1}'::map[text=>int] -> 'hello world'
+----
+1
+
+query T
+SELECT '{"key=>with=>arrows"=>1}'::map[text=>int]
+----
+{"key=>with=>arrows"=>1}
+
+### Map CASE edge cases ###
+
+query T
+SELECT CASE WHEN true THEN '{a=>1}'::map[text=>int] ELSE '{b=>2}'::map[text=>int] END
+----
+{a=>1}
+
+query T
+SELECT CASE WHEN false THEN '{a=>1}'::map[text=>int] ELSE '{b=>2}'::map[text=>int] END
+----
+{b=>2}
+
+### Map IN list edge cases ###
+
+query B
+SELECT '{a=>1}'::map[text=>int] IN ('{a=>1}'::map[text=>int], '{b=>2}'::map[text=>int])
+----
+true
+
+query B
+SELECT '{c=>3}'::map[text=>int] IN ('{a=>1}'::map[text=>int], '{b=>2}'::map[text=>int])
+----
+false
+
+### Map ORDER BY edge cases ###
+
+statement ok
+CREATE TABLE map_order_test (data map[text=>int])
+
+statement ok
+INSERT INTO map_order_test VALUES ('{a=>1}'), ('{b=>2}'), ('{a=>2}'), (NULL), ('{}')
+
+query T
+SELECT data FROM map_order_test ORDER BY data
+----
+{}
+{a=>1}
+{a=>2}
+{b=>2}
+NULL
+
+query T
+SELECT data FROM map_order_test ORDER BY data DESC
+----
+NULL
+{b=>2}
+{a=>2}
+{a=>1}
+{}
+
+statement ok
+DROP TABLE map_order_test

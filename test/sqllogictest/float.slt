@@ -166,3 +166,1017 @@ SELECT 'e'::float::text
 
 query error invalid input syntax
 SELECT 'e10'::float::text
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### NaN arithmetic edge cases ###
+
+query R
+SELECT 'NaN'::float + 1
+----
+NaN
+
+query R
+SELECT 'NaN'::float - 1
+----
+NaN
+
+query R
+SELECT 'NaN'::float * 2
+----
+NaN
+
+query R
+SELECT 'NaN'::float / 2
+----
+NaN
+
+query R
+SELECT 'NaN'::float + 'NaN'::float
+----
+NaN
+
+query R
+SELECT 'NaN'::float * 'Infinity'::float
+----
+NaN
+
+query R
+SELECT 'NaN'::float - 'Infinity'::float
+----
+NaN
+
+query R
+SELECT 0 * 'NaN'::float
+----
+NaN
+
+query R
+SELECT 0 / 'NaN'::float
+----
+NaN
+
+### NaN comparison edge cases ###
+
+query B
+SELECT 'NaN'::float = 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float != 'NaN'::float
+----
+true
+
+query B
+SELECT 'NaN'::float > 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float < 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float >= 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float <= 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float > 'Infinity'::float
+----
+false
+
+query B
+SELECT 'NaN'::float < 'Infinity'::float
+----
+false
+
+query B
+SELECT 'NaN'::float > 0
+----
+false
+
+query B
+SELECT 'NaN'::float < 0
+----
+false
+
+query B
+SELECT 'NaN'::float = 0
+----
+false
+
+### Infinity arithmetic edge cases ###
+
+query R
+SELECT 'Infinity'::float + 1
+----
+inf
+
+query R
+SELECT 'Infinity'::float - 1
+----
+inf
+
+query R
+SELECT 'Infinity'::float * 2
+----
+inf
+
+query R
+SELECT 'Infinity'::float / 2
+----
+inf
+
+query R
+SELECT 'Infinity'::float + 'Infinity'::float
+----
+inf
+
+query R
+SELECT 'Infinity'::float * 'Infinity'::float
+----
+inf
+
+query R
+SELECT '-Infinity'::float + '-Infinity'::float
+----
+-inf
+
+query R
+SELECT '-Infinity'::float * '-Infinity'::float
+----
+inf
+
+query R
+SELECT 'Infinity'::float * '-Infinity'::float
+----
+-inf
+
+query R
+SELECT 'Infinity'::float - 'Infinity'::float
+----
+NaN
+
+query R
+SELECT 'Infinity'::float / 'Infinity'::float
+----
+NaN
+
+query R
+SELECT 0 * 'Infinity'::float
+----
+NaN
+
+query R
+SELECT 0 / 'Infinity'::float
+----
+0
+
+query R
+SELECT 'Infinity'::float / 0
+----
+inf
+
+query R
+SELECT '-Infinity'::float / 0
+----
+-inf
+
+### Infinity comparison edge cases ###
+
+query B
+SELECT 'Infinity'::float = 'Infinity'::float
+----
+true
+
+query B
+SELECT 'Infinity'::float > '-Infinity'::float
+----
+true
+
+query B
+SELECT '-Infinity'::float < 'Infinity'::float
+----
+true
+
+query B
+SELECT 'Infinity'::float > 1e308
+----
+true
+
+query B
+SELECT '-Infinity'::float < -1e308
+----
+true
+
+### Signed zero edge cases ###
+
+query B
+SELECT 0.0::float = -0.0::float
+----
+true
+
+query B
+SELECT 0.0::float > -0.0::float
+----
+false
+
+query B
+SELECT 0.0::float < -0.0::float
+----
+false
+
+query R
+SELECT 1.0 / 0.0::float
+----
+inf
+
+query R
+SELECT 1.0 / -0.0::float
+----
+-inf
+
+query R
+SELECT -1.0 / 0.0::float
+----
+-inf
+
+query R
+SELECT -1.0 / -0.0::float
+----
+inf
+
+query R
+SELECT 0.0::float * -1
+----
+-0
+
+query R
+SELECT -0.0::float * -1
+----
+0
+
+### Float precision edge cases ###
+
+query R
+SELECT 1e-307::float
+----
+0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+
+query R
+SELECT 1e-323::float
+----
+0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+
+query R
+SELECT 1.7976931348623157e308::float
+----
+179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+query error real out of range
+SELECT 1.7976931348623159e308::float
+
+### Float4 vs Float8 precision edge cases ###
+
+query R
+SELECT 3.4028235e38::float4
+----
+340282350000000000000000000000000000000
+
+query error value out of range: overflow
+SELECT 3.5e38::float4
+
+query R
+SELECT 1.18e-38::float4
+----
+0.0000000000000000000000000000000000000118
+
+### Math functions with special float values ###
+
+query R
+SELECT sqrt('Infinity'::float)
+----
+inf
+
+query R
+SELECT sqrt('NaN'::float)
+----
+NaN
+
+query error cannot take square root of a negative number
+SELECT sqrt('-1'::float)
+
+query R
+SELECT sqrt('-0'::float)
+----
+-0
+
+query R
+SELECT abs('Infinity'::float)
+----
+inf
+
+query R
+SELECT abs('-Infinity'::float)
+----
+inf
+
+query R
+SELECT abs('NaN'::float)
+----
+NaN
+
+query R
+SELECT abs('-0'::float)
+----
+0
+
+query R
+SELECT ceil('Infinity'::float)
+----
+inf
+
+query R
+SELECT ceil('-Infinity'::float)
+----
+-inf
+
+query R
+SELECT ceil('NaN'::float)
+----
+NaN
+
+query R
+SELECT floor('Infinity'::float)
+----
+inf
+
+query R
+SELECT floor('-Infinity'::float)
+----
+-inf
+
+query R
+SELECT floor('NaN'::float)
+----
+NaN
+
+query R
+SELECT round('Infinity'::float)
+----
+inf
+
+query R
+SELECT round('-Infinity'::float)
+----
+-inf
+
+query R
+SELECT round('NaN'::float)
+----
+NaN
+
+query R
+SELECT trunc('Infinity'::float)
+----
+inf
+
+query R
+SELECT trunc('-Infinity'::float)
+----
+-inf
+
+query R
+SELECT trunc('NaN'::float)
+----
+NaN
+
+query R
+SELECT exp('Infinity'::float)
+----
+inf
+
+query R
+SELECT exp('-Infinity'::float)
+----
+0
+
+query R
+SELECT exp('NaN'::float)
+----
+NaN
+
+query error value out of range: overflow
+SELECT exp(1000::float)
+
+query R
+SELECT ln('Infinity'::float)
+----
+inf
+
+query R
+SELECT ln('NaN'::float)
+----
+NaN
+
+query error cannot take logarithm of zero
+SELECT ln(0::float)
+
+query error cannot take logarithm of a negative number
+SELECT ln(-1::float)
+
+query R
+SELECT log10('Infinity'::float)
+----
+inf
+
+query R
+SELECT log10('NaN'::float)
+----
+NaN
+
+query R
+SELECT power('Infinity'::float, 2)
+----
+inf
+
+query R
+SELECT power('Infinity'::float, -1)
+----
+0
+
+query R
+SELECT power('Infinity'::float, 0)
+----
+1
+
+query R
+SELECT power('NaN'::float, 2)
+----
+NaN
+
+query R
+SELECT power('NaN'::float, 0)
+----
+1
+
+query R
+SELECT power(0::float, 'Infinity'::float)
+----
+0
+
+query R
+SELECT power(0::float, '-Infinity'::float)
+----
+inf
+
+query R
+SELECT power(1::float, 'Infinity'::float)
+----
+1
+
+query R
+SELECT power(1::float, 'NaN'::float)
+----
+1
+
+### Trigonometric functions with special values ###
+
+query R
+SELECT sin('NaN'::float)
+----
+NaN
+
+query R
+SELECT cos('NaN'::float)
+----
+NaN
+
+query R
+SELECT tan('NaN'::float)
+----
+NaN
+
+query R
+SELECT sin('Infinity'::float)
+----
+NaN
+
+query R
+SELECT cos('Infinity'::float)
+----
+NaN
+
+query R
+SELECT tan('Infinity'::float)
+----
+NaN
+
+query R
+SELECT asin('NaN'::float)
+----
+NaN
+
+query error input is out of range
+SELECT asin(2::float)
+
+query R
+SELECT acos('NaN'::float)
+----
+NaN
+
+query error input is out of range
+SELECT acos(2::float)
+
+query R
+SELECT atan('NaN'::float)
+----
+NaN
+
+query R
+SELECT atan('Infinity'::float)
+----
+1.5707963267948966
+
+query R
+SELECT atan('-Infinity'::float)
+----
+-1.5707963267948966
+
+query R
+SELECT atan2('NaN'::float, 1)
+----
+NaN
+
+query R
+SELECT atan2(1, 'NaN'::float)
+----
+NaN
+
+query R
+SELECT atan2('Infinity'::float, 1)
+----
+1.5707963267948966
+
+query R
+SELECT atan2(1, 'Infinity'::float)
+----
+0
+
+### Aggregate functions with special float values ###
+
+statement ok
+CREATE TABLE float_agg_test (val float)
+
+statement ok
+INSERT INTO float_agg_test VALUES ('NaN'), (1), (2), (3)
+
+query R
+SELECT SUM(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT AVG(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT MIN(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT MAX(val) FROM float_agg_test
+----
+NaN
+
+statement ok
+DELETE FROM float_agg_test
+
+statement ok
+INSERT INTO float_agg_test VALUES ('Infinity'), (1), (2), (3)
+
+query R
+SELECT SUM(val) FROM float_agg_test
+----
+inf
+
+query R
+SELECT AVG(val) FROM float_agg_test
+----
+inf
+
+query R
+SELECT MIN(val) FROM float_agg_test
+----
+1
+
+query R
+SELECT MAX(val) FROM float_agg_test
+----
+inf
+
+statement ok
+DELETE FROM float_agg_test
+
+statement ok
+INSERT INTO float_agg_test VALUES ('Infinity'), ('-Infinity')
+
+query R
+SELECT SUM(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT AVG(val) FROM float_agg_test
+----
+NaN
+
+statement ok
+DROP TABLE float_agg_test
+
+### Float comparison with GREATEST/LEAST ###
+
+query R
+SELECT GREATEST('NaN'::float, 1, 2, 3)
+----
+NaN
+
+query R
+SELECT LEAST('NaN'::float, 1, 2, 3)
+----
+NaN
+
+query R
+SELECT GREATEST('Infinity'::float, 1, 2, 3)
+----
+inf
+
+query R
+SELECT LEAST('-Infinity'::float, 1, 2, 3)
+----
+-inf
+
+### Float modulo operations ###
+
+query R
+SELECT 5.5::float % 2.0
+----
+1.5
+
+query R
+SELECT -5.5::float % 2.0
+----
+-1.5
+
+query R
+SELECT 5.5::float % -2.0
+----
+1.5
+
+query R
+SELECT 'Infinity'::float % 2.0
+----
+NaN
+
+query R
+SELECT 5.5::float % 'Infinity'::float
+----
+5.5
+
+query R
+SELECT 'NaN'::float % 2.0
+----
+NaN
+
+query R
+SELECT 5.5::float % 'NaN'::float
+----
+NaN
+
+### Float negation edge cases ###
+
+query R
+SELECT -'NaN'::float
+----
+NaN
+
+query R
+SELECT -'Infinity'::float
+----
+-inf
+
+query R
+SELECT -'-Infinity'::float
+----
+inf
+
+query R
+SELECT -'-0'::float
+----
+0
+
+query R
+SELECT -'0'::float
+----
+-0
+
+### Float exponent notation edge cases ###
+
+query R
+SELECT '1E+308'::float
+----
+100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+query R
+SELECT '1e-308'::float
+----
+0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+
+query R
+SELECT '.5e1'::float
+----
+5
+
+query R
+SELECT '5.e1'::float
+----
+50
+
+### Float BETWEEN with special values ###
+
+query B
+SELECT 'NaN'::float BETWEEN 0 AND 10
+----
+false
+
+query B
+SELECT 'NaN'::float BETWEEN '-Infinity'::float AND 'Infinity'::float
+----
+false
+
+query B
+SELECT 5::float BETWEEN '-Infinity'::float AND 'Infinity'::float
+----
+true
+
+query B
+SELECT 'Infinity'::float BETWEEN 0 AND 'Infinity'::float
+----
+true
+
+### Float IN list with special values ###
+
+query B
+SELECT 'NaN'::float IN (1, 2, 'NaN'::float)
+----
+false
+
+query B
+SELECT 'Infinity'::float IN (1, 2, 'Infinity'::float)
+----
+true
+
+### Float DISTINCT comparison ###
+
+query B
+SELECT 'NaN'::float IS DISTINCT FROM 'NaN'::float
+----
+false
+
+query B
+SELECT 0.0::float IS DISTINCT FROM -0.0::float
+----
+false
+
+query B
+SELECT 'Infinity'::float IS DISTINCT FROM 'Infinity'::float
+----
+false
+
+### Float ORDER BY with special values ###
+
+statement ok
+CREATE TABLE float_order_test (val float)
+
+statement ok
+INSERT INTO float_order_test VALUES (NULL), ('NaN'), ('Infinity'), ('-Infinity'), (0), (-0.0), (1), (-1)
+
+query R
+SELECT val FROM float_order_test ORDER BY val
+----
+-inf
+-1
+-0
+0
+1
+inf
+NaN
+NULL
+
+query R
+SELECT val FROM float_order_test ORDER BY val DESC
+----
+NULL
+NaN
+inf
+1
+0
+-0
+-1
+-inf
+
+statement ok
+DROP TABLE float_order_test
+
+### Float division edge cases ###
+
+query R
+SELECT 1.0::float / 3.0
+----
+0.3333333333333333
+
+query R
+SELECT 2.0::float / 3.0
+----
+0.6666666666666666
+
+query R
+SELECT 0.0::float / 0.0
+----
+NaN
+
+query R
+SELECT 'Infinity'::float / 0.0
+----
+inf
+
+query R
+SELECT '-Infinity'::float / 0.0
+----
+-inf
+
+### Float precision type modifiers ###
+
+query R
+SELECT 1::float(1)
+----
+1
+
+query R
+SELECT 1::float(24)
+----
+1
+
+query R
+SELECT 1::float(25)
+----
+1
+
+query R
+SELECT 1::float(53)
+----
+1
+
+### Float COALESCE with special values ###
+
+query R
+SELECT COALESCE(NULL::float, 'NaN'::float)
+----
+NaN
+
+query R
+SELECT COALESCE(NULL::float, 'Infinity'::float)
+----
+inf
+
+query R
+SELECT COALESCE('NaN'::float, 1)
+----
+NaN
+
+### Float NULLIF with special values ###
+
+query R
+SELECT NULLIF('NaN'::float, 'NaN'::float)
+----
+NaN
+
+query R
+SELECT NULLIF('Infinity'::float, 'Infinity'::float)
+----
+NULL
+
+query R
+SELECT NULLIF(0.0::float, -0.0::float)
+----
+NULL
+
+### Float CASE expressions with special values ###
+
+query R
+SELECT CASE WHEN 'NaN'::float = 'NaN'::float THEN 1 ELSE 0 END
+----
+0
+
+query R
+SELECT CASE WHEN 'Infinity'::float = 'Infinity'::float THEN 1 ELSE 0 END
+----
+1
+
+query R
+SELECT CASE WHEN 'NaN'::float IS NULL THEN 1 ELSE 0 END
+----
+0
+
+### Float sign function ###
+
+query R
+SELECT sign('NaN'::float)
+----
+NaN
+
+query R
+SELECT sign('Infinity'::float)
+----
+1
+
+query R
+SELECT sign('-Infinity'::float)
+----
+-1
+
+query R
+SELECT sign(0.0::float)
+----
+0
+
+query R
+SELECT sign(-0.0::float)
+----
+0
+
+### Float cbrt (cube root) ###
+
+query R
+SELECT cbrt('NaN'::float)
+----
+NaN
+
+query R
+SELECT cbrt('Infinity'::float)
+----
+inf
+
+query R
+SELECT cbrt('-Infinity'::float)
+----
+-inf
+
+query R
+SELECT cbrt(-8::float)
+----
+-2
+
+query R
+SELECT cbrt(0::float)
+----
+0
+
+query R
+SELECT cbrt(-0::float)
+----
+-0
+
+### Float degrees/radians conversion ###
+
+query R
+SELECT degrees('NaN'::float)
+----
+NaN
+
+query R
+SELECT degrees('Infinity'::float)
+----
+inf
+
+query R
+SELECT radians('NaN'::float)
+----
+NaN
+
+query R
+SELECT radians('Infinity'::float)
+----
+inf

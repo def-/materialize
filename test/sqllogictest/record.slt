@@ -80,3 +80,370 @@ Source materialize.public.t1
 Target cluster: quickstart
 
 EOF
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+mode cockroach
+
+### Basic ROW construction ###
+
+query T
+SELECT ROW(1)
+----
+(1)
+
+query T
+SELECT ROW(1, 2)
+----
+(1,2)
+
+query T
+SELECT ROW(1, 2, 3)
+----
+(1,2,3)
+
+query T
+SELECT ROW('a', 'b', 'c')
+----
+(a,b,c)
+
+query T
+SELECT ROW(1, 'two', 3.0)
+----
+(1,two,3)
+
+### ROW with NULL values ###
+
+query T
+SELECT ROW(NULL)
+----
+()
+
+query T
+SELECT ROW(1, NULL)
+----
+(1,)
+
+query T
+SELECT ROW(NULL, 2)
+----
+(,2)
+
+query T
+SELECT ROW(NULL, NULL)
+----
+(,)
+
+query T
+SELECT ROW(1, NULL, 3)
+----
+(1,,3)
+
+### Nested ROW construction ###
+
+query T
+SELECT ROW(ROW(1, 2), 3)
+----
+("(1,2)",3)
+
+query T
+SELECT ROW(1, ROW(2, 3))
+----
+(1,"(2,3)")
+
+query T
+SELECT ROW(ROW(1), ROW(2))
+----
+("(1)","(2)")
+
+query T
+SELECT ROW(ROW(ROW(1)))
+----
+("(""(1)"")")
+
+### ROW comparison edge cases ###
+
+query B
+SELECT ROW(1, 2) = ROW(1, 2)
+----
+true
+
+query B
+SELECT ROW(1, 2) = ROW(1, 3)
+----
+false
+
+query B
+SELECT ROW(1, 2) <> ROW(1, 3)
+----
+true
+
+query B
+SELECT ROW(1, 2) < ROW(1, 3)
+----
+true
+
+query B
+SELECT ROW(1, 2) > ROW(1, 3)
+----
+false
+
+query B
+SELECT ROW(1, 2) <= ROW(1, 2)
+----
+true
+
+query B
+SELECT ROW(1, 2) >= ROW(1, 2)
+----
+true
+
+query B
+SELECT ROW(2, 1) > ROW(1, 2)
+----
+true
+
+query B
+SELECT ROW(1, 2) < ROW(2, 1)
+----
+true
+
+### ROW comparison with NULL ###
+
+query B
+SELECT ROW(1, NULL) = ROW(1, NULL)
+----
+NULL
+
+query B
+SELECT ROW(1, NULL) = ROW(1, 2)
+----
+NULL
+
+query B
+SELECT ROW(1, 2) = ROW(1, NULL)
+----
+NULL
+
+query B
+SELECT ROW(NULL, NULL) = ROW(NULL, NULL)
+----
+NULL
+
+query B
+SELECT ROW(1, 2) <> ROW(1, NULL)
+----
+NULL
+
+query B
+SELECT ROW(1, 2) < ROW(1, NULL)
+----
+NULL
+
+### ROW IS DISTINCT FROM ###
+
+query B
+SELECT ROW(1, 2) IS DISTINCT FROM ROW(1, 2)
+----
+false
+
+query B
+SELECT ROW(1, 2) IS DISTINCT FROM ROW(1, 3)
+----
+true
+
+query B
+SELECT ROW(1, NULL) IS DISTINCT FROM ROW(1, NULL)
+----
+false
+
+query B
+SELECT ROW(1, NULL) IS DISTINCT FROM ROW(1, 2)
+----
+true
+
+query B
+SELECT ROW(NULL, NULL) IS DISTINCT FROM ROW(NULL, NULL)
+----
+false
+
+query B
+SELECT ROW(1, 2) IS NOT DISTINCT FROM ROW(1, 2)
+----
+true
+
+query B
+SELECT ROW(1, NULL) IS NOT DISTINCT FROM ROW(1, NULL)
+----
+true
+
+### ROW field access ###
+
+query I
+SELECT (ROW(1, 2, 3)).f1
+----
+1
+
+query I
+SELECT (ROW(1, 2, 3)).f2
+----
+2
+
+query I
+SELECT (ROW(1, 2, 3)).f3
+----
+3
+
+query T
+SELECT (ROW('a', 'b', 'c')).f2
+----
+b
+
+query I
+SELECT (ROW(1, NULL, 3)).f2
+----
+NULL
+
+### ROW from table columns ###
+
+query T rowsort
+SELECT ROW(a, b) FROM t1
+----
+(1,2)
+
+query I rowsort
+SELECT (ROW(a, b)).f1 FROM t1
+----
+1
+
+query I rowsort
+SELECT (ROW(a, b)).f2 FROM t1
+----
+2
+
+### ROW in subquery ###
+
+query T
+SELECT (SELECT ROW(1, 2))
+----
+(1,2)
+
+query I
+SELECT (SELECT ROW(1, 2)).f1
+----
+1
+
+### ROW with expressions ###
+
+query T
+SELECT ROW(1 + 1, 2 * 3)
+----
+(2,6)
+
+query T
+SELECT ROW(length('hello'), upper('world'))
+----
+(5,WORLD)
+
+### ROW concatenation patterns ###
+
+query T
+SELECT ROW(1, 2) || ROW(3, 4)
+----
+(1,2)(3,4)
+
+### ROW in WHERE clause ###
+
+query II rowsort
+SELECT * FROM t1 WHERE ROW(a, b) = ROW(1, 2)
+----
+1  2
+
+query II
+SELECT * FROM t1 WHERE ROW(a, b) <> ROW(1, 2)
+----
+
+### ROW in CASE expression ###
+
+query T
+SELECT CASE WHEN true THEN ROW(1, 2) ELSE ROW(3, 4) END
+----
+(1,2)
+
+query T
+SELECT CASE WHEN false THEN ROW(1, 2) ELSE ROW(3, 4) END
+----
+(3,4)
+
+### ROW with arrays ###
+
+query T
+SELECT ROW(ARRAY[1, 2, 3])
+----
+("{1,2,3}")
+
+query T
+SELECT ROW(1, ARRAY[2, 3])
+----
+(1,"{2,3}")
+
+### ROW with different types ###
+
+query T
+SELECT ROW(1::int, 2::bigint, 3::float)
+----
+(1,2,3)
+
+query T
+SELECT ROW(true, false)
+----
+(t,f)
+
+query T
+SELECT ROW('2023-01-01'::date, '12:30:00'::time)
+----
+(2023-01-01,12:30:00)
+
+### ROW COALESCE ###
+
+query T
+SELECT COALESCE(NULL::record(f1 int, f2 int), ROW(1, 2))
+----
+(1,2)
+
+### ROW ordering ###
+
+query T
+SELECT x FROM (VALUES (ROW(1, 2)), (ROW(1, 1)), (ROW(2, 1))) AS t(x) ORDER BY x
+----
+(1,1)
+(1,2)
+(2,1)
+
+query T
+SELECT x FROM (VALUES (ROW(1, 2)), (ROW(1, 1)), (ROW(2, 1))) AS t(x) ORDER BY x DESC
+----
+(2,1)
+(1,2)
+(1,1)
+
+### Empty ROW - not directly supported but testing edge behavior ###
+
+query T
+SELECT ROW()
+----
+()
+
+### ROW with special characters in strings ###
+
+query T
+SELECT ROW('hello, world', 'it''s')
+----
+("hello, world",it's)
+
+query T
+SELECT ROW('(', ')')
+----
+("(",")")

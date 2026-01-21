@@ -1174,3 +1174,459 @@ query I
 SELECT '-9223372036854775808'::int8 % '-1'::int8
 ----
 0
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### NaN and Infinity propagation edge cases ###
+
+# NaN propagation through various operations
+query R
+SELECT 'NaN'::float + 'NaN'::float
+----
+NaN
+
+query R
+SELECT 'NaN'::float - 'NaN'::float
+----
+NaN
+
+query R
+SELECT 'NaN'::float * 'NaN'::float
+----
+NaN
+
+query R
+SELECT 'NaN'::float / 'NaN'::float
+----
+NaN
+
+query R
+SELECT 'NaN'::float % 1.0::float
+----
+NaN
+
+query R
+SELECT 1.0::float % 'NaN'::float
+----
+NaN
+
+# Infinity arithmetic edge cases
+query R
+SELECT 'Inf'::float - 'Inf'::float
+----
+NaN
+
+query R
+SELECT 'Inf'::float / 'Inf'::float
+----
+NaN
+
+query R
+SELECT '-Inf'::float + 'Inf'::float
+----
+NaN
+
+query R
+SELECT 0.0::float * 'Inf'::float
+----
+NaN
+
+query R
+SELECT 'Inf'::float % 1.0::float
+----
+NaN
+
+query R
+SELECT 1.0::float % 'Inf'::float
+----
+1
+
+# NaN comparisons (should not panic)
+query B
+SELECT 'NaN'::float = 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float < 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float > 'NaN'::float
+----
+false
+
+query B
+SELECT 'NaN'::float <> 'NaN'::float
+----
+true
+
+# NaN in aggregates
+query R
+SELECT SUM(x) FROM (VALUES ('NaN'::float), (1.0), (2.0)) AS t(x)
+----
+NaN
+
+query R
+SELECT AVG(x) FROM (VALUES ('NaN'::float), (1.0), (2.0)) AS t(x)
+----
+NaN
+
+query R
+SELECT MIN(x) FROM (VALUES ('NaN'::float), (1.0), (2.0)) AS t(x)
+----
+1
+
+query R
+SELECT MAX(x) FROM (VALUES ('NaN'::float), (1.0), (2.0)) AS t(x)
+----
+NaN
+
+### Integer boundary edge cases in expressions ###
+
+# Multiplication near overflow boundaries
+query error numeric field overflow
+SELECT 2147483647::int4 * 2
+
+query error numeric field overflow
+SELECT (-2147483648)::int4 * 2
+
+query error numeric field overflow
+SELECT 32767::int2 * 2
+
+query error numeric field overflow
+SELECT (-32768)::int2 * 2
+
+# Subtraction causing overflow
+query error numeric field overflow
+SELECT (-2147483648)::int4 - 1
+
+query error numeric field overflow
+SELECT (-9223372036854775808)::int8 - 1
+
+query error numeric field overflow
+SELECT (-32768)::int2 - 1
+
+# Addition at max boundaries
+query I
+SELECT 2147483646::int4 + 1
+----
+2147483647
+
+query I
+SELECT 9223372036854775806::int8 + 1
+----
+9223372036854775807
+
+query I
+SELECT 32766::int2 + 1
+----
+32767
+
+# Negation edge cases (MIN values can't be negated)
+query error "-32768" smallint out of range
+SELECT -(-32768::int2)
+
+query error "-2147483648" integer out of range
+SELECT -(-2147483648::int4)
+
+query error "-9223372036854775808" bigint out of range
+SELECT -(-9223372036854775808::int8)
+
+### Complex expressions with potential for internal errors ###
+
+# Deeply nested arithmetic
+query I
+SELECT 1 + (2 + (3 + (4 + (5 + (6 + (7 + (8 + (9 + 10))))))))
+----
+55
+
+# Chain of divisions
+query R
+SELECT 1000000.0 / 2.0 / 2.0 / 2.0 / 2.0 / 2.0 / 2.0 / 2.0 / 2.0 / 2.0 / 2.0
+----
+976.5625
+
+# Chain of multiplications approaching overflow
+query error numeric field overflow
+SELECT 2::int4 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2
+
+# Mixed type arithmetic edge cases
+query R
+SELECT 2147483647::int4 + 0.1::float
+----
+2147483647.1
+
+query R
+SELECT 2147483647::int4 * 1.0::float
+----
+2147483647
+
+query R
+SELECT 9223372036854775807::int8 + 0.0::float
+----
+9223372036854776000
+
+### Modulo edge cases ###
+
+# Modulo with 1 and -1
+query I
+SELECT 2147483647 % 1
+----
+0
+
+query I
+SELECT 2147483647 % (-1)
+----
+0
+
+query I
+SELECT (-2147483648)::int4 % 1
+----
+0
+
+# Modulo with large numbers
+query I
+SELECT 9223372036854775807::int8 % 9223372036854775806::int8
+----
+1
+
+query I
+SELECT 9223372036854775807::int8 % 2
+----
+1
+
+### Round-trip edge cases ###
+
+# Float to int and back
+query error "2147483648" integer out of range
+SELECT 2147483647.6::float::int4
+
+query I
+SELECT 2147483646.5::float::int4
+----
+2147483646
+
+# Decimal precision edge cases
+query R
+SELECT 0.123456789012345678901234567890123456789::numeric
+----
+0.123456789012345678901234567890123456789
+
+query R
+SELECT -0.123456789012345678901234567890123456789::numeric
+----
+-0.123456789012345678901234567890123456789
+
+### Power function edge cases ###
+
+query R
+SELECT power(2.0::float, 1023.0)
+----
+89884656743115800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+query error value out of range: overflow
+SELECT power(2.0::float, 1024.0)
+
+query R
+SELECT power(2.0::float, -1074.0)
+----
+0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005
+
+query R
+SELECT power(0.0, 0.0)
+----
+1
+
+query R
+SELECT power('NaN'::float, 0.0)
+----
+1
+
+query R
+SELECT power(0.0, 'NaN'::float)
+----
+NaN
+
+query R
+SELECT power('NaN'::float, 'NaN'::float)
+----
+NaN
+
+query error division by zero
+SELECT power(0.0::float, -1.0)
+
+### Sqrt and log edge cases ###
+
+query R
+SELECT sqrt('NaN'::float)
+----
+NaN
+
+query R
+SELECT sqrt('Inf'::float)
+----
+inf
+
+query error cannot take square root of a negative number
+SELECT sqrt(-1.0::float)
+
+query R
+SELECT ln('Inf'::float)
+----
+inf
+
+query error cannot take logarithm of zero
+SELECT ln(0.0::float)
+
+query error cannot take logarithm of a negative number
+SELECT ln(-1.0::float)
+
+query R
+SELECT ln('NaN'::float)
+----
+NaN
+
+query R
+SELECT log10('Inf'::float)
+----
+inf
+
+query error cannot take logarithm of zero
+SELECT log10(0.0::float)
+
+### Exp function edge cases ###
+
+query R
+SELECT exp('NaN'::float)
+----
+NaN
+
+query R
+SELECT exp('-Inf'::float)
+----
+0
+
+query R
+SELECT exp('Inf'::float)
+----
+inf
+
+query error value out of range: overflow
+SELECT exp(1000.0::float)
+
+### Trigonometric function edge cases ###
+
+query R
+SELECT sin('NaN'::float)
+----
+NaN
+
+query R
+SELECT cos('NaN'::float)
+----
+NaN
+
+query R
+SELECT tan('NaN'::float)
+----
+NaN
+
+query error input is out of range
+SELECT sin('Inf'::float)
+
+query error input is out of range
+SELECT cos('Inf'::float)
+
+query error input is out of range
+SELECT tan('Inf'::float)
+
+### Ceil/Floor/Round edge cases ###
+
+query R
+SELECT ceil('Inf'::float)
+----
+inf
+
+query R
+SELECT ceil('-Inf'::float)
+----
+-inf
+
+query R
+SELECT ceil('NaN'::float)
+----
+NaN
+
+query R
+SELECT floor('Inf'::float)
+----
+inf
+
+query R
+SELECT floor('-Inf'::float)
+----
+-inf
+
+query R
+SELECT floor('NaN'::float)
+----
+NaN
+
+query R
+SELECT round('Inf'::float)
+----
+inf
+
+query R
+SELECT round('-Inf'::float)
+----
+-inf
+
+query R
+SELECT round('NaN'::float)
+----
+NaN
+
+### Bitwise operations at boundaries ###
+
+# Left shift at boundaries
+query I
+SELECT 1::int8 << 62
+----
+4611686018427387904
+
+query I
+SELECT 1::int8 << 63
+----
+-9223372036854775808
+
+query I
+SELECT (-1)::int8 << 63
+----
+-9223372036854775808
+
+# Right shift of negative numbers
+query I
+SELECT (-1)::int8 >> 63
+----
+-1
+
+query I
+SELECT (-9223372036854775808)::int8 >> 63
+----
+-1
+
+# XOR at boundaries
+query I
+SELECT 9223372036854775807::int8 # (-1)::int8
+----
+-9223372036854775808
+
+query I
+SELECT (-9223372036854775808)::int8 # (-1)::int8
+----
+9223372036854775807

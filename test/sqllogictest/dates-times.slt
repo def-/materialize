@@ -1728,3 +1728,524 @@ query T
 SELECT timestamp::timestamp from t ORDER BY t.timestamp;
 ----
 2012-03-05 00:00:00
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Date boundary edge cases ###
+
+query T
+SELECT DATE '0001-01-01'
+----
+0001-01-01
+
+query T
+SELECT DATE '9999-12-31'
+----
+9999-12-31
+
+# BC dates
+query T
+SELECT DATE '0001-01-01 BC'
+----
+0001-01-01 BC
+
+### Timestamp boundary edge cases ###
+
+query T
+SELECT TIMESTAMP '0001-01-01 00:00:00'
+----
+0001-01-01 00:00:00
+
+query T
+SELECT TIMESTAMP '9999-12-31 23:59:59.999999'
+----
+9999-12-31 23:59:59.999999
+
+# Microsecond precision
+query T
+SELECT TIMESTAMP '2000-01-01 00:00:00.000001'
+----
+2000-01-01 00:00:00.000001
+
+query T
+SELECT TIMESTAMP '2000-01-01 00:00:00.999999'
+----
+2000-01-01 00:00:00.999999
+
+### Leap year edge cases ###
+
+# Feb 29 on leap year
+query T
+SELECT DATE '2000-02-29'
+----
+2000-02-29
+
+query T
+SELECT DATE '2004-02-29'
+----
+2004-02-29
+
+# 1900 was NOT a leap year (divisible by 100 but not 400)
+query error invalid input syntax for type date
+SELECT DATE '1900-02-29'
+
+# 2000 WAS a leap year (divisible by 400)
+query T
+SELECT DATE '2000-02-29'
+----
+2000-02-29
+
+# Day after Feb 28 on non-leap year
+query T
+SELECT DATE '2001-02-28' + INTERVAL '1 day'
+----
+2001-03-01 00:00:00
+
+# Day after Feb 28 on leap year
+query T
+SELECT DATE '2000-02-28' + INTERVAL '1 day'
+----
+2000-02-29 00:00:00
+
+### Month/Year boundary arithmetic ###
+
+# Adding months across year boundary
+query T
+SELECT DATE '2000-11-30' + INTERVAL '2 months'
+----
+2001-01-30 00:00:00
+
+# Adding months to 31st when target month has 30 days
+query T
+SELECT DATE '2000-01-31' + INTERVAL '1 month'
+----
+2000-02-29 00:00:00
+
+query T
+SELECT DATE '2001-01-31' + INTERVAL '1 month'
+----
+2001-02-28 00:00:00
+
+# Adding years to Feb 29
+query T
+SELECT DATE '2000-02-29' + INTERVAL '1 year'
+----
+2001-02-28 00:00:00
+
+query T
+SELECT DATE '2000-02-29' + INTERVAL '4 years'
+----
+2004-02-29 00:00:00
+
+### Time edge cases ###
+
+query T
+SELECT TIME '00:00:00'
+----
+00:00:00
+
+query T
+SELECT TIME '23:59:59'
+----
+23:59:59
+
+query T
+SELECT TIME '23:59:59.999999'
+----
+23:59:59.999999
+
+query T
+SELECT TIME '00:00:00.000001'
+----
+00:00:00.000001
+
+### Timestamp with timezone edge cases ###
+
+query T
+SELECT TIMESTAMPTZ '2000-01-01 00:00:00+00'
+----
+2000-01-01 00:00:00+00
+
+query T
+SELECT TIMESTAMPTZ '2000-01-01 00:00:00+14'
+----
+1999-12-31 10:00:00+00
+
+query T
+SELECT TIMESTAMPTZ '2000-01-01 00:00:00-12'
+----
+2000-01-01 12:00:00+00
+
+### extract() edge cases ###
+
+query R
+SELECT extract(year FROM DATE '0001-01-01')
+----
+1
+
+query R
+SELECT extract(month FROM DATE '0001-01-01')
+----
+1
+
+query R
+SELECT extract(day FROM DATE '0001-01-01')
+----
+1
+
+query R
+SELECT extract(dow FROM DATE '2000-01-01')
+----
+6
+
+query R
+SELECT extract(doy FROM DATE '2000-01-01')
+----
+1
+
+query R
+SELECT extract(doy FROM DATE '2000-12-31')
+----
+366
+
+query R
+SELECT extract(doy FROM DATE '2001-12-31')
+----
+365
+
+query R
+SELECT extract(epoch FROM TIMESTAMP '1970-01-01 00:00:00')
+----
+0
+
+query R
+SELECT extract(epoch FROM TIMESTAMP '1970-01-01 00:00:01')
+----
+1
+
+query R
+SELECT extract(epoch FROM TIMESTAMP '1969-12-31 23:59:59')
+----
+-1
+
+query R
+SELECT extract(microseconds FROM TIME '00:00:00.123456')
+----
+123456
+
+query R
+SELECT extract(milliseconds FROM TIME '00:00:00.123456')
+----
+123.456
+
+query R
+SELECT extract(quarter FROM DATE '2000-01-01')
+----
+1
+
+query R
+SELECT extract(quarter FROM DATE '2000-04-01')
+----
+2
+
+query R
+SELECT extract(quarter FROM DATE '2000-07-01')
+----
+3
+
+query R
+SELECT extract(quarter FROM DATE '2000-10-01')
+----
+4
+
+query R
+SELECT extract(week FROM DATE '2000-01-01')
+----
+52
+
+query R
+SELECT extract(week FROM DATE '2000-01-03')
+----
+1
+
+### date_trunc() edge cases ###
+
+query T
+SELECT date_trunc('year', TIMESTAMP '2000-06-15 12:30:45')
+----
+2000-01-01 00:00:00
+
+query T
+SELECT date_trunc('month', TIMESTAMP '2000-06-15 12:30:45')
+----
+2000-06-01 00:00:00
+
+query T
+SELECT date_trunc('day', TIMESTAMP '2000-06-15 12:30:45')
+----
+2000-06-15 00:00:00
+
+query T
+SELECT date_trunc('hour', TIMESTAMP '2000-06-15 12:30:45')
+----
+2000-06-15 12:00:00
+
+query T
+SELECT date_trunc('minute', TIMESTAMP '2000-06-15 12:30:45')
+----
+2000-06-15 12:30:00
+
+query T
+SELECT date_trunc('second', TIMESTAMP '2000-06-15 12:30:45.123456')
+----
+2000-06-15 12:30:45
+
+query T
+SELECT date_trunc('milliseconds', TIMESTAMP '2000-06-15 12:30:45.123456')
+----
+2000-06-15 12:30:45.123
+
+query T
+SELECT date_trunc('microseconds', TIMESTAMP '2000-06-15 12:30:45.123456')
+----
+2000-06-15 12:30:45.123456
+
+query T
+SELECT date_trunc('week', TIMESTAMP '2000-06-15 12:30:45')
+----
+2000-06-12 00:00:00
+
+query T
+SELECT date_trunc('quarter', TIMESTAMP '2000-06-15 12:30:45')
+----
+2000-04-01 00:00:00
+
+### NULL handling in date/time functions ###
+
+query T
+SELECT DATE NULL
+----
+NULL
+
+query T
+SELECT TIMESTAMP NULL
+----
+NULL
+
+query T
+SELECT DATE '2000-01-01' + NULL
+----
+NULL
+
+query R
+SELECT extract(year FROM NULL::date)
+----
+NULL
+
+query T
+SELECT date_trunc('year', NULL::timestamp)
+----
+NULL
+
+### Date/Time arithmetic edge cases ###
+
+query T
+SELECT DATE '2000-01-01' - DATE '1999-01-01'
+----
+366 days
+
+query T
+SELECT DATE '2001-01-01' - DATE '2000-01-01'
+----
+366 days
+
+query T
+SELECT DATE '2002-01-01' - DATE '2001-01-01'
+----
+365 days
+
+query T
+SELECT TIMESTAMP '2000-01-01 12:00:00' - TIMESTAMP '2000-01-01 00:00:00'
+----
+12:00:00
+
+query T
+SELECT TIME '12:00:00' - TIME '00:00:00'
+----
+12:00:00
+
+query T
+SELECT TIME '00:00:00' - TIME '12:00:00'
+----
+-12:00:00
+
+### to_timestamp() edge cases ###
+
+query T
+SELECT to_timestamp(0)
+----
+1970-01-01 00:00:00+00
+
+query T
+SELECT to_timestamp(-1)
+----
+1969-12-31 23:59:59+00
+
+query T
+SELECT to_timestamp(2147483647)
+----
+2038-01-19 03:14:07+00
+
+query T
+SELECT to_timestamp(-2147483648)
+----
+1901-12-13 20:45:52+00
+
+### to_char() edge cases ###
+
+query T
+SELECT to_char(DATE '2000-01-01', 'YYYY-MM-DD')
+----
+2000-01-01
+
+query T
+SELECT to_char(DATE '0001-01-01', 'YYYY-MM-DD')
+----
+0001-01-01
+
+query T
+SELECT to_char(TIMESTAMP '2000-01-01 12:34:56.789', 'YYYY-MM-DD HH24:MI:SS.MS')
+----
+2000-01-01 12:34:56.789
+
+query T
+SELECT to_char(TIMESTAMP '2000-01-01 12:34:56.789', 'HH:MI:SS AM')
+----
+12:34:56 PM
+
+query T
+SELECT to_char(TIMESTAMP '2000-01-01 00:00:00', 'HH:MI:SS AM')
+----
+12:00:00 AM
+
+### make_date() edge cases ###
+
+query T
+SELECT make_date(2000, 1, 1)
+----
+2000-01-01
+
+query T
+SELECT make_date(1, 1, 1)
+----
+0001-01-01
+
+query T
+SELECT make_date(9999, 12, 31)
+----
+9999-12-31
+
+query error date field value out of range
+SELECT make_date(2000, 13, 1)
+
+query error date field value out of range
+SELECT make_date(2000, 0, 1)
+
+query error date field value out of range
+SELECT make_date(2000, 1, 32)
+
+query error date field value out of range
+SELECT make_date(2000, 1, 0)
+
+query error date field value out of range
+SELECT make_date(2001, 2, 29)
+
+### make_time() edge cases ###
+
+query T
+SELECT make_time(0, 0, 0)
+----
+00:00:00
+
+query T
+SELECT make_time(23, 59, 59.999999)
+----
+23:59:59.999999
+
+query error time field value out of range
+SELECT make_time(24, 0, 0)
+
+query error time field value out of range
+SELECT make_time(0, 60, 0)
+
+query error time field value out of range
+SELECT make_time(0, 0, 60)
+
+query error time field value out of range
+SELECT make_time(-1, 0, 0)
+
+### make_timestamp() edge cases ###
+
+query T
+SELECT make_timestamp(2000, 1, 1, 0, 0, 0)
+----
+2000-01-01 00:00:00
+
+query T
+SELECT make_timestamp(2000, 1, 1, 23, 59, 59.999999)
+----
+2000-01-01 23:59:59.999999
+
+query error timestamp field value out of range
+SELECT make_timestamp(2000, 1, 1, 24, 0, 0)
+
+### age() edge cases ###
+
+query T
+SELECT age(DATE '2000-01-01', DATE '2000-01-01')
+----
+00:00:00
+
+query T
+SELECT age(DATE '2001-01-01', DATE '2000-01-01')
+----
+1 year
+
+query T
+SELECT age(DATE '2000-01-01', DATE '2001-01-01')
+----
+-1 years
+
+query T
+SELECT age(TIMESTAMP '2000-01-01 12:00:00', TIMESTAMP '2000-01-01 00:00:00')
+----
+12:00:00
+
+### Comparison edge cases ###
+
+query B
+SELECT DATE '2000-01-01' = DATE '2000-01-01'
+----
+true
+
+query B
+SELECT DATE '2000-01-01' < DATE '2000-01-02'
+----
+true
+
+query B
+SELECT TIMESTAMP '2000-01-01 00:00:00' = TIMESTAMP '2000-01-01 00:00:00.000000'
+----
+true
+
+query B
+SELECT DATE NULL = DATE '2000-01-01'
+----
+NULL
+
+query B
+SELECT DATE NULL < DATE NULL
+----
+NULL

@@ -79,3 +79,468 @@ query T
 select uuid_generate_v5('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', NULL)
 ----
 NULL
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### UUID literal parsing edge cases ###
+
+query T
+SELECT '00000000-0000-0000-0000-000000000000'::uuid
+----
+00000000-0000-0000-0000-000000000000
+
+query T
+SELECT 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid
+----
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query T
+SELECT 'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF'::uuid
+----
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query T
+SELECT 'AbCdEf01-2345-6789-AbCd-Ef0123456789'::uuid
+----
+abcdef01-2345-6789-abcd-ef0123456789
+
+### UUID parsing without hyphens ###
+
+query T
+SELECT '63616665663030646465616462656568'::uuid
+----
+63616665-6630-3064-6465-616462656568
+
+query T
+SELECT '00000000000000000000000000000000'::uuid
+----
+00000000-0000-0000-0000-000000000000
+
+query T
+SELECT 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'::uuid
+----
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+### UUID parsing with braces ###
+
+query T
+SELECT '{63616665-6630-3064-6465-616462656568}'::uuid
+----
+63616665-6630-3064-6465-616462656568
+
+query T
+SELECT '{00000000-0000-0000-0000-000000000000}'::uuid
+----
+00000000-0000-0000-0000-000000000000
+
+### UUID invalid input edge cases ###
+
+query error invalid input syntax for type uuid
+SELECT ''::uuid
+
+query error invalid input syntax for type uuid
+SELECT 'not-a-uuid'::uuid
+
+query error invalid input syntax for type uuid
+SELECT '63616665-6630-3064-6465-61646265656'::uuid
+
+query error invalid input syntax for type uuid
+SELECT '63616665-6630-3064-6465-6164626565689'::uuid
+
+query error invalid input syntax for type uuid
+SELECT '63616665-6630-3064-6465'::uuid
+
+query error invalid input syntax for type uuid
+SELECT '636166656630306464656164626565689'::uuid
+
+query error invalid input syntax for type uuid
+SELECT 'gggggggg-gggg-gggg-gggg-gggggggggggg'::uuid
+
+query error invalid input syntax for type uuid
+SELECT '63616665-6630-3064-6465-616462656568-extra'::uuid
+
+### UUID NULL handling ###
+
+query T
+SELECT NULL::uuid
+----
+NULL
+
+query B
+SELECT NULL::uuid IS NULL
+----
+true
+
+query B
+SELECT '63616665-6630-3064-6465-616462656568'::uuid IS NULL
+----
+false
+
+query B
+SELECT '63616665-6630-3064-6465-616462656568'::uuid IS NOT NULL
+----
+true
+
+### UUID comparison edge cases ###
+
+query B
+SELECT '00000000-0000-0000-0000-000000000000'::uuid = '00000000-0000-0000-0000-000000000000'::uuid
+----
+true
+
+query B
+SELECT '00000000-0000-0000-0000-000000000000'::uuid < 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid
+----
+true
+
+query B
+SELECT 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid > '00000000-0000-0000-0000-000000000000'::uuid
+----
+true
+
+query B
+SELECT '00000000-0000-0000-0000-000000000001'::uuid > '00000000-0000-0000-0000-000000000000'::uuid
+----
+true
+
+query B
+SELECT '00000000-0000-0000-0001-000000000000'::uuid > '00000000-0000-0000-0000-ffffffffffff'::uuid
+----
+true
+
+query B
+SELECT '00000000-0000-0001-0000-000000000000'::uuid > '00000000-0000-0000-ffff-ffffffffffff'::uuid
+----
+true
+
+query B
+SELECT NULL::uuid = '63616665-6630-3064-6465-616462656568'::uuid
+----
+NULL
+
+query B
+SELECT NULL::uuid <> '63616665-6630-3064-6465-616462656568'::uuid
+----
+NULL
+
+query B
+SELECT NULL::uuid < '63616665-6630-3064-6465-616462656568'::uuid
+----
+NULL
+
+### UUID comparison with BETWEEN ###
+
+query B
+SELECT '50000000-0000-0000-0000-000000000000'::uuid
+    BETWEEN '00000000-0000-0000-0000-000000000000'::uuid
+    AND 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid
+----
+true
+
+query B
+SELECT '00000000-0000-0000-0000-000000000000'::uuid
+    BETWEEN '50000000-0000-0000-0000-000000000000'::uuid
+    AND 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid
+----
+false
+
+### UUID IN list ###
+
+query B
+SELECT '63616665-6630-3064-6465-616462656568'::uuid IN (
+    '63616665-6630-3064-6465-616462656568'::uuid,
+    '00000000-0000-0000-0000-000000000000'::uuid
+)
+----
+true
+
+query B
+SELECT '11111111-1111-1111-1111-111111111111'::uuid IN (
+    '63616665-6630-3064-6465-616462656568'::uuid,
+    '00000000-0000-0000-0000-000000000000'::uuid
+)
+----
+false
+
+query B
+SELECT NULL::uuid IN (
+    '63616665-6630-3064-6465-616462656568'::uuid,
+    '00000000-0000-0000-0000-000000000000'::uuid
+)
+----
+NULL
+
+### UUID table operations ###
+
+statement ok
+CREATE TABLE uuid_test (id uuid, name text)
+
+statement ok
+INSERT INTO uuid_test VALUES
+    ('63616665-6630-3064-6465-616462656568', 'first'),
+    ('00000000-0000-0000-0000-000000000000', 'zero'),
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'max'),
+    (NULL, 'null_uuid')
+
+query TT rowsort
+SELECT * FROM uuid_test
+----
+00000000-0000-0000-0000-000000000000  zero
+63616665-6630-3064-6465-616462656568  first
+NULL                                  null_uuid
+ffffffff-ffff-ffff-ffff-ffffffffffff  max
+
+query T
+SELECT id FROM uuid_test ORDER BY id
+----
+00000000-0000-0000-0000-000000000000
+63616665-6630-3064-6465-616462656568
+ffffffff-ffff-ffff-ffff-ffffffffffff
+NULL
+
+query T
+SELECT id FROM uuid_test ORDER BY id DESC
+----
+NULL
+ffffffff-ffff-ffff-ffff-ffffffffffff
+63616665-6630-3064-6465-616462656568
+00000000-0000-0000-0000-000000000000
+
+query T
+SELECT id FROM uuid_test ORDER BY id NULLS FIRST
+----
+NULL
+00000000-0000-0000-0000-000000000000
+63616665-6630-3064-6465-616462656568
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+### UUID aggregate functions ###
+
+query T
+SELECT min(id) FROM uuid_test
+----
+00000000-0000-0000-0000-000000000000
+
+query T
+SELECT max(id) FROM uuid_test
+----
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT count(id) FROM uuid_test
+----
+3
+
+query I
+SELECT count(*) FROM uuid_test
+----
+4
+
+query I
+SELECT count(DISTINCT id) FROM uuid_test
+----
+3
+
+### UUID with GROUP BY ###
+
+statement ok
+INSERT INTO uuid_test VALUES
+    ('63616665-6630-3064-6465-616462656568', 'first_duplicate')
+
+query TI rowsort
+SELECT id, count(*) FROM uuid_test GROUP BY id
+----
+00000000-0000-0000-0000-000000000000  1
+63616665-6630-3064-6465-616462656568  2
+NULL                                  1
+ffffffff-ffff-ffff-ffff-ffffffffffff  1
+
+### UUID DISTINCT ###
+
+query T rowsort
+SELECT DISTINCT id FROM uuid_test
+----
+00000000-0000-0000-0000-000000000000
+63616665-6630-3064-6465-616462656568
+NULL
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+### UUID with WHERE clause ###
+
+query TT
+SELECT * FROM uuid_test WHERE id = '63616665-6630-3064-6465-616462656568'::uuid
+----
+63616665-6630-3064-6465-616462656568  first
+63616665-6630-3064-6465-616462656568  first_duplicate
+
+query TT
+SELECT * FROM uuid_test WHERE id IS NULL
+----
+NULL  null_uuid
+
+query TT rowsort
+SELECT * FROM uuid_test WHERE id > '50000000-0000-0000-0000-000000000000'::uuid
+----
+63616665-6630-3064-6465-616462656568  first
+63616665-6630-3064-6465-616462656568  first_duplicate
+ffffffff-ffff-ffff-ffff-ffffffffffff  max
+
+### UUID with JOIN ###
+
+statement ok
+CREATE TABLE uuid_ref (ref_id uuid, data text)
+
+statement ok
+INSERT INTO uuid_ref VALUES
+    ('63616665-6630-3064-6465-616462656568', 'ref_data'),
+    ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'max_ref')
+
+query TTT rowsort
+SELECT u.id, u.name, r.data
+FROM uuid_test u
+JOIN uuid_ref r ON u.id = r.ref_id
+----
+63616665-6630-3064-6465-616462656568  first            ref_data
+63616665-6630-3064-6465-616462656568  first_duplicate  ref_data
+ffffffff-ffff-ffff-ffff-ffffffffffff  max              max_ref
+
+### UUID cast to text and back ###
+
+query T
+SELECT '63616665-6630-3064-6465-616462656568'::uuid::text::uuid
+----
+63616665-6630-3064-6465-616462656568
+
+query B
+SELECT '63616665-6630-3064-6465-616462656568'::uuid::text = '63616665-6630-3064-6465-616462656568'
+----
+true
+
+### uuid_generate_v5 edge cases ###
+
+query T
+SELECT uuid_generate_v5('6ba7b810-9dad-11d1-80b4-00c04fd430c8', '')
+----
+e129f27c-5103-5c5c-844b-cdf0a15e160d
+
+query T
+SELECT uuid_generate_v5('6ba7b810-9dad-11d1-80b4-00c04fd430c8', 'test')
+----
+4be0643f-1d98-573b-97cd-ca98a65347dd
+
+query T
+SELECT uuid_generate_v5('6ba7b811-9dad-11d1-80b4-00c04fd430c8', 'test')
+----
+e8b764da-5fe5-51ed-8af8-c5c6eca28d7a
+
+query T
+SELECT uuid_generate_v5('00000000-0000-0000-0000-000000000000', 'test')
+----
+e8b764da-5fe5-51ed-8af8-c5c6eca28d7a
+
+query B
+SELECT uuid_generate_v5('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'foo')
+     = uuid_generate_v5('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'foo')
+----
+true
+
+query B
+SELECT uuid_generate_v5('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'foo')
+    <> uuid_generate_v5('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'bar')
+----
+true
+
+### UUID COALESCE ###
+
+query T
+SELECT COALESCE(NULL::uuid, '63616665-6630-3064-6465-616462656568'::uuid)
+----
+63616665-6630-3064-6465-616462656568
+
+query T
+SELECT COALESCE('00000000-0000-0000-0000-000000000000'::uuid, '63616665-6630-3064-6465-616462656568'::uuid)
+----
+00000000-0000-0000-0000-000000000000
+
+### UUID NULLIF ###
+
+query T
+SELECT NULLIF('63616665-6630-3064-6465-616462656568'::uuid, '63616665-6630-3064-6465-616462656568'::uuid)
+----
+NULL
+
+query T
+SELECT NULLIF('63616665-6630-3064-6465-616462656568'::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+----
+63616665-6630-3064-6465-616462656568
+
+### UUID CASE expression ###
+
+query T
+SELECT CASE
+    WHEN id = '00000000-0000-0000-0000-000000000000'::uuid THEN 'is_zero'
+    WHEN id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid THEN 'is_max'
+    ELSE 'other'
+END
+FROM uuid_test
+WHERE id IS NOT NULL
+ORDER BY id
+LIMIT 3
+----
+is_zero
+other
+is_max
+
+### UUID array ###
+
+query T
+SELECT ARRAY['63616665-6630-3064-6465-616462656568'::uuid, '00000000-0000-0000-0000-000000000000'::uuid]
+----
+{63616665-6630-3064-6465-616462656568,00000000-0000-0000-0000-000000000000}
+
+query T
+SELECT ARRAY['63616665-6630-3064-6465-616462656568'::uuid][1]
+----
+63616665-6630-3064-6465-616462656568
+
+### UUID IS DISTINCT FROM ###
+
+query B
+SELECT '63616665-6630-3064-6465-616462656568'::uuid IS DISTINCT FROM '63616665-6630-3064-6465-616462656568'::uuid
+----
+false
+
+query B
+SELECT '63616665-6630-3064-6465-616462656568'::uuid IS DISTINCT FROM '00000000-0000-0000-0000-000000000000'::uuid
+----
+true
+
+query B
+SELECT NULL::uuid IS DISTINCT FROM '63616665-6630-3064-6465-616462656568'::uuid
+----
+true
+
+query B
+SELECT NULL::uuid IS DISTINCT FROM NULL::uuid
+----
+false
+
+query B
+SELECT '63616665-6630-3064-6465-616462656568'::uuid IS NOT DISTINCT FROM '63616665-6630-3064-6465-616462656568'::uuid
+----
+true
+
+query B
+SELECT NULL::uuid IS NOT DISTINCT FROM NULL::uuid
+----
+true
+
+### Cleanup ###
+
+statement ok
+DROP TABLE uuid_test
+
+statement ok
+DROP TABLE uuid_ref

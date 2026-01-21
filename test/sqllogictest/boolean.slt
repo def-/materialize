@@ -416,3 +416,688 @@ NULL  2
 # SELECT CASE WHEN FALSE THEN 'short_string'::char(20) ELSE 'long_string_long_string'::char(30) END
 # ----
 # long_string_long_string
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Boolean literal edge cases ###
+
+query B
+SELECT true
+----
+true
+
+query B
+SELECT false
+----
+false
+
+query B
+SELECT TRUE
+----
+true
+
+query B
+SELECT FALSE
+----
+false
+
+query B
+SELECT 't'::bool
+----
+true
+
+query B
+SELECT 'f'::bool
+----
+false
+
+query B
+SELECT 'true'::bool
+----
+true
+
+query B
+SELECT 'false'::bool
+----
+false
+
+query B
+SELECT 'yes'::bool
+----
+true
+
+query B
+SELECT 'no'::bool
+----
+false
+
+query B
+SELECT 'on'::bool
+----
+true
+
+query B
+SELECT 'off'::bool
+----
+false
+
+query B
+SELECT '1'::bool
+----
+true
+
+query B
+SELECT '0'::bool
+----
+false
+
+query B
+SELECT 'T'::bool
+----
+true
+
+query B
+SELECT 'F'::bool
+----
+false
+
+query B
+SELECT 'TRUE'::bool
+----
+true
+
+query B
+SELECT 'FALSE'::bool
+----
+false
+
+query B
+SELECT 'y'::bool
+----
+true
+
+query B
+SELECT 'n'::bool
+----
+false
+
+query error invalid input syntax for type boolean
+SELECT ''::bool
+
+query error invalid input syntax for type boolean
+SELECT 'invalid'::bool
+
+query error invalid input syntax for type boolean
+SELECT '2'::bool
+
+### Boolean AND edge cases ###
+
+query B
+SELECT true AND true
+----
+true
+
+query B
+SELECT true AND false
+----
+false
+
+query B
+SELECT false AND true
+----
+false
+
+query B
+SELECT false AND false
+----
+false
+
+query B
+SELECT true AND NULL
+----
+NULL
+
+query B
+SELECT NULL AND true
+----
+NULL
+
+query B
+SELECT false AND NULL
+----
+false
+
+query B
+SELECT NULL AND false
+----
+false
+
+query B
+SELECT NULL AND NULL
+----
+NULL
+
+### Boolean OR edge cases ###
+
+query B
+SELECT true OR true
+----
+true
+
+query B
+SELECT true OR false
+----
+true
+
+query B
+SELECT false OR true
+----
+true
+
+query B
+SELECT false OR false
+----
+false
+
+query B
+SELECT true OR NULL
+----
+true
+
+query B
+SELECT NULL OR true
+----
+true
+
+query B
+SELECT false OR NULL
+----
+NULL
+
+query B
+SELECT NULL OR false
+----
+NULL
+
+query B
+SELECT NULL OR NULL
+----
+NULL
+
+### Boolean NOT edge cases ###
+
+query B
+SELECT NOT true
+----
+false
+
+query B
+SELECT NOT false
+----
+true
+
+query B
+SELECT NOT NULL::bool
+----
+NULL
+
+query B
+SELECT NOT NOT true
+----
+true
+
+query B
+SELECT NOT NOT false
+----
+false
+
+### Boolean comparison edge cases ###
+
+query B
+SELECT true = true
+----
+true
+
+query B
+SELECT true = false
+----
+false
+
+query B
+SELECT false = false
+----
+true
+
+query B
+SELECT true <> false
+----
+true
+
+query B
+SELECT true <> true
+----
+false
+
+query B
+SELECT true = NULL
+----
+NULL
+
+query B
+SELECT NULL = true
+----
+NULL
+
+query B
+SELECT NULL = NULL
+----
+NULL
+
+query B
+SELECT true > false
+----
+true
+
+query B
+SELECT false < true
+----
+true
+
+query B
+SELECT true >= true
+----
+true
+
+query B
+SELECT false <= false
+----
+true
+
+### Boolean IS TRUE/FALSE/UNKNOWN edge cases ###
+
+query B
+SELECT true IS TRUE
+----
+true
+
+query B
+SELECT false IS TRUE
+----
+false
+
+query B
+SELECT NULL IS TRUE
+----
+false
+
+query B
+SELECT true IS FALSE
+----
+false
+
+query B
+SELECT false IS FALSE
+----
+true
+
+query B
+SELECT NULL IS FALSE
+----
+false
+
+query B
+SELECT true IS UNKNOWN
+----
+false
+
+query B
+SELECT false IS UNKNOWN
+----
+false
+
+query B
+SELECT NULL IS UNKNOWN
+----
+true
+
+query B
+SELECT true IS NOT TRUE
+----
+false
+
+query B
+SELECT false IS NOT TRUE
+----
+true
+
+query B
+SELECT NULL IS NOT TRUE
+----
+true
+
+query B
+SELECT true IS NOT FALSE
+----
+true
+
+query B
+SELECT false IS NOT FALSE
+----
+false
+
+query B
+SELECT NULL IS NOT FALSE
+----
+true
+
+query B
+SELECT true IS NOT UNKNOWN
+----
+true
+
+query B
+SELECT false IS NOT UNKNOWN
+----
+true
+
+query B
+SELECT NULL IS NOT UNKNOWN
+----
+false
+
+### Boolean DISTINCT FROM edge cases ###
+
+query B
+SELECT true IS DISTINCT FROM true
+----
+false
+
+query B
+SELECT true IS DISTINCT FROM false
+----
+true
+
+query B
+SELECT true IS DISTINCT FROM NULL
+----
+true
+
+query B
+SELECT NULL IS DISTINCT FROM NULL
+----
+false
+
+query B
+SELECT true IS NOT DISTINCT FROM true
+----
+true
+
+query B
+SELECT true IS NOT DISTINCT FROM false
+----
+false
+
+query B
+SELECT true IS NOT DISTINCT FROM NULL
+----
+false
+
+query B
+SELECT NULL IS NOT DISTINCT FROM NULL
+----
+true
+
+### Boolean COALESCE edge cases ###
+
+query B
+SELECT COALESCE(NULL::bool, true)
+----
+true
+
+query B
+SELECT COALESCE(NULL::bool, false)
+----
+false
+
+query B
+SELECT COALESCE(true, false)
+----
+true
+
+query B
+SELECT COALESCE(NULL::bool, NULL::bool, true)
+----
+true
+
+### Boolean NULLIF edge cases ###
+
+query B
+SELECT NULLIF(true, true)
+----
+NULL
+
+query B
+SELECT NULLIF(true, false)
+----
+true
+
+query B
+SELECT NULLIF(false, false)
+----
+NULL
+
+query B
+SELECT NULLIF(false, true)
+----
+false
+
+### Boolean GREATEST/LEAST edge cases ###
+
+query B
+SELECT GREATEST(true, false)
+----
+true
+
+query B
+SELECT LEAST(true, false)
+----
+false
+
+query B
+SELECT GREATEST(true, NULL::bool)
+----
+true
+
+query B
+SELECT LEAST(false, NULL::bool)
+----
+false
+
+query B
+SELECT GREATEST(NULL::bool, NULL::bool)
+----
+NULL
+
+### Boolean CASE edge cases ###
+
+query B
+SELECT CASE WHEN true THEN true ELSE false END
+----
+true
+
+query B
+SELECT CASE WHEN false THEN true ELSE false END
+----
+false
+
+query B
+SELECT CASE WHEN NULL THEN true ELSE false END
+----
+false
+
+query B
+SELECT CASE true WHEN true THEN true ELSE false END
+----
+true
+
+query B
+SELECT CASE false WHEN true THEN true ELSE false END
+----
+false
+
+### Boolean IN list edge cases ###
+
+query B
+SELECT true IN (true, false)
+----
+true
+
+query B
+SELECT true IN (false)
+----
+false
+
+query B
+SELECT NULL IN (true, false)
+----
+NULL
+
+query B
+SELECT true IN (true, NULL)
+----
+true
+
+query B
+SELECT false IN (true, NULL)
+----
+NULL
+
+### Boolean cast to integer ###
+
+query I
+SELECT true::int
+----
+1
+
+query I
+SELECT false::int
+----
+0
+
+query I
+SELECT NULL::bool::int
+----
+NULL
+
+### Boolean from integer ###
+
+query error cannot cast type integer to boolean
+SELECT 1::bool
+
+### Complex boolean expressions ###
+
+query B
+SELECT (true AND false) OR true
+----
+true
+
+query B
+SELECT true AND (false OR true)
+----
+true
+
+query B
+SELECT NOT (true AND false)
+----
+true
+
+query B
+SELECT NOT (true OR false)
+----
+false
+
+query B
+SELECT (true OR NULL) AND (false OR true)
+----
+true
+
+query B
+SELECT (false AND NULL) OR (true AND NULL)
+----
+NULL
+
+### Boolean with aggregate functions ###
+
+statement ok
+CREATE TABLE bool_test (val bool)
+
+statement ok
+INSERT INTO bool_test VALUES (true), (true), (false), (NULL)
+
+query B
+SELECT bool_and(val) FROM bool_test
+----
+false
+
+query B
+SELECT bool_or(val) FROM bool_test
+----
+true
+
+query I
+SELECT COUNT(*) FROM bool_test WHERE val
+----
+2
+
+query I
+SELECT COUNT(*) FROM bool_test WHERE NOT val
+----
+1
+
+query I
+SELECT COUNT(*) FROM bool_test WHERE val IS NULL
+----
+1
+
+statement ok
+DROP TABLE bool_test
+
+### Boolean ORDER BY edge cases ###
+
+statement ok
+CREATE TABLE bool_order_test (val bool)
+
+statement ok
+INSERT INTO bool_order_test VALUES (true), (false), (NULL), (true), (false)
+
+query B
+SELECT val FROM bool_order_test ORDER BY val
+----
+false
+false
+true
+true
+NULL
+
+query B
+SELECT val FROM bool_order_test ORDER BY val DESC
+----
+NULL
+true
+true
+false
+false
+
+query B
+SELECT val FROM bool_order_test ORDER BY val NULLS FIRST
+----
+NULL
+false
+false
+true
+true
+
+statement ok
+DROP TABLE bool_order_test

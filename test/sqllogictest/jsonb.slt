@@ -2189,3 +2189,677 @@ Source materialize.public.t3
 Target cluster: quickstart
 
 EOF
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Deep JSON nesting edge cases ###
+
+# Already tested 100-deep nesting at the top, but test operations on it
+query T
+SELECT ('[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'::jsonb)->0->0->0->0->0->0->0->0->0->0
+----
+[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
+
+# Access at boundary of nesting
+query T
+SELECT ('{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":"deep"}}}}}}}}}}'::jsonb)->'a'->'a'->'a'->'a'->'a'->'a'->'a'->'a'->'a'->'a'
+----
+"deep"
+
+### Empty JSON structures ###
+
+query T
+SELECT '{}'::jsonb
+----
+{}
+
+query T
+SELECT '[]'::jsonb
+----
+[]
+
+query T
+SELECT '{}'::jsonb -> 'key'
+----
+NULL
+
+query T
+SELECT '[]'::jsonb -> 0
+----
+NULL
+
+query T
+SELECT '[]'::jsonb -> 1000000
+----
+NULL
+
+query T
+SELECT '[]'::jsonb -> -1
+----
+NULL
+
+query T
+SELECT '{}'::jsonb ->> 'key'
+----
+NULL
+
+query T
+SELECT '[]'::jsonb ->> 0
+----
+NULL
+
+### NULL handling in JSON operations ###
+
+query T
+SELECT NULL::jsonb -> 'key'
+----
+NULL
+
+query T
+SELECT NULL::jsonb -> 0
+----
+NULL
+
+query T
+SELECT NULL::jsonb ->> 'key'
+----
+NULL
+
+query T
+SELECT NULL::jsonb ->> 0
+----
+NULL
+
+query T
+SELECT '{"a": 1}'::jsonb -> NULL::text
+----
+NULL
+
+query T
+SELECT '{"a": 1}'::jsonb -> NULL::int
+----
+NULL
+
+query T
+SELECT '{"a": 1}'::jsonb ->> NULL::text
+----
+NULL
+
+query T
+SELECT '[1,2,3]'::jsonb ->> NULL::int
+----
+NULL
+
+### JSON path with non-existent keys ###
+
+query T
+SELECT '{"a": {"b": {"c": 1}}}'::jsonb -> 'x' -> 'y' -> 'z'
+----
+NULL
+
+query T
+SELECT '{"a": 1}'::jsonb -> 'a' -> 'b'
+----
+NULL
+
+query T
+SELECT '[1,2,3]'::jsonb -> 0 -> 0
+----
+NULL
+
+### Special characters in JSON keys and values ###
+
+query T
+SELECT '{"": "empty key"}'::jsonb -> ''
+----
+"empty key"
+
+query T
+SELECT '{"\u0000": "null char"}'::jsonb
+----
+{"\u0000":"null char"}
+
+query T
+SELECT '{"key\nwith\nnewlines": "value"}'::jsonb -> 'key
+with
+newlines'
+----
+"value"
+
+query T
+SELECT '{"tab\there": 1}'::jsonb -> 'tab	here'
+----
+1
+
+query T
+SELECT '{"quote\"here": 1}'::jsonb -> 'quote"here'
+----
+1
+
+query T
+SELECT '{"backslash\\here": 1}'::jsonb -> 'backslash\here'
+----
+1
+
+### JSON array index edge cases ###
+
+# Large positive index
+query T
+SELECT '[1,2,3]'::jsonb -> 2147483647
+----
+NULL
+
+# Large negative index
+query T
+SELECT '[1,2,3]'::jsonb -> -2147483648
+----
+NULL
+
+# Negative indices (should work like Python)
+query T
+SELECT '[1,2,3]'::jsonb -> -1
+----
+3
+
+query T
+SELECT '[1,2,3]'::jsonb -> -2
+----
+2
+
+query T
+SELECT '[1,2,3]'::jsonb -> -3
+----
+1
+
+query T
+SELECT '[1,2,3]'::jsonb -> -4
+----
+NULL
+
+### JSON containment edge cases ###
+
+query B
+SELECT '{}'::jsonb @> '{}'::jsonb
+----
+true
+
+query B
+SELECT '[]'::jsonb @> '[]'::jsonb
+----
+true
+
+query B
+SELECT '{"a": 1}'::jsonb @> '{}'::jsonb
+----
+true
+
+query B
+SELECT '[1,2,3]'::jsonb @> '[]'::jsonb
+----
+true
+
+query B
+SELECT '{}'::jsonb @> '{"a": 1}'::jsonb
+----
+false
+
+query B
+SELECT '[]'::jsonb @> '[1]'::jsonb
+----
+false
+
+# Nested containment
+query B
+SELECT '{"a": {"b": {"c": 1}}}'::jsonb @> '{"a": {"b": {}}}'::jsonb
+----
+true
+
+query B
+SELECT '[[1,2],[3,4]]'::jsonb @> '[[1,2]]'::jsonb
+----
+true
+
+### jsonb_typeof edge cases ###
+
+query T
+SELECT jsonb_typeof('{}'::jsonb)
+----
+object
+
+query T
+SELECT jsonb_typeof('[]'::jsonb)
+----
+array
+
+query T
+SELECT jsonb_typeof('null'::jsonb)
+----
+null
+
+query T
+SELECT jsonb_typeof('true'::jsonb)
+----
+boolean
+
+query T
+SELECT jsonb_typeof('false'::jsonb)
+----
+boolean
+
+query T
+SELECT jsonb_typeof('0'::jsonb)
+----
+number
+
+query T
+SELECT jsonb_typeof('""'::jsonb)
+----
+string
+
+query T
+SELECT jsonb_typeof(NULL::jsonb)
+----
+NULL
+
+### jsonb_array_length edge cases ###
+
+query I
+SELECT jsonb_array_length('[]'::jsonb)
+----
+0
+
+query I
+SELECT jsonb_array_length('[1]'::jsonb)
+----
+1
+
+query I
+SELECT jsonb_array_length('[[],[],[]]'::jsonb)
+----
+3
+
+query I
+SELECT jsonb_array_length(NULL::jsonb)
+----
+NULL
+
+query error cannot get array length of a non-array
+SELECT jsonb_array_length('{}'::jsonb)
+
+query error cannot get array length of a non-array
+SELECT jsonb_array_length('"string"'::jsonb)
+
+query error cannot get array length of a non-array
+SELECT jsonb_array_length('null'::jsonb)
+
+### jsonb_object_keys edge cases ###
+
+query T rowsort
+SELECT jsonb_object_keys('{}'::jsonb)
+----
+
+query T rowsort
+SELECT jsonb_object_keys('{"a": 1, "b": 2, "c": 3}'::jsonb)
+----
+a
+b
+c
+
+query T rowsort
+SELECT jsonb_object_keys('{"": 1}'::jsonb)
+----
+(empty)
+
+query error cannot call jsonb_object_keys on an array
+SELECT jsonb_object_keys('[]'::jsonb)
+
+query error cannot call jsonb_object_keys on a scalar
+SELECT jsonb_object_keys('"string"'::jsonb)
+
+### jsonb_each edge cases ###
+
+query TT rowsort
+SELECT * FROM jsonb_each('{}'::jsonb)
+----
+
+query TT rowsort
+SELECT * FROM jsonb_each('{"a": 1, "b": "two", "c": null}'::jsonb)
+----
+a  1
+b  "two"
+c  null
+
+query TT rowsort
+SELECT * FROM jsonb_each('{"": "empty"}'::jsonb)
+----
+(empty)  "empty"
+
+### jsonb_array_elements edge cases ###
+
+query T rowsort
+SELECT jsonb_array_elements('[]'::jsonb)
+----
+
+query T rowsort
+SELECT jsonb_array_elements('[1, "two", null, true, {}, []]'::jsonb)
+----
+1
+"two"
+null
+true
+{}
+[]
+
+### to_jsonb edge cases ###
+
+query T
+SELECT to_jsonb(NULL::int)
+----
+null
+
+query T
+SELECT to_jsonb(NULL::text)
+----
+null
+
+query T
+SELECT to_jsonb(''::text)
+----
+""
+
+query T
+SELECT to_jsonb(0)
+----
+0
+
+query T
+SELECT to_jsonb(true)
+----
+true
+
+query T
+SELECT to_jsonb(false)
+----
+false
+
+# Large numbers
+query T
+SELECT to_jsonb(9223372036854775807::bigint)
+----
+9223372036854775807
+
+query T
+SELECT to_jsonb(-9223372036854775808::bigint)
+----
+-9223372036854775808
+
+### JSON equality edge cases ###
+
+query B
+SELECT '{}'::jsonb = '{}'::jsonb
+----
+true
+
+query B
+SELECT '[]'::jsonb = '[]'::jsonb
+----
+true
+
+query B
+SELECT 'null'::jsonb = 'null'::jsonb
+----
+true
+
+# Key order doesn't matter in objects
+query B
+SELECT '{"a": 1, "b": 2}'::jsonb = '{"b": 2, "a": 1}'::jsonb
+----
+true
+
+# But array order matters
+query B
+SELECT '[1, 2]'::jsonb = '[2, 1]'::jsonb
+----
+false
+
+# Numeric equality
+query B
+SELECT '1.0'::jsonb = '1'::jsonb
+----
+true
+
+query B
+SELECT '1.00'::jsonb = '1'::jsonb
+----
+true
+
+### jsonb_strip_nulls edge cases ###
+
+query T
+SELECT jsonb_strip_nulls('{}'::jsonb)
+----
+{}
+
+query T
+SELECT jsonb_strip_nulls('{"a": null}'::jsonb)
+----
+{}
+
+query T
+SELECT jsonb_strip_nulls('{"a": null, "b": 1}'::jsonb)
+----
+{"b":1}
+
+query T
+SELECT jsonb_strip_nulls('{"a": {"b": null}}'::jsonb)
+----
+{"a":{}}
+
+query T
+SELECT jsonb_strip_nulls('[null, 1, null, 2]'::jsonb)
+----
+[null,1,null,2]
+
+query T
+SELECT jsonb_strip_nulls('null'::jsonb)
+----
+null
+
+query T
+SELECT jsonb_strip_nulls(NULL::jsonb)
+----
+NULL
+
+### jsonb_build_object edge cases ###
+
+query T
+SELECT jsonb_build_object()
+----
+{}
+
+query T
+SELECT jsonb_build_object('a', NULL)
+----
+{"a":null}
+
+query T
+SELECT jsonb_build_object('a', 1, 'b', 2)
+----
+{"a":1,"b":2}
+
+query T
+SELECT jsonb_build_object('', 'empty key')
+----
+{"":"empty key"}
+
+query error argument list must have even number of elements
+SELECT jsonb_build_object('a')
+
+### jsonb_build_array edge cases ###
+
+query T
+SELECT jsonb_build_array()
+----
+[]
+
+query T
+SELECT jsonb_build_array(NULL)
+----
+[null]
+
+query T
+SELECT jsonb_build_array(1, 'two', true, NULL)
+----
+[1,"two",true,null]
+
+### JSON concat operator edge cases ###
+
+query T
+SELECT '{}'::jsonb || '{}'::jsonb
+----
+{}
+
+query T
+SELECT '[]'::jsonb || '[]'::jsonb
+----
+[]
+
+query T
+SELECT '{"a": 1}'::jsonb || '{"b": 2}'::jsonb
+----
+{"a":1,"b":2}
+
+query T
+SELECT '{"a": 1}'::jsonb || '{"a": 2}'::jsonb
+----
+{"a":2}
+
+query T
+SELECT '[1]'::jsonb || '[2]'::jsonb
+----
+[1,2]
+
+query T
+SELECT '[1]'::jsonb || '2'::jsonb
+----
+[1,2]
+
+query T
+SELECT '1'::jsonb || '[2]'::jsonb
+----
+[1,2]
+
+query T
+SELECT '{"a": 1}'::jsonb || 'null'::jsonb
+----
+[{"a":1},null]
+
+### JSON delete operator edge cases ###
+
+query T
+SELECT '{"a": 1, "b": 2}'::jsonb - 'a'
+----
+{"b":2}
+
+query T
+SELECT '{"a": 1, "b": 2}'::jsonb - 'c'
+----
+{"a":1,"b":2}
+
+query T
+SELECT '{}'::jsonb - 'a'
+----
+{}
+
+query T
+SELECT '[1, 2, 3]'::jsonb - 1
+----
+[1,3]
+
+query T
+SELECT '[1, 2, 3]'::jsonb - 0
+----
+[2,3]
+
+query T
+SELECT '[1, 2, 3]'::jsonb - -1
+----
+[1,2]
+
+query T
+SELECT '[1, 2, 3]'::jsonb - 100
+----
+[1,2,3]
+
+query T
+SELECT '[]'::jsonb - 0
+----
+[]
+
+### JSON #- path delete edge cases ###
+
+query T
+SELECT '{"a": {"b": 1}}'::jsonb #- '{a,b}'
+----
+{"a":{}}
+
+query T
+SELECT '{"a": {"b": 1}}'::jsonb #- '{a}'
+----
+{}
+
+query T
+SELECT '{"a": {"b": 1}}'::jsonb #- '{c}'
+----
+{"a":{"b":1}}
+
+query T
+SELECT '{"a": {"b": 1}}'::jsonb #- '{}'
+----
+{"a":{"b":1}}
+
+query T
+SELECT '[1, [2, 3], 4]'::jsonb #- '{1,0}'
+----
+[1,[3],4]
+
+### jsonb_pretty edge cases ###
+
+query T
+SELECT jsonb_pretty('{}'::jsonb)
+----
+{
+}
+
+query T
+SELECT jsonb_pretty('[]'::jsonb)
+----
+[
+]
+
+query T
+SELECT jsonb_pretty('null'::jsonb)
+----
+null
+
+query T
+SELECT jsonb_pretty(NULL::jsonb)
+----
+NULL
+
+### Edge case: very long string values ###
+
+query T
+SELECT length(('{"key": "' || repeat('a', 10000) || '"}'::jsonb)->>'key')
+----
+10000
+
+### Edge case: many keys in object ###
+
+# Build object with many keys and verify it works
+query I
+SELECT jsonb_object_keys(jsonb_object_agg(x::text, x)) IS NOT NULL AS has_keys FROM generate_series(1, 100) AS t(x) GROUP BY true
+----
+true

@@ -745,3 +745,666 @@ Source materialize.public.t_variance
 Target cluster: quickstart
 
 EOF
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Setup tables for aggregate tests ###
+
+statement ok
+CREATE TABLE agg_test (id int, grp text, val int, fval float, nval numeric)
+
+statement ok
+INSERT INTO agg_test VALUES
+    (1, 'A', 10, 1.5, 10.5),
+    (2, 'A', 20, 2.5, 20.5),
+    (3, 'A', NULL, NULL, NULL),
+    (4, 'B', 100, 100.5, 100.5),
+    (5, 'B', 200, 200.5, 200.5),
+    (6, 'C', NULL, NULL, NULL),
+    (7, 'C', NULL, NULL, NULL)
+
+### Aggregate over empty result set ###
+
+query I
+SELECT COUNT(*) FROM agg_test WHERE false
+----
+0
+
+query I
+SELECT COUNT(val) FROM agg_test WHERE false
+----
+0
+
+query I
+SELECT SUM(val) FROM agg_test WHERE false
+----
+NULL
+
+query I
+SELECT AVG(val) FROM agg_test WHERE false
+----
+NULL
+
+query I
+SELECT MIN(val) FROM agg_test WHERE false
+----
+NULL
+
+query I
+SELECT MAX(val) FROM agg_test WHERE false
+----
+NULL
+
+query R
+SELECT STDDEV(val) FROM agg_test WHERE false
+----
+NULL
+
+query R
+SELECT VARIANCE(val) FROM agg_test WHERE false
+----
+NULL
+
+### Aggregate over all NULL values ###
+
+query I
+SELECT COUNT(*) FROM agg_test WHERE grp = 'C'
+----
+2
+
+query I
+SELECT COUNT(val) FROM agg_test WHERE grp = 'C'
+----
+0
+
+query I
+SELECT SUM(val) FROM agg_test WHERE grp = 'C'
+----
+NULL
+
+query I
+SELECT AVG(val) FROM agg_test WHERE grp = 'C'
+----
+NULL
+
+query I
+SELECT MIN(val) FROM agg_test WHERE grp = 'C'
+----
+NULL
+
+query I
+SELECT MAX(val) FROM agg_test WHERE grp = 'C'
+----
+NULL
+
+### Aggregate with mixed NULL and non-NULL values ###
+
+query I
+SELECT COUNT(val) FROM agg_test WHERE grp = 'A'
+----
+2
+
+query I
+SELECT SUM(val) FROM agg_test WHERE grp = 'A'
+----
+30
+
+query I
+SELECT AVG(val) FROM agg_test WHERE grp = 'A'
+----
+15
+
+query I
+SELECT MIN(val) FROM agg_test WHERE grp = 'A'
+----
+10
+
+query I
+SELECT MAX(val) FROM agg_test WHERE grp = 'A'
+----
+20
+
+### Aggregate with single row ###
+
+query I
+SELECT COUNT(*) FROM agg_test WHERE id = 1
+----
+1
+
+query I
+SELECT SUM(val) FROM agg_test WHERE id = 1
+----
+10
+
+query I
+SELECT AVG(val) FROM agg_test WHERE id = 1
+----
+10
+
+query R
+SELECT STDDEV(val) FROM agg_test WHERE id = 1
+----
+NULL
+
+query R
+SELECT VARIANCE(val) FROM agg_test WHERE id = 1
+----
+NULL
+
+query R
+SELECT STDDEV_POP(val) FROM agg_test WHERE id = 1
+----
+0
+
+query R
+SELECT VAR_POP(val) FROM agg_test WHERE id = 1
+----
+0
+
+### DISTINCT aggregate edge cases ###
+
+statement ok
+CREATE TABLE agg_distinct_test (val int)
+
+statement ok
+INSERT INTO agg_distinct_test VALUES (1), (1), (2), (2), (3), (NULL), (NULL)
+
+query I
+SELECT COUNT(DISTINCT val) FROM agg_distinct_test
+----
+3
+
+query I
+SELECT SUM(DISTINCT val) FROM agg_distinct_test
+----
+6
+
+query I
+SELECT AVG(DISTINCT val) FROM agg_distinct_test
+----
+2
+
+query I
+SELECT COUNT(DISTINCT val) FROM agg_distinct_test WHERE false
+----
+0
+
+statement ok
+DROP TABLE agg_distinct_test
+
+### String aggregate edge cases ###
+
+query T
+SELECT string_agg(grp, ',') FROM agg_test WHERE grp = 'A' GROUP BY grp
+----
+A,A,A
+
+query T
+SELECT string_agg(grp, ',') FROM agg_test WHERE false
+----
+NULL
+
+query T
+SELECT string_agg(grp, NULL) FROM agg_test WHERE grp = 'A' GROUP BY grp
+----
+NULL
+
+query T
+SELECT string_agg(NULL::text, ',') FROM agg_test WHERE grp = 'A'
+----
+NULL
+
+query T
+SELECT string_agg(grp, '') FROM agg_test WHERE grp = 'A' GROUP BY grp
+----
+AAA
+
+### Array aggregate edge cases ###
+
+query T
+SELECT array_agg(val) FROM agg_test WHERE grp = 'A'
+----
+{10,20,NULL}
+
+query T
+SELECT array_agg(val) FROM agg_test WHERE false
+----
+NULL
+
+query T
+SELECT array_agg(val ORDER BY val) FROM agg_test WHERE grp = 'A'
+----
+{10,20,NULL}
+
+query T
+SELECT array_agg(val ORDER BY val DESC) FROM agg_test WHERE grp = 'A'
+----
+{NULL,20,10}
+
+query T
+SELECT array_agg(DISTINCT val) FROM agg_test WHERE grp IN ('A', 'B') ORDER BY 1
+----
+{10,20,100,200,NULL}
+
+### JSON aggregate edge cases ###
+
+query T
+SELECT jsonb_agg(val) FROM agg_test WHERE grp = 'A'
+----
+[10,20,null]
+
+query T
+SELECT jsonb_agg(val) FROM agg_test WHERE false
+----
+NULL
+
+query T
+SELECT jsonb_object_agg(id::text, val) FROM agg_test WHERE grp = 'A'
+----
+{"1":10,"2":20,"3":null}
+
+query T
+SELECT jsonb_object_agg(id::text, val) FROM agg_test WHERE false
+----
+NULL
+
+### Boolean aggregate edge cases ###
+
+statement ok
+CREATE TABLE bool_agg_test (val bool)
+
+statement ok
+INSERT INTO bool_agg_test VALUES (true), (true), (false), (NULL)
+
+query B
+SELECT bool_and(val) FROM bool_agg_test
+----
+false
+
+query B
+SELECT bool_or(val) FROM bool_agg_test
+----
+true
+
+query B
+SELECT bool_and(val) FROM bool_agg_test WHERE val IS NOT NULL
+----
+false
+
+query B
+SELECT bool_or(val) FROM bool_agg_test WHERE val = false
+----
+false
+
+query B
+SELECT bool_and(val) FROM bool_agg_test WHERE false
+----
+NULL
+
+query B
+SELECT bool_or(val) FROM bool_agg_test WHERE false
+----
+NULL
+
+statement ok
+DELETE FROM bool_agg_test
+
+statement ok
+INSERT INTO bool_agg_test VALUES (NULL), (NULL)
+
+query B
+SELECT bool_and(val) FROM bool_agg_test
+----
+NULL
+
+query B
+SELECT bool_or(val) FROM bool_agg_test
+----
+NULL
+
+statement ok
+DROP TABLE bool_agg_test
+
+### Bitwise aggregate edge cases ###
+
+statement ok
+CREATE TABLE bit_agg_test (val int)
+
+statement ok
+INSERT INTO bit_agg_test VALUES (7), (3), (5), (NULL)
+
+query I
+SELECT bit_and(val) FROM bit_agg_test
+----
+1
+
+query I
+SELECT bit_or(val) FROM bit_agg_test
+----
+7
+
+query I
+SELECT bit_xor(val) FROM bit_agg_test
+----
+1
+
+query I
+SELECT bit_and(val) FROM bit_agg_test WHERE false
+----
+NULL
+
+query I
+SELECT bit_or(val) FROM bit_agg_test WHERE false
+----
+NULL
+
+query I
+SELECT bit_xor(val) FROM bit_agg_test WHERE false
+----
+NULL
+
+statement ok
+DROP TABLE bit_agg_test
+
+### Statistical aggregate edge cases ###
+
+query R
+SELECT STDDEV(fval) FROM agg_test WHERE grp = 'A'
+----
+0.7071067811865476
+
+query R
+SELECT STDDEV_POP(fval) FROM agg_test WHERE grp = 'A'
+----
+0.5
+
+query R
+SELECT VARIANCE(fval) FROM agg_test WHERE grp = 'A'
+----
+0.5
+
+query R
+SELECT VAR_POP(fval) FROM agg_test WHERE grp = 'A'
+----
+0.25
+
+query R
+SELECT STDDEV(fval) FROM agg_test WHERE grp = 'C'
+----
+NULL
+
+query R
+SELECT VARIANCE(fval) FROM agg_test WHERE grp = 'C'
+----
+NULL
+
+### Aggregate with float special values ###
+
+statement ok
+CREATE TABLE float_agg_test (val float)
+
+statement ok
+INSERT INTO float_agg_test VALUES (1), (2), ('NaN'), (3)
+
+query R
+SELECT SUM(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT AVG(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT MIN(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT MAX(val) FROM float_agg_test
+----
+NaN
+
+statement ok
+DELETE FROM float_agg_test
+
+statement ok
+INSERT INTO float_agg_test VALUES (1), (2), ('Infinity'), (3)
+
+query R
+SELECT SUM(val) FROM float_agg_test
+----
+inf
+
+query R
+SELECT AVG(val) FROM float_agg_test
+----
+inf
+
+query R
+SELECT MIN(val) FROM float_agg_test
+----
+1
+
+query R
+SELECT MAX(val) FROM float_agg_test
+----
+inf
+
+statement ok
+DELETE FROM float_agg_test
+
+statement ok
+INSERT INTO float_agg_test VALUES ('Infinity'), ('-Infinity')
+
+query R
+SELECT SUM(val) FROM float_agg_test
+----
+NaN
+
+query R
+SELECT AVG(val) FROM float_agg_test
+----
+NaN
+
+statement ok
+DROP TABLE float_agg_test
+
+### GROUP BY edge cases ###
+
+query TI
+SELECT grp, COUNT(*) FROM agg_test GROUP BY grp ORDER BY grp
+----
+A  3
+B  2
+C  2
+
+query TI
+SELECT grp, COUNT(val) FROM agg_test GROUP BY grp ORDER BY grp
+----
+A  2
+B  2
+C  0
+
+query TI
+SELECT grp, SUM(val) FROM agg_test GROUP BY grp ORDER BY grp
+----
+A  30
+B  300
+C  NULL
+
+### GROUP BY with NULL ###
+
+statement ok
+CREATE TABLE null_grp_test (grp text, val int)
+
+statement ok
+INSERT INTO null_grp_test VALUES ('A', 1), ('A', 2), (NULL, 3), (NULL, 4), ('B', 5)
+
+query TI
+SELECT grp, SUM(val) FROM null_grp_test GROUP BY grp ORDER BY grp NULLS FIRST
+----
+NULL  7
+A  3
+B  5
+
+query TI
+SELECT grp, COUNT(*) FROM null_grp_test GROUP BY grp ORDER BY grp NULLS LAST
+----
+A  2
+B  1
+NULL  2
+
+statement ok
+DROP TABLE null_grp_test
+
+### HAVING edge cases ###
+
+query TI
+SELECT grp, SUM(val) FROM agg_test GROUP BY grp HAVING SUM(val) > 50 ORDER BY grp
+----
+B  300
+
+query TI
+SELECT grp, SUM(val) FROM agg_test GROUP BY grp HAVING SUM(val) IS NULL ORDER BY grp
+----
+C  NULL
+
+query TI
+SELECT grp, COUNT(*) FROM agg_test GROUP BY grp HAVING COUNT(*) = 0
+----
+
+query TI
+SELECT grp, COUNT(val) FROM agg_test GROUP BY grp HAVING COUNT(val) = 0 ORDER BY grp
+----
+C  0
+
+### Aggregate with ORDER BY inside ###
+
+query T
+SELECT array_agg(val ORDER BY val NULLS FIRST) FROM agg_test WHERE grp = 'A'
+----
+{NULL,10,20}
+
+query T
+SELECT array_agg(val ORDER BY val NULLS LAST) FROM agg_test WHERE grp = 'A'
+----
+{10,20,NULL}
+
+query T
+SELECT string_agg(grp, ',' ORDER BY id DESC) FROM agg_test WHERE grp = 'A'
+----
+A,A,A
+
+### Aggregate with FILTER clause ###
+
+query I
+SELECT COUNT(*) FILTER (WHERE val IS NOT NULL) FROM agg_test
+----
+4
+
+query I
+SELECT SUM(val) FILTER (WHERE val > 50) FROM agg_test
+----
+300
+
+query I
+SELECT COUNT(*) FILTER (WHERE false) FROM agg_test
+----
+0
+
+query I
+SELECT SUM(val) FILTER (WHERE val > 1000) FROM agg_test
+----
+NULL
+
+query TII
+SELECT grp, COUNT(*), COUNT(*) FILTER (WHERE val IS NOT NULL) FROM agg_test GROUP BY grp ORDER BY grp
+----
+A  3  2
+B  2  2
+C  2  0
+
+### Nested aggregate expressions ###
+
+query I
+SELECT MAX(val) - MIN(val) FROM agg_test WHERE grp = 'A'
+----
+10
+
+query R
+SELECT SUM(val)::float / COUNT(val) FROM agg_test WHERE grp = 'A'
+----
+15
+
+query R
+SELECT COALESCE(SUM(val), 0) FROM agg_test WHERE grp = 'C'
+----
+0
+
+### Aggregate with CASE ###
+
+query I
+SELECT SUM(CASE WHEN val > 50 THEN val ELSE 0 END) FROM agg_test
+----
+300
+
+query I
+SELECT COUNT(CASE WHEN val IS NULL THEN 1 END) FROM agg_test
+----
+3
+
+### Multiple aggregates with different GROUP BY ###
+
+query TIIII
+SELECT grp, COUNT(*), SUM(val), MIN(val), MAX(val) FROM agg_test GROUP BY grp ORDER BY grp
+----
+A  3  30  10  20
+B  2  300  100  200
+C  2  NULL  NULL  NULL
+
+### Aggregate over expressions ###
+
+query I
+SELECT SUM(val * 2) FROM agg_test WHERE grp = 'A'
+----
+60
+
+query I
+SELECT AVG(val + id) FROM agg_test WHERE grp = 'A'
+----
+16
+
+query I
+SELECT COUNT(val + NULL) FROM agg_test
+----
+0
+
+### Correlated aggregate in subquery ###
+
+query II
+SELECT id, (SELECT SUM(val) FROM agg_test t2 WHERE t2.grp = t1.grp) FROM agg_test t1 WHERE id <= 3 ORDER BY id
+----
+1  30
+2  30
+3  30
+
+### Aggregate with COALESCE ###
+
+query I
+SELECT SUM(COALESCE(val, 0)) FROM agg_test WHERE grp = 'A'
+----
+30
+
+query I
+SELECT SUM(COALESCE(val, 0)) FROM agg_test WHERE grp = 'C'
+----
+0
+
+### Cleanup ###
+
+statement ok
+DROP TABLE agg_test

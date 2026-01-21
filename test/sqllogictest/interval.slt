@@ -1489,3 +1489,495 @@ query T
 SELECT MIN(unnest) FROM (SELECT UNNEST(ARRAY[INTERVAL '2' SECOND, INTERVAL '1' SECOND]));
 ----
 00:00:01
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Interval parsing edge cases ###
+
+query T
+SELECT INTERVAL '0'
+----
+00:00:00
+
+query T
+SELECT INTERVAL '0 seconds'
+----
+00:00:00
+
+query T
+SELECT INTERVAL '0.0'
+----
+00:00:00
+
+query T
+SELECT INTERVAL '1 microsecond'
+----
+00:00:00.000001
+
+query T
+SELECT INTERVAL '999999 microseconds'
+----
+00:00:00.999999
+
+query T
+SELECT INTERVAL '1000000 microseconds'
+----
+00:00:01
+
+query T
+SELECT INTERVAL '-1 second'
+----
+-00:00:01
+
+query T
+SELECT INTERVAL '-1 minute'
+----
+-00:01:00
+
+query T
+SELECT INTERVAL '-1 hour'
+----
+-01:00:00
+
+query T
+SELECT INTERVAL '-1 day'
+----
+-1 days
+
+query T
+SELECT INTERVAL '-1 month'
+----
+-1 months
+
+query T
+SELECT INTERVAL '-1 year'
+----
+-1 years
+
+### Interval with mixed signs ###
+
+query T
+SELECT INTERVAL '1 year -2 months'
+----
+1 year -2 months
+
+query T
+SELECT INTERVAL '-1 year 2 months'
+----
+-1 years 2 months
+
+query T
+SELECT INTERVAL '1 day -2 hours'
+----
+1 day -02:00:00
+
+### Interval precision edge cases ###
+
+query T
+SELECT INTERVAL '1.123456789 seconds'
+----
+00:00:01.123457
+
+query T
+SELECT INTERVAL '0.000001 seconds'
+----
+00:00:00.000001
+
+query T
+SELECT INTERVAL '59.999999 seconds'
+----
+00:00:59.999999
+
+### Interval arithmetic edge cases ###
+
+query T
+SELECT INTERVAL '1 day' + INTERVAL '1 hour'
+----
+1 day 01:00:00
+
+query T
+SELECT INTERVAL '1 day' - INTERVAL '1 hour'
+----
+1 day -01:00:00
+
+query T
+SELECT INTERVAL '1 hour' - INTERVAL '1 day'
+----
+-1 days +01:00:00
+
+query T
+SELECT INTERVAL '1 year' + INTERVAL '1 month'
+----
+1 year 1 month
+
+query T
+SELECT INTERVAL '1 month' - INTERVAL '1 year'
+----
+-11 months
+
+query T
+SELECT INTERVAL '0' + INTERVAL '0'
+----
+00:00:00
+
+query T
+SELECT INTERVAL '0' - INTERVAL '0'
+----
+00:00:00
+
+### Interval multiplication edge cases ###
+
+query T
+SELECT INTERVAL '1 hour' * 2
+----
+02:00:00
+
+query T
+SELECT INTERVAL '1 hour' * 0
+----
+00:00:00
+
+query T
+SELECT INTERVAL '1 hour' * -1
+----
+-01:00:00
+
+query T
+SELECT INTERVAL '1 day' * 0.5
+----
+12:00:00
+
+query T
+SELECT INTERVAL '1 hour' * 0.5
+----
+00:30:00
+
+query T
+SELECT 2 * INTERVAL '1 hour'
+----
+02:00:00
+
+### Interval division edge cases ###
+
+query T
+SELECT INTERVAL '2 hours' / 2
+----
+01:00:00
+
+query T
+SELECT INTERVAL '1 hour' / 2
+----
+00:30:00
+
+query T
+SELECT INTERVAL '1 hour' / 3
+----
+00:20:00
+
+query T
+SELECT INTERVAL '1 second' / 1000000
+----
+00:00:00.000001
+
+query error division by zero
+SELECT INTERVAL '1 hour' / 0
+
+### Interval comparison edge cases ###
+
+query B
+SELECT INTERVAL '1 hour' = INTERVAL '60 minutes'
+----
+true
+
+query B
+SELECT INTERVAL '1 hour' = INTERVAL '3600 seconds'
+----
+true
+
+query B
+SELECT INTERVAL '1 day' < INTERVAL '25 hours'
+----
+true
+
+query B
+SELECT INTERVAL '1 day' > INTERVAL '23 hours'
+----
+true
+
+query B
+SELECT INTERVAL '0' = INTERVAL '0 seconds'
+----
+true
+
+query B
+SELECT INTERVAL '-1 hour' < INTERVAL '0'
+----
+true
+
+query B
+SELECT INTERVAL '-1 hour' < INTERVAL '-30 minutes'
+----
+true
+
+### NULL handling ###
+
+query T
+SELECT INTERVAL NULL
+----
+NULL
+
+query T
+SELECT INTERVAL '1 hour' + NULL
+----
+NULL
+
+query T
+SELECT NULL + INTERVAL '1 hour'
+----
+NULL
+
+query T
+SELECT INTERVAL '1 hour' * NULL::float
+----
+NULL
+
+query T
+SELECT INTERVAL '1 hour' / NULL::float
+----
+NULL
+
+query B
+SELECT INTERVAL '1 hour' = NULL
+----
+NULL
+
+query B
+SELECT INTERVAL '1 hour' < NULL
+----
+NULL
+
+### Interval extract edge cases ###
+
+query R
+SELECT extract(hour FROM INTERVAL '1 day 2 hours 3 minutes')
+----
+2
+
+query R
+SELECT extract(minute FROM INTERVAL '1 day 2 hours 3 minutes')
+----
+3
+
+query R
+SELECT extract(second FROM INTERVAL '1 day 2 hours 3 minutes 4.5 seconds')
+----
+4.5
+
+query R
+SELECT extract(day FROM INTERVAL '1 day 2 hours')
+----
+1
+
+query R
+SELECT extract(month FROM INTERVAL '1 year 2 months')
+----
+2
+
+query R
+SELECT extract(year FROM INTERVAL '1 year 2 months')
+----
+1
+
+query R
+SELECT extract(epoch FROM INTERVAL '1 day')
+----
+86400
+
+query R
+SELECT extract(epoch FROM INTERVAL '1 hour')
+----
+3600
+
+query R
+SELECT extract(epoch FROM INTERVAL '1 second')
+----
+1
+
+query R
+SELECT extract(epoch FROM INTERVAL '0')
+----
+0
+
+query R
+SELECT extract(epoch FROM INTERVAL '-1 day')
+----
+-86400
+
+### Interval justify functions ###
+
+query T
+SELECT justify_hours(INTERVAL '25 hours')
+----
+1 day 01:00:00
+
+query T
+SELECT justify_hours(INTERVAL '-25 hours')
+----
+-1 days -01:00:00
+
+query T
+SELECT justify_hours(INTERVAL '0')
+----
+00:00:00
+
+query T
+SELECT justify_days(INTERVAL '35 days')
+----
+1 mon 5 days
+
+query T
+SELECT justify_days(INTERVAL '-35 days')
+----
+-1 mons -5 days
+
+query T
+SELECT justify_interval(INTERVAL '1 month 35 days 25 hours')
+----
+1 mon 36 days 01:00:00
+
+### Large interval values ###
+
+query T
+SELECT INTERVAL '100 years'
+----
+100 years
+
+query T
+SELECT INTERVAL '1000000 days'
+----
+1000000 days
+
+query T
+SELECT INTERVAL '1000000 hours'
+----
+1000000:00:00
+
+### Interval to/from date arithmetic ###
+
+query T
+SELECT DATE '2000-01-01' + INTERVAL '1 year 2 months 3 days'
+----
+2001-03-04 00:00:00
+
+query T
+SELECT DATE '2000-01-01' - INTERVAL '1 year 2 months 3 days'
+----
+1998-10-29 00:00:00
+
+query T
+SELECT TIMESTAMP '2000-01-01 12:00:00' + INTERVAL '1 hour 30 minutes'
+----
+2000-01-01 13:30:00
+
+query T
+SELECT TIMESTAMP '2000-01-01 12:00:00' - INTERVAL '1 hour 30 minutes'
+----
+2000-01-01 10:30:00
+
+### Interval make functions ###
+
+query T
+SELECT make_interval()
+----
+00:00:00
+
+query T
+SELECT make_interval(years => 1)
+----
+1 year
+
+query T
+SELECT make_interval(months => 12)
+----
+12 mons
+
+query T
+SELECT make_interval(days => 1, hours => 2, mins => 3, secs => 4.5)
+----
+1 day 02:03:04.5
+
+query T
+SELECT make_interval(years => -1)
+----
+-1 years
+
+query T
+SELECT make_interval(secs => 0.000001)
+----
+00:00:00.000001
+
+### Interval aggregates ###
+
+query T
+SELECT SUM(x) FROM (VALUES (INTERVAL '1 hour'), (INTERVAL '2 hours'), (INTERVAL '3 hours')) AS t(x)
+----
+06:00:00
+
+query T
+SELECT AVG(x) FROM (VALUES (INTERVAL '1 hour'), (INTERVAL '2 hours'), (INTERVAL '3 hours')) AS t(x)
+----
+02:00:00
+
+query T
+SELECT MAX(x) FROM (VALUES (INTERVAL '1 hour'), (INTERVAL '2 hours'), (INTERVAL '3 hours')) AS t(x)
+----
+03:00:00
+
+query T
+SELECT MIN(x) FROM (VALUES (INTERVAL '1 hour'), (INTERVAL '2 hours'), (INTERVAL '3 hours')) AS t(x)
+----
+01:00:00
+
+query T
+SELECT SUM(x) FROM (SELECT INTERVAL '1 hour' WHERE false) AS t(x)
+----
+NULL
+
+### Interval in expressions ###
+
+query B
+SELECT INTERVAL '1 hour' BETWEEN INTERVAL '30 minutes' AND INTERVAL '2 hours'
+----
+true
+
+query B
+SELECT INTERVAL '1 hour' IN (INTERVAL '30 minutes', INTERVAL '1 hour', INTERVAL '2 hours')
+----
+true
+
+query T
+SELECT CASE WHEN true THEN INTERVAL '1 hour' ELSE INTERVAL '2 hours' END
+----
+01:00:00
+
+query T
+SELECT COALESCE(NULL::interval, INTERVAL '1 hour')
+----
+01:00:00
+
+query T
+SELECT NULLIF(INTERVAL '1 hour', INTERVAL '1 hour')
+----
+NULL
+
+query T
+SELECT GREATEST(INTERVAL '1 hour', INTERVAL '2 hours', INTERVAL '30 minutes')
+----
+02:00:00
+
+query T
+SELECT LEAST(INTERVAL '1 hour', INTERVAL '2 hours', INTERVAL '30 minutes')
+----
+00:30:00

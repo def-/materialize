@@ -1636,3 +1636,504 @@ EXECUTE fizz_paginated(4::bigint, 2*4);
 # similarly to OFFSET.
 query error db error: ERROR: Top\-level LIMIT must be a constant expression, got integer_to_bigint\(4\)
 EXECUTE fizz_paginated(4, 2*4);
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### ORDER BY with complex expressions ###
+
+statement ok
+CREATE TABLE order_test (a int, b int, c text)
+
+statement ok
+INSERT INTO order_test VALUES
+    (1, 10, 'one'), (2, 20, 'two'), (3, 30, 'three'),
+    (NULL, 40, 'null_a'), (5, NULL, 'null_b'), (NULL, NULL, 'null_both')
+
+query IIT
+SELECT * FROM order_test ORDER BY a + b
+----
+1     10    one
+2     20    two
+3     30    three
+NULL  40    null_a
+5     NULL  null_b
+NULL  NULL  null_both
+
+query IIT
+SELECT * FROM order_test ORDER BY a * b DESC NULLS LAST
+----
+3     30    three
+2     20    two
+1     10    one
+NULL  40    null_a
+5     NULL  null_b
+NULL  NULL  null_both
+
+query IIT
+SELECT * FROM order_test ORDER BY COALESCE(a, 0) + COALESCE(b, 0)
+----
+NULL  NULL  null_both
+5     NULL  null_b
+1     10    one
+2     20    two
+3     30    three
+NULL  40    null_a
+
+### ORDER BY with CASE expression ###
+
+query IIT
+SELECT * FROM order_test ORDER BY CASE WHEN a IS NULL THEN 0 ELSE a END
+----
+NULL  40    null_a
+NULL  NULL  null_both
+1     10    one
+2     20    two
+3     30    three
+5     NULL  null_b
+
+query IIT
+SELECT * FROM order_test ORDER BY
+    CASE
+        WHEN a IS NULL AND b IS NULL THEN 0
+        WHEN a IS NULL THEN 1
+        WHEN b IS NULL THEN 2
+        ELSE 3
+    END
+----
+NULL  NULL  null_both
+NULL  40    null_a
+5     NULL  null_b
+1     10    one
+2     20    two
+3     30    three
+
+### ORDER BY with multiple NULL handling ###
+
+query IIT
+SELECT * FROM order_test ORDER BY a NULLS FIRST, b NULLS FIRST
+----
+NULL  NULL  null_both
+NULL  40    null_a
+1     10    one
+2     20    two
+3     30    three
+5     NULL  null_b
+
+query IIT
+SELECT * FROM order_test ORDER BY a NULLS LAST, b NULLS LAST
+----
+1     10    one
+2     20    two
+3     30    three
+5     NULL  null_b
+NULL  40    null_a
+NULL  NULL  null_both
+
+query IIT
+SELECT * FROM order_test ORDER BY a ASC NULLS FIRST, b DESC NULLS LAST
+----
+NULL  40    null_a
+NULL  NULL  null_both
+1     10    one
+2     20    two
+3     30    three
+5     NULL  null_b
+
+### ORDER BY with string operations ###
+
+query T
+SELECT c FROM order_test ORDER BY length(c)
+----
+one
+two
+three
+null_a
+null_b
+null_both
+
+query T
+SELECT c FROM order_test ORDER BY upper(c) DESC
+----
+two
+three
+one
+null_both
+null_b
+null_a
+
+query T
+SELECT c FROM order_test ORDER BY substr(c, 1, 2)
+----
+null_a
+null_b
+null_both
+one
+three
+two
+
+### ORDER BY with type coercion ###
+
+query II
+SELECT a, b FROM order_test WHERE a IS NOT NULL AND b IS NOT NULL ORDER BY a::float / b::float
+----
+3  30
+2  20
+1  10
+
+### ORDER BY with boolean expression ###
+
+query IIB
+SELECT a, b, a > b FROM order_test WHERE a IS NOT NULL AND b IS NOT NULL ORDER BY a > b, a
+----
+1  10  false
+2  20  false
+3  30  false
+
+### ORDER BY with subquery ###
+
+query IT
+SELECT a, c FROM order_test
+WHERE a IS NOT NULL
+ORDER BY (SELECT max(b) FROM order_test WHERE order_test.a = a) DESC NULLS LAST
+----
+1  one
+2  two
+3  three
+5  null_b
+
+### ORDER BY referencing alias ###
+
+query II
+SELECT a, a * 2 AS double_a FROM order_test ORDER BY double_a NULLS LAST
+----
+1     2
+2     4
+3     6
+5     10
+NULL  NULL
+NULL  NULL
+
+### ORDER BY with DISTINCT ###
+
+query I
+SELECT DISTINCT a FROM order_test ORDER BY a NULLS LAST
+----
+1
+2
+3
+5
+NULL
+
+### ORDER BY with GROUP BY ###
+
+query IR
+SELECT a, avg(b) FROM order_test GROUP BY a ORDER BY avg(b) NULLS LAST
+----
+1     10
+2     20
+3     30
+NULL  40
+5     NULL
+
+### ORDER BY with HAVING ###
+
+query IR
+SELECT a, avg(b) FROM order_test GROUP BY a HAVING avg(b) > 15 ORDER BY a
+----
+2     20
+3     30
+NULL  40
+
+### ORDER BY with UNION ###
+
+query I
+SELECT a FROM order_test WHERE a IS NOT NULL
+UNION ALL
+SELECT b FROM order_test WHERE b IS NOT NULL
+ORDER BY a
+----
+1
+2
+3
+5
+10
+20
+30
+40
+
+### ORDER BY with empty result ###
+
+query I
+SELECT a FROM order_test WHERE a > 100 ORDER BY a
+----
+
+### ORDER BY with single row ###
+
+query IT
+SELECT a, c FROM order_test WHERE a = 1 ORDER BY a
+----
+1  one
+
+### ORDER BY constant expression ###
+
+query I
+SELECT a FROM order_test WHERE a IS NOT NULL ORDER BY 1
+----
+1
+2
+3
+5
+
+### ORDER BY with negative column reference ###
+
+query error column reference 0 in ORDER BY clause is out of range
+SELECT a FROM order_test ORDER BY 0
+
+query error column reference -1 in ORDER BY clause is out of range
+SELECT a FROM order_test ORDER BY -1
+
+### ORDER BY with large column reference ###
+
+query error column reference 100 in ORDER BY clause is out of range
+SELECT a FROM order_test ORDER BY 100
+
+### ORDER BY with multiple identical columns ###
+
+query II
+SELECT a, a FROM order_test ORDER BY 1, 2 NULLS LAST
+----
+1     1
+2     2
+3     3
+5     5
+NULL  NULL
+NULL  NULL
+
+### ORDER BY with array ###
+
+statement ok
+CREATE TABLE order_array_test (id int, arr int[])
+
+statement ok
+INSERT INTO order_array_test VALUES
+    (1, ARRAY[3, 2, 1]),
+    (2, ARRAY[1, 2, 3]),
+    (3, ARRAY[2, 2, 2]),
+    (4, NULL),
+    (5, ARRAY[]::int[])
+
+query IT
+SELECT id, arr FROM order_array_test ORDER BY arr NULLS LAST
+----
+5  {}
+2  {1,2,3}
+3  {2,2,2}
+1  {3,2,1}
+4  NULL
+
+### ORDER BY with jsonb ###
+
+statement ok
+CREATE TABLE order_jsonb_test (id int, data jsonb)
+
+statement ok
+INSERT INTO order_jsonb_test VALUES
+    (1, '{"a": 3}'::jsonb),
+    (2, '{"a": 1}'::jsonb),
+    (3, '{"a": 2}'::jsonb),
+    (4, NULL),
+    (5, '{}'::jsonb)
+
+query IT
+SELECT id, data FROM order_jsonb_test ORDER BY data NULLS LAST
+----
+5  {}
+2  {"a":1}
+3  {"a":2}
+1  {"a":3}
+4  NULL
+
+### ORDER BY with window function in ORDER BY ###
+
+query II
+SELECT a, row_number() OVER (ORDER BY a NULLS LAST) as rn
+FROM order_test
+ORDER BY rn DESC
+----
+NULL  6
+NULL  5
+5     4
+3     3
+2     2
+1     1
+
+### ORDER BY with LAG/LEAD ###
+
+query II
+SELECT a, lag(a) OVER (ORDER BY a NULLS LAST) as prev_a
+FROM order_test
+ORDER BY prev_a NULLS LAST
+----
+2     1
+3     2
+5     3
+NULL  5
+NULL  NULL
+1     NULL
+
+### ORDER BY with LATERAL ###
+
+query IT
+SELECT o.a, lat.doubled
+FROM order_test o,
+LATERAL (SELECT o.a * 2 as doubled) lat
+WHERE o.a IS NOT NULL
+ORDER BY lat.doubled
+----
+1  2
+2  4
+3  6
+5  10
+
+### ORDER BY with VALUES ###
+
+query I
+VALUES (3), (1), (2) ORDER BY 1
+----
+1
+2
+3
+
+query II
+VALUES (1, 'a'), (3, 'c'), (2, 'b') ORDER BY 2
+----
+1  a
+2  b
+3  c
+
+### ORDER BY with CTE ###
+
+query I
+WITH cte AS (SELECT a FROM order_test WHERE a IS NOT NULL)
+SELECT a FROM cte ORDER BY a DESC
+----
+5
+3
+2
+1
+
+### ORDER BY with recursive-like pattern ###
+
+query I
+WITH MUTUALLY RECURSIVE
+    evens (n int) AS (SELECT 0 UNION SELECT n + 2 FROM evens WHERE n < 10),
+    odds (n int) AS (SELECT 1 UNION SELECT n + 2 FROM odds WHERE n < 10)
+SELECT n FROM evens
+UNION ALL
+SELECT n FROM odds
+ORDER BY n
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+
+### ORDER BY with float special values ###
+
+statement ok
+CREATE TABLE order_float_test (f float)
+
+statement ok
+INSERT INTO order_float_test VALUES ('NaN'::float), ('Infinity'::float), ('-Infinity'::float), (0.0), (-0.0), (1.5), (NULL)
+
+query R
+SELECT f FROM order_float_test ORDER BY f
+----
+-Infinity
+-0
+0
+1.5
+Infinity
+NaN
+NULL
+
+query R
+SELECT f FROM order_float_test ORDER BY f DESC
+----
+NULL
+NaN
+Infinity
+1.5
+0
+-0
+-Infinity
+
+### ORDER BY with timestamp ###
+
+statement ok
+CREATE TABLE order_ts_test (ts timestamp)
+
+statement ok
+INSERT INTO order_ts_test VALUES
+    ('2023-01-01 00:00:00'),
+    ('2023-06-15 12:30:00'),
+    ('2023-12-31 23:59:59'),
+    (NULL)
+
+query T
+SELECT ts FROM order_ts_test ORDER BY ts
+----
+2023-01-01 00:00:00
+2023-06-15 12:30:00
+2023-12-31 23:59:59
+NULL
+
+### ORDER BY with date ###
+
+statement ok
+CREATE TABLE order_date_test (d date)
+
+statement ok
+INSERT INTO order_date_test VALUES
+    ('2023-01-01'),
+    ('2023-06-15'),
+    ('2023-12-31'),
+    (NULL)
+
+query T
+SELECT d FROM order_date_test ORDER BY d DESC NULLS FIRST
+----
+NULL
+2023-12-31
+2023-06-15
+2023-01-01
+
+### Cleanup ###
+
+statement ok
+DROP TABLE order_test
+
+statement ok
+DROP TABLE order_array_test
+
+statement ok
+DROP TABLE order_jsonb_test
+
+statement ok
+DROP TABLE order_float_test
+
+statement ok
+DROP TABLE order_ts_test
+
+statement ok
+DROP TABLE order_date_test

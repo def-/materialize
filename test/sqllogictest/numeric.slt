@@ -2253,3 +2253,507 @@ query I
 SELECT '1.1'::numeric
 ----
 1
+
+mode cockroach
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### NaN edge cases in numeric ###
+
+query R
+SELECT 'NaN'::numeric + 1
+----
+NaN
+
+query R
+SELECT 'NaN'::numeric - 1
+----
+NaN
+
+query R
+SELECT 'NaN'::numeric * 2
+----
+NaN
+
+query R
+SELECT 'NaN'::numeric / 2
+----
+NaN
+
+query R
+SELECT 'NaN'::numeric + 'NaN'::numeric
+----
+NaN
+
+query R
+SELECT 'NaN'::numeric * 'NaN'::numeric
+----
+NaN
+
+query R
+SELECT 1 + 'NaN'::numeric
+----
+NaN
+
+query R
+SELECT 1 - 'NaN'::numeric
+----
+NaN
+
+query R
+SELECT 1 * 'NaN'::numeric
+----
+NaN
+
+query R
+SELECT 1 / 'NaN'::numeric
+----
+NaN
+
+# NaN comparisons
+query B
+SELECT 'NaN'::numeric = 'NaN'::numeric
+----
+true
+
+query B
+SELECT 'NaN'::numeric < 1::numeric
+----
+false
+
+query B
+SELECT 'NaN'::numeric > 1::numeric
+----
+true
+
+query B
+SELECT 1::numeric < 'NaN'::numeric
+----
+true
+
+### Numeric precision boundary edge cases ###
+
+# Maximum precision (39 digits)
+query R
+SELECT '123456789012345678901234567890123456789'::numeric
+----
+123456789012345678901234567890123456789
+
+query R
+SELECT '-123456789012345678901234567890123456789'::numeric
+----
+-123456789012345678901234567890123456789
+
+# Exceeding precision
+query error is out of range for type numeric: exceeds maximum precision 39
+SELECT '1234567890123456789012345678901234567890'::numeric
+
+# Very small numbers near precision limit
+query R
+SELECT '0.000000000000000000000000000000000000001'::numeric
+----
+0.000000000000000000000000000000000000001
+
+query error is out of range for type numeric: exceeds maximum precision 39
+SELECT '0.0000000000000000000000000000000000000001'::numeric
+
+### Numeric arithmetic at precision boundaries ###
+
+# Addition near max
+query R
+SELECT '123456789012345678901234567890123456789'::numeric + 0
+----
+123456789012345678901234567890123456789
+
+query R
+SELECT '123456789012345678901234567890123456789'::numeric - 0
+----
+123456789012345678901234567890123456789
+
+# Multiplication edge cases
+query R
+SELECT '12345678901234567890'::numeric * '1000000000000000000'::numeric
+----
+12345678901234567890000000000000000000
+
+# Division edge cases
+query R
+SELECT 1::numeric / 3
+----
+0.333333333333333333333333333333333333333
+
+query R
+SELECT 2::numeric / 3
+----
+0.666666666666666666666666666666666666667
+
+query R
+SELECT 1::numeric / 7
+----
+0.142857142857142857142857142857142857143
+
+# Very small division results
+query R
+SELECT 1::numeric / 999999999999999999999999999999999999999
+----
+0.000000000000000000000000000000000000001
+
+### Numeric modulo edge cases ###
+
+query R
+SELECT 'NaN'::numeric % 1
+----
+NaN
+
+query R
+SELECT 1 % 'NaN'::numeric
+----
+NaN
+
+query error division by zero
+SELECT 1::numeric % 0
+
+query R
+SELECT 0::numeric % 5
+----
+0
+
+query R
+SELECT 10::numeric % 10
+----
+0
+
+query R
+SELECT 12345678901234567890::numeric % 1
+----
+0
+
+### Numeric scale/precision specification edge cases ###
+
+query R
+SELECT 1.5::numeric(10,0)
+----
+2
+
+query R
+SELECT 1.4::numeric(10,0)
+----
+1
+
+query R
+SELECT -1.5::numeric(10,0)
+----
+-2
+
+query R
+SELECT -1.4::numeric(10,0)
+----
+-1
+
+# Maximum scale
+query R
+SELECT 1.0::numeric(39,38)
+----
+1
+
+query error numeric field overflow
+SELECT 10.0::numeric(39,38)
+
+# Very high precision with specified scale
+query R
+SELECT '0.123456789012345678901234567890123456789'::numeric(39,39)
+----
+0.123456789012345678901234567890123456789
+
+### Numeric round/trunc/ceil/floor edge cases ###
+
+query R
+SELECT round('NaN'::numeric)
+----
+NaN
+
+query R
+SELECT round('NaN'::numeric, 2)
+----
+NaN
+
+query R
+SELECT trunc('NaN'::numeric)
+----
+NaN
+
+query R
+SELECT ceil('NaN'::numeric)
+----
+NaN
+
+query R
+SELECT floor('NaN'::numeric)
+----
+NaN
+
+# Rounding at precision boundaries
+query R
+SELECT round(123456789012345678901234567890123456789::numeric, -10)
+----
+123456789012345678901234567890000000000
+
+query R
+SELECT round(123456789012345678901234567890123456789::numeric, -38)
+----
+100000000000000000000000000000000000000
+
+query R
+SELECT round(0.123456789012345678901234567890123456789::numeric, 38)
+----
+0.12345678901234567890123456789012345679
+
+# Trunc at boundaries
+query R
+SELECT trunc(999999999999999999999999999999999999999::numeric, -38)
+----
+900000000000000000000000000000000000000
+
+### Numeric abs edge cases ###
+
+query R
+SELECT abs('NaN'::numeric)
+----
+NaN
+
+query R
+SELECT abs(-123456789012345678901234567890123456789::numeric)
+----
+123456789012345678901234567890123456789
+
+query R
+SELECT abs(0::numeric)
+----
+0
+
+query R
+SELECT abs(-0::numeric)
+----
+0
+
+### Numeric sign edge cases ###
+
+query I
+SELECT sign('NaN'::numeric)
+----
+0
+
+query I
+SELECT sign(0::numeric)
+----
+0
+
+query I
+SELECT sign(-0::numeric)
+----
+0
+
+query I
+SELECT sign(123456789012345678901234567890123456789::numeric)
+----
+1
+
+query I
+SELECT sign(-123456789012345678901234567890123456789::numeric)
+----
+-1
+
+### Numeric sqrt edge cases ###
+
+query R
+SELECT sqrt(0::numeric)
+----
+0
+
+query R
+SELECT sqrt('NaN'::numeric)
+----
+NaN
+
+query error cannot take square root of a negative number
+SELECT sqrt(-1::numeric)
+
+# Large number sqrt
+query R
+SELECT sqrt(999999999999999999999999999999999999999::numeric)
+----
+999999999999999999999.999999999999999999
+
+### Numeric power edge cases ###
+
+query R
+SELECT power(2::numeric, 0)
+----
+1
+
+query R
+SELECT power(0::numeric, 0)
+----
+1
+
+query R
+SELECT power('NaN'::numeric, 0)
+----
+1
+
+query R
+SELECT power('NaN'::numeric, 1)
+----
+NaN
+
+query R
+SELECT power(2::numeric, 'NaN'::numeric)
+----
+NaN
+
+query error zero raised to a negative power is undefined
+SELECT power(0::numeric, -1)
+
+# Large power
+query R
+SELECT power(10::numeric, 38)
+----
+100000000000000000000000000000000000000
+
+query error value overflows numeric format
+SELECT power(10::numeric, 39)
+
+### Numeric exp/ln edge cases ###
+
+query R
+SELECT exp(0::numeric)
+----
+1
+
+query R
+SELECT exp('NaN'::numeric)
+----
+NaN
+
+query R
+SELECT ln(1::numeric)
+----
+0
+
+query R
+SELECT ln('NaN'::numeric)
+----
+NaN
+
+query error cannot take logarithm of zero
+SELECT ln(0::numeric)
+
+query error cannot take logarithm of a negative number
+SELECT ln(-1::numeric)
+
+### Numeric in aggregates ###
+
+query R
+SELECT SUM(x) FROM (VALUES ('NaN'::numeric), (1), (2)) AS t(x)
+----
+NaN
+
+query R
+SELECT AVG(x) FROM (VALUES ('NaN'::numeric), (1), (2)) AS t(x)
+----
+NaN
+
+query R
+SELECT MIN(x) FROM (VALUES ('NaN'::numeric), (1), (2)) AS t(x)
+----
+1
+
+query R
+SELECT MAX(x) FROM (VALUES ('NaN'::numeric), (1), (2)) AS t(x)
+----
+NaN
+
+# Empty aggregate
+query R
+SELECT SUM(x) FROM (SELECT 1::numeric WHERE false) AS t(x)
+----
+NULL
+
+query R
+SELECT AVG(x) FROM (SELECT 1::numeric WHERE false) AS t(x)
+----
+NULL
+
+### Numeric to/from string edge cases ###
+
+query T
+SELECT 'NaN'::numeric::text
+----
+NaN
+
+query T
+SELECT 0::numeric::text
+----
+0
+
+query T
+SELECT (-0)::numeric::text
+----
+0
+
+query T
+SELECT 123456789012345678901234567890123456789::numeric::text
+----
+123456789012345678901234567890123456789
+
+query T
+SELECT 0.000000000000000000000000000000000000001::numeric::text
+----
+0.000000000000000000000000000000000000001
+
+### Numeric comparison edge cases ###
+
+query B
+SELECT 0::numeric = (-0)::numeric
+----
+true
+
+query B
+SELECT 1.0::numeric = 1.00::numeric
+----
+true
+
+query B
+SELECT 1.0::numeric = 1.000::numeric
+----
+true
+
+# NaN sorting behavior
+query R rowsort
+SELECT x FROM (VALUES ('NaN'::numeric), (1), (NULL), (2), ('NaN'::numeric)) AS t(x) ORDER BY x
+----
+NULL
+1
+2
+NaN
+NaN
+
+query R rowsort
+SELECT x FROM (VALUES ('NaN'::numeric), (1), (NULL), (2), ('NaN'::numeric)) AS t(x) ORDER BY x DESC
+----
+NaN
+NaN
+2
+1
+NULL
+
+### Numeric DISTINCT edge cases ###
+
+query R rowsort
+SELECT DISTINCT x FROM (VALUES ('NaN'::numeric), ('NaN'::numeric), (1.0), (1.00), (NULL), (NULL)) AS t(x)
+----
+NULL
+1
+NaN

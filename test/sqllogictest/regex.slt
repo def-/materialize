@@ -823,3 +823,869 @@ SELECT 'aaaaaaaaaaa' ~ repeat('vxx.0.0-rc.4 (5b079d80c)', '2600000');
 
 statement ok
 DROP CLUSTER multiprocess;
+
+# ==========================================
+# Additional edge case tests for potential panics/internal errors
+# ==========================================
+
+### Basic regex matching edge cases ###
+
+query B
+SELECT '' ~ ''
+----
+true
+
+query B
+SELECT 'abc' ~ ''
+----
+true
+
+query B
+SELECT '' ~ 'abc'
+----
+false
+
+query B
+SELECT '' ~ '^$'
+----
+true
+
+query B
+SELECT NULL ~ 'abc'
+----
+NULL
+
+query B
+SELECT 'abc' ~ NULL
+----
+NULL
+
+query B
+SELECT NULL ~ NULL
+----
+NULL
+
+### Case insensitive matching edge cases ###
+
+query B
+SELECT 'ABC' ~* 'abc'
+----
+true
+
+query B
+SELECT 'abc' ~* 'ABC'
+----
+true
+
+query B
+SELECT 'AbC' ~* '^abc$'
+----
+true
+
+query B
+SELECT '' ~* ''
+----
+true
+
+### Negated regex matching edge cases ###
+
+query B
+SELECT 'abc' !~ 'xyz'
+----
+true
+
+query B
+SELECT 'abc' !~ 'abc'
+----
+false
+
+query B
+SELECT '' !~ ''
+----
+false
+
+query B
+SELECT 'ABC' !~* 'abc'
+----
+false
+
+query B
+SELECT 'ABC' !~* 'xyz'
+----
+true
+
+### Special regex characters edge cases ###
+
+query B
+SELECT 'a.b' ~ 'a\.b'
+----
+true
+
+query B
+SELECT 'a.b' ~ 'a.b'
+----
+true
+
+query B
+SELECT 'axb' ~ 'a.b'
+----
+true
+
+query B
+SELECT 'a*b' ~ 'a\*b'
+----
+true
+
+query B
+SELECT 'a+b' ~ 'a\+b'
+----
+true
+
+query B
+SELECT 'a?b' ~ 'a\?b'
+----
+true
+
+query B
+SELECT '[abc]' ~ '\[abc\]'
+----
+true
+
+query B
+SELECT '(abc)' ~ '\(abc\)'
+----
+true
+
+query B
+SELECT 'a{3}' ~ 'a\{3\}'
+----
+true
+
+query B
+SELECT 'a|b' ~ 'a\|b'
+----
+true
+
+query B
+SELECT '^abc$' ~ '\^abc\$'
+----
+true
+
+### Anchor edge cases ###
+
+query B
+SELECT 'abc' ~ '^abc'
+----
+true
+
+query B
+SELECT 'abc' ~ 'abc$'
+----
+true
+
+query B
+SELECT 'abc' ~ '^abc$'
+----
+true
+
+query B
+SELECT 'xabc' ~ '^abc'
+----
+false
+
+query B
+SELECT 'abcx' ~ 'abc$'
+----
+false
+
+query B
+SELECT E'abc\ndef' ~ '^def'
+----
+false
+
+query B
+SELECT E'abc\ndef' ~ '(?m)^def'
+----
+true
+
+### Character class edge cases ###
+
+query B
+SELECT 'a' ~ '[a-z]'
+----
+true
+
+query B
+SELECT 'Z' ~ '[a-z]'
+----
+false
+
+query B
+SELECT '5' ~ '[0-9]'
+----
+true
+
+query B
+SELECT '-' ~ '[-]'
+----
+true
+
+query B
+SELECT ']' ~ '[\]]'
+----
+true
+
+query B
+SELECT '[' ~ '[\[]'
+----
+true
+
+query B
+SELECT '^' ~ '[\^]'
+----
+true
+
+query B
+SELECT 'a' ~ '[^a]'
+----
+false
+
+query B
+SELECT 'b' ~ '[^a]'
+----
+true
+
+### Quantifier edge cases ###
+
+query B
+SELECT '' ~ 'a*'
+----
+true
+
+query B
+SELECT 'aaa' ~ 'a*'
+----
+true
+
+query B
+SELECT '' ~ 'a+'
+----
+false
+
+query B
+SELECT 'a' ~ 'a+'
+----
+true
+
+query B
+SELECT 'aaa' ~ 'a+'
+----
+true
+
+query B
+SELECT '' ~ 'a?'
+----
+true
+
+query B
+SELECT 'a' ~ 'a?'
+----
+true
+
+query B
+SELECT 'aa' ~ '^a?$'
+----
+false
+
+query B
+SELECT 'aaa' ~ 'a{3}'
+----
+true
+
+query B
+SELECT 'aa' ~ 'a{3}'
+----
+false
+
+query B
+SELECT 'aaaa' ~ 'a{3}'
+----
+true
+
+query B
+SELECT 'aa' ~ 'a{2,4}'
+----
+true
+
+query B
+SELECT 'aaaaa' ~ '^a{2,4}$'
+----
+false
+
+query B
+SELECT 'aa' ~ 'a{2,}'
+----
+true
+
+query B
+SELECT 'aaaaaaa' ~ 'a{2,}'
+----
+true
+
+### Alternation edge cases ###
+
+query B
+SELECT 'a' ~ 'a|b'
+----
+true
+
+query B
+SELECT 'b' ~ 'a|b'
+----
+true
+
+query B
+SELECT 'c' ~ 'a|b'
+----
+false
+
+query B
+SELECT '' ~ '|'
+----
+true
+
+query B
+SELECT 'a' ~ '|a'
+----
+true
+
+query B
+SELECT 'abc' ~ 'abc|def|ghi'
+----
+true
+
+### Grouping edge cases ###
+
+query B
+SELECT 'ab' ~ '(ab)'
+----
+true
+
+query B
+SELECT 'abab' ~ '(ab)+'
+----
+true
+
+query B
+SELECT 'abab' ~ '(ab){2}'
+----
+true
+
+query B
+SELECT 'abab' ~ '^(ab){2}$'
+----
+true
+
+query B
+SELECT 'ab' ~ '(?:ab)'
+----
+true
+
+### Backreference edge cases ###
+
+query T
+SELECT regexp_replace('abab', '(ab)\1', 'X')
+----
+X
+
+query T
+SELECT regexp_replace('abcd', '(ab)\1', 'X')
+----
+abcd
+
+### regexp_replace edge cases ###
+
+query T
+SELECT regexp_replace('hello', 'l', 'L')
+----
+heLlo
+
+query T
+SELECT regexp_replace('hello', 'l', 'L', 'g')
+----
+heLLo
+
+query T
+SELECT regexp_replace('hello', 'L', 'X', 'i')
+----
+heXlo
+
+query T
+SELECT regexp_replace('hello', 'L', 'X', 'gi')
+----
+heXXo
+
+query T
+SELECT regexp_replace('', 'a', 'b')
+----
+(empty)
+
+query T
+SELECT regexp_replace('abc', '', 'X')
+----
+Xabc
+
+query T
+SELECT regexp_replace('abc', '', 'X', 'g')
+----
+XaXbXcX
+
+query T
+SELECT regexp_replace(NULL, 'a', 'b')
+----
+NULL
+
+query T
+SELECT regexp_replace('abc', NULL, 'b')
+----
+NULL
+
+query T
+SELECT regexp_replace('abc', 'a', NULL)
+----
+NULL
+
+query T
+SELECT regexp_replace('abc', 'x', 'y')
+----
+abc
+
+query T
+SELECT regexp_replace('abc123def456', '[0-9]+', '#', 'g')
+----
+abc#def#
+
+query T
+SELECT regexp_replace('hello world', '(\w+) (\w+)', '\2 \1')
+----
+world hello
+
+query T
+SELECT regexp_replace('aaa', 'a', 'bb', 'g')
+----
+bbbbbb
+
+### regexp_match edge cases ###
+
+query T
+SELECT regexp_match('abc123', '[0-9]+')
+----
+{123}
+
+query T
+SELECT regexp_match('abc', '[0-9]+')
+----
+NULL
+
+query T
+SELECT regexp_match('abc123def456', '[0-9]+')
+----
+{123}
+
+query T
+SELECT regexp_match('', 'a')
+----
+NULL
+
+query T
+SELECT regexp_match('abc', '')
+----
+{}
+
+query T
+SELECT regexp_match(NULL, 'a')
+----
+NULL
+
+query T
+SELECT regexp_match('abc', NULL)
+----
+NULL
+
+query T
+SELECT regexp_match('hello world', '(\w+) (\w+)')
+----
+{hello,world}
+
+query T
+SELECT regexp_match('HELLO', 'hello', 'i')
+----
+{HELLO}
+
+query T
+SELECT regexp_match('HELLO', 'hello')
+----
+NULL
+
+### regexp_matches edge cases ###
+
+query T
+SELECT regexp_matches('abc123def456', '[0-9]+', 'g')
+----
+{123}
+{456}
+
+query T
+SELECT regexp_matches('abc', '[0-9]+', 'g')
+----
+
+query T
+SELECT regexp_matches('', 'a', 'g')
+----
+
+query T
+SELECT regexp_matches('aaa', 'a', 'g')
+----
+{a}
+{a}
+{a}
+
+query T
+SELECT regexp_matches('hello world foo bar', '(\w+)', 'g')
+----
+{hello}
+{world}
+{foo}
+{bar}
+
+### regexp_split_to_array edge cases ###
+
+query T
+SELECT regexp_split_to_array('hello world', '\s+')
+----
+{hello,world}
+
+query T
+SELECT regexp_split_to_array('hello', '\s+')
+----
+{hello}
+
+query T
+SELECT regexp_split_to_array('', '\s+')
+----
+{""}
+
+query T
+SELECT regexp_split_to_array('a1b2c3', '[0-9]')
+----
+{a,b,c,""}
+
+query T
+SELECT regexp_split_to_array('abc', '')
+----
+{a,b,c}
+
+query T
+SELECT regexp_split_to_array(NULL, '\s+')
+----
+NULL
+
+query T
+SELECT regexp_split_to_array('abc', NULL)
+----
+NULL
+
+query T
+SELECT regexp_split_to_array('a,,b', ',')
+----
+{a,"",b}
+
+query T
+SELECT regexp_split_to_array(',a,b,', ',')
+----
+{"",a,b,""}
+
+### regexp_split_to_table edge cases ###
+
+query T
+SELECT * FROM regexp_split_to_table('hello world foo', '\s+')
+----
+hello
+world
+foo
+
+query T
+SELECT * FROM regexp_split_to_table('hello', '\s+')
+----
+hello
+
+query T
+SELECT * FROM regexp_split_to_table('', 'x')
+----
+(empty)
+
+### Invalid regex patterns ###
+
+query error invalid regular expression
+SELECT 'abc' ~ '['
+
+query error invalid regular expression
+SELECT 'abc' ~ '(abc'
+
+query error invalid regular expression
+SELECT 'abc' ~ 'abc)'
+
+query error invalid regular expression
+SELECT 'abc' ~ '*'
+
+query error invalid regular expression
+SELECT 'abc' ~ '+'
+
+query error invalid regular expression
+SELECT 'abc' ~ '?'
+
+query error invalid regular expression
+SELECT 'abc' ~ 'a{}'
+
+query error invalid regular expression
+SELECT 'abc' ~ 'a{-1}'
+
+query error invalid regular expression
+SELECT regexp_replace('abc', '[', 'x')
+
+query error invalid regular expression
+SELECT regexp_match('abc', '(')
+
+### Unicode regex edge cases ###
+
+query B
+SELECT '你好' ~ '你'
+----
+true
+
+query B
+SELECT '你好世界' ~ '好.*界'
+----
+true
+
+query B
+SELECT 'café' ~ 'caf.'
+----
+true
+
+query B
+SELECT '日本語' ~ '^.{3}$'
+----
+true
+
+query T
+SELECT regexp_replace('hello世界', '世界', 'world')
+----
+helloworld
+
+query T
+SELECT regexp_match('hello世界', '(世界)')
+----
+{世界}
+
+### Word boundary edge cases ###
+
+query B
+SELECT 'hello world' ~ '\bworld\b'
+----
+true
+
+query B
+SELECT 'helloworld' ~ '\bworld\b'
+----
+false
+
+query B
+SELECT 'world' ~ '\bworld\b'
+----
+true
+
+query B
+SELECT '' ~ '\b'
+----
+false
+
+### Lookahead/lookbehind edge cases (if supported) ###
+
+query B
+SELECT 'foobar' ~ 'foo(?=bar)'
+----
+true
+
+query B
+SELECT 'foobaz' ~ 'foo(?=bar)'
+----
+false
+
+query B
+SELECT 'foobar' ~ 'foo(?!baz)'
+----
+true
+
+query B
+SELECT 'foobaz' ~ 'foo(?!baz)'
+----
+false
+
+### Greedy vs non-greedy edge cases ###
+
+query T
+SELECT regexp_match('aaa', 'a+')
+----
+{aaa}
+
+query T
+SELECT regexp_match('aaa', 'a+?')
+----
+{a}
+
+query T
+SELECT regexp_replace('<b>bold</b>', '<.*>', 'X')
+----
+X
+
+query T
+SELECT regexp_replace('<b>bold</b>', '<.*?>', 'X')
+----
+Xbold</b>
+
+query T
+SELECT regexp_replace('<b>bold</b>', '<.*?>', 'X', 'g')
+----
+XboldX
+
+### Regex with newlines ###
+
+query B
+SELECT E'hello\nworld' ~ 'hello.world'
+----
+false
+
+query B
+SELECT E'hello\nworld' ~ '(?s)hello.world'
+----
+true
+
+query B
+SELECT E'hello\nworld' ~ 'hello\nworld'
+----
+true
+
+### Empty capture groups ###
+
+query T
+SELECT regexp_match('abc', '(a)()(b)')
+----
+{a,"",b}
+
+query T
+SELECT regexp_match('ab', '(a)?(b)')
+----
+{a,b}
+
+query T
+SELECT regexp_match('b', '(a)?(b)')
+----
+{NULL,b}
+
+### Long strings with regex ###
+
+query B
+SELECT repeat('a', 1000) ~ 'a+'
+----
+true
+
+query B
+SELECT repeat('a', 1000) ~ '^a{1000}$'
+----
+true
+
+query B
+SELECT repeat('a', 1000) ~ '^a{1001}$'
+----
+false
+
+### Regex flags combinations ###
+
+query T
+SELECT regexp_replace(E'Hello\nWorld', 'world', 'WORLD', 'i')
+----
+Hello
+WORLD
+
+query T
+SELECT regexp_matches(E'abc\nDEF', '[a-z]+', 'gi')
+----
+{abc}
+{DEF}
+
+### Regex with special escape sequences ###
+
+query B
+SELECT E'\t' ~ '\t'
+----
+true
+
+query B
+SELECT E'\n' ~ '\n'
+----
+true
+
+query B
+SELECT E'\r' ~ '\r'
+----
+true
+
+query B
+SELECT '123' ~ '\d+'
+----
+true
+
+query B
+SELECT 'abc' ~ '\d+'
+----
+false
+
+query B
+SELECT 'abc' ~ '\w+'
+----
+true
+
+query B
+SELECT '   ' ~ '\s+'
+----
+true
+
+### Nested groups edge cases ###
+
+query T
+SELECT regexp_match('abcabc', '((abc)+)')
+----
+{abcabc,abc}
+
+query T
+SELECT regexp_match('abcdef', '(a(b(c)))(d(e(f)))')
+----
+{abc,bc,c,def,ef,f}
+
+### Empty string replacements ###
+
+query T
+SELECT regexp_replace('abc', 'b', '')
+----
+ac
+
+query T
+SELECT regexp_replace('abc', '.', '', 'g')
+----
+(empty)
+
+query T
+SELECT regexp_replace('', '', 'X')
+----
+X
