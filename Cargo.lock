@@ -6558,6 +6558,7 @@ dependencies = [
  "anyhow",
  "foundationdb",
  "mz-ore",
+ "workspace-hack",
 ]
 
 [[package]]
