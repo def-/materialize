@@ -54,38 +54,36 @@ fi
 
 export PGUSER=root
 
-# Start PostgreSQL, unless suppressed.
-if ! is_truthy "${MZ_NO_BUILTIN_POSTGRES:-0}"; then
-  PGDATA=/mzdata/postgres
-  export PGPORT=26257
-  export PGDATABASE=root
+# Start FoundationDB, unless suppressed.
+if ! is_truthy "${MZ_NO_BUILTIN_FDB:-0}"; then
+  FDB_CLUSTER_FILE="${FDB_CLUSTER_FILE:-/mzdata/fdb.cluster}"
+  FDB_DATA_DIR="${FDB_DATA_DIR:-/mzdata/fdb}"
+  FDB_LOG_DIR="${FDB_LOG_DIR:-/mzdata/fdb/logs}"
 
-  # Should exist already, but /mzdata might be overwritten with a fresh volume
-  if [ ! -f $PGDATA/PG_VERSION ]; then
-    mkdir -p $PGDATA
-    /usr/lib/postgresql/18/bin/initdb -D $PGDATA -U $PGUSER --auth-local=trust
+  mkdir -p "$FDB_DATA_DIR" "$FDB_LOG_DIR"
+
+  # Generate cluster file if it doesn't exist
+  if [[ ! -f "$FDB_CLUSTER_FILE" ]]; then
+    mkdir -p "$(dirname "$FDB_CLUSTER_FILE")"
+    echo "docker:docker@127.0.0.1:4500" > "$FDB_CLUSTER_FILE"
   fi
 
-  # Might have been killed hard
-  rm -f $PGDATA/postmaster.pid
-  /usr/lib/postgresql/18/bin/postgres -D $PGDATA \
-      -c listen_addresses='*' \
-      -c unix_socket_directories=/var/run/postgresql \
-      -c config_file=/etc/postgresql/postgresql.conf > /mzdata/postgres/postgres.log 2>&1 &
-  PGPID=$!
+  echo "Starting FoundationDB server..."
+  fdbserver \
+    -p 127.0.0.1:4500 \
+    -C "$FDB_CLUSTER_FILE" \
+    -d "$FDB_DATA_DIR" \
+    -L "$FDB_LOG_DIR" \
+    &
 
-  trap 'kill -INT $PGPID; wait $PGPID' SIGTERM SIGINT
-
-  until /usr/lib/postgresql/18/bin/pg_isready > /dev/null 2>&1; do
-    sleep 0.01
-  done
-
-  psql -d template1 -c "CREATE DATABASE $PGUSER OWNER $PGUSER;" > /dev/null 2>&1 || true
-  psql -c "ALTER USER $PGUSER WITH PASSWORD 'root'; \
-           CREATE SCHEMA IF NOT EXISTS consensus; \
-           CREATE SCHEMA IF NOT EXISTS storage; \
-           CREATE SCHEMA IF NOT EXISTS adapter; \
-           CREATE SCHEMA IF NOT EXISTS tsoracle;"
+  # Wait for fdbserver to be ready and configure if needed
+  echo "Waiting for FoundationDB to be ready..."
+  sleep 2
+  if ! fdbcli -C "$FDB_CLUSTER_FILE" --exec "status minimal" --timeout 5 2>/dev/null; then
+    echo "Configuring FoundationDB..."
+    fdbcli -C "$FDB_CLUSTER_FILE" --exec "configure new single ssd" --timeout 30 || true
+  fi
+  echo "FoundationDB started."
 fi
 
 # Start nginx to serve the console.
@@ -109,13 +107,12 @@ export MZ_INTERNAL_HTTP_LISTEN_ADDR=${MZ_INTERNAL_HTTP_LISTEN_ADDR:-0.0.0.0:6878
 export MZ_BALANCER_SQL_LISTEN_ADDR=${MZ_BALANCER_SQL_LISTEN_ADDR:-0.0.0.0:6880}
 export MZ_BALANCER_HTTP_LISTEN_ADDR=${MZ_BALANCER_HTTP_LISTEN_ADDR:-0.0.0.0:6881}
 if is_truthy "${MZ_NO_EXTERNAL_CLUSTERD:-0}"; then
-  export MZ_PERSIST_CONSENSUS_URL=${MZ_PERSIST_CONSENSUS_URL:-postgresql://$PGUSER@%2Fvar%2Frun%2Fpostgresql:26257/?options=--search_path=consensus}
+  export MZ_PERSIST_CONSENSUS_URL=${MZ_PERSIST_CONSENSUS_URL:-foundationdb:${FDB_CLUSTER_FILE}?options=--search_path=consensus}
 else
-  export MZ_PERSIST_CONSENSUS_URL=${MZ_PERSIST_CONSENSUS_URL:-postgresql://$PGUSER@$(hostname):26257/?options=--search_path=consensus}
+  export MZ_PERSIST_CONSENSUS_URL=${MZ_PERSIST_CONSENSUS_URL:-foundationdb:${FDB_CLUSTER_FILE}?options=--search_path=consensus}
 fi
 export MZ_PERSIST_BLOB_URL=${MZ_PERSIST_BLOB_URL:-file:///mzdata/persist/blob}
-export MZ_ADAPTER_STASH_URL=${MZ_ADAPTER_STASH_URL:-postgresql://$PGUSER@%2Fvar%2Frun%2Fpostgresql:26257/?options=--search_path=adapter}
-export MZ_TIMESTAMP_ORACLE_URL=${MZ_TIMESTAMP_ORACLE_URL:-postgresql://$PGUSER@%2Fvar%2Frun%2Fpostgresql:26257/?options=--search_path=tsoracle}
+export MZ_TIMESTAMP_ORACLE_URL=${MZ_TIMESTAMP_ORACLE_URL:-foundationdb:${FDB_CLUSTER_FILE}?options=--search_path=tsoracle}
 export MZ_ORCHESTRATOR=${MZ_ORCHESTRATOR:-process}
 export MZ_ORCHESTRATOR_PROCESS_SECRETS_DIRECTORY=${MZ_ORCHESTRATOR_PROCESS_SECRETS_DIRECTORY:-/mzdata/secrets}
 export MZ_ORCHESTRATOR_PROCESS_SCRATCH_DIRECTORY=${MZ_ORCHESTRATOR_PROCESS_SCRATCH_DIRECTORY:-/scratch}
@@ -278,6 +275,8 @@ if ! is_truthy "${MZ_NO_TELEMETRY:-0}"; then
     export MZ_SEGMENT_API_KEY=${MZ_SEGMENT_API_KEY:-hMWi3sZ17KFMjn2sPWo9UJGpOQqiba4A}
     export MZ_SEGMENT_CLIENT_SIDE=${MZ_SEGMENT_CLIENT_SIDE:-true}
 fi
+
+env
 
 if is_truthy "${MZ_RESTART_ON_FAILURE:-0}"; then
     for ((i = 0; i < ${MZ_RESTART_LIMIT:-9999999999}; i++)); do
