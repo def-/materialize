@@ -2244,11 +2244,10 @@ class KillAction(Action):
                 restart="on-failure",
                 external_blob_store=True,
                 blob_store_is_azure=self.azurite,
-                external_metadata_store="toxiproxy",
+                external_metadata_store=True,
                 ports=["6975:6875", "6976:6876", "6977:6877"],
                 sanity_restart=self.sanity_restart,
                 additional_system_parameter_defaults=self.system_parameters,
-                metadata_store="cockroach",
                 default_replication_factor=1,
             )
         ):
@@ -2290,14 +2289,13 @@ class ZeroDowntimeDeployAction(Action):
                 # TODO: Retry with toxiproxy on azurite
                 external_blob_store=True,
                 blob_store_is_azure=self.azurite,
-                external_metadata_store="toxiproxy",
+                external_metadata_store=True,
                 ports=ports,
                 sanity_restart=self.sanity_restart,
                 deploy_generation=self.deploy_generation,
                 system_parameter_defaults=get_default_system_parameters(),
                 restart="on-failure",
                 healthcheck=LEADER_STATUS_HEALTHCHECK,
-                metadata_store="cockroach",
                 default_replication_factor=1,
                 additional_system_parameter_defaults=ADDITIONAL_SYSTEM_PARAMETER_DEFAULTS,
             ),

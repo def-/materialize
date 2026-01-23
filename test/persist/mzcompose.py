@@ -21,13 +21,11 @@ from materialize.mzcompose.composition import (
 )
 from materialize.mzcompose.service import Service
 from materialize.mzcompose.services.cockroach import Cockroach
-from materialize.mzcompose.services.foundationdb import FoundationDB
 from materialize.mzcompose.services.postgres import PostgresMetadata
 
 SERVICES = [
     Cockroach(setup_materialize=True, in_memory=True),
     PostgresMetadata(),
-    FoundationDB(),
     Service(
         "maelstrom-persist",
         {

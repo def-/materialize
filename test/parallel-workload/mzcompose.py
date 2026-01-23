@@ -26,6 +26,7 @@ from materialize.mzcompose.composition import (
 from materialize.mzcompose.service import Service as MzComposeService
 from materialize.mzcompose.services.azurite import Azurite
 from materialize.mzcompose.services.cockroach import Cockroach
+from materialize.mzcompose.services.foundationdb import FoundationDB
 from materialize.mzcompose.services.kafka import Kafka
 from materialize.mzcompose.services.materialized import Materialized
 from materialize.mzcompose.services.minio import Mc, Minio
@@ -48,6 +49,7 @@ from materialize.parallel_workload.settings import (
 
 SERVICES = [
     Cockroach(setup_materialize=True, in_memory=True),
+    FoundationDB(),
     Postgres(),
     MySql(),
     SqlServer(),
@@ -84,6 +86,7 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
     print(f"--- Random seed is {args.seed}")
     service_names = [
         "cockroach",
+        "foundationdb",
         "postgres",
         "mysql",
         "sql-server",
@@ -110,8 +113,7 @@ def workflow_default(c: Composition, parser: WorkflowArgumentParser) -> None:
         Materialized(
             external_blob_store=external,
             blob_store_is_azure=args.azurite,
-            external_metadata_store=("toxiproxy" if external else False),
-            metadata_store=("cockroach" if external else "postgres-metadata"),
+            external_metadata_store=True,
             ports=["6975:6875", "6976:6876", "6977:6877"],
             sanity_restart=sanity_restart,
             default_replication_factor=1,

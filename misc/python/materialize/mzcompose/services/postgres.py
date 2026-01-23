@@ -15,7 +15,7 @@ from materialize.mzcompose.service import (
     Service,
     ServiceConfig,
 )
-from materialize.mzcompose.services.cockroach import Cockroach
+from materialize.mzcompose.services.foundationdb import FoundationDB
 
 
 class Postgres(Service):
@@ -90,10 +90,9 @@ class PostgresMetadata(Postgres):
         )
 
 
-CockroachOrPostgresMetadata = (
-    Cockroach if os.getenv("BUILDKITE_TAG", "") != "" else PostgresMetadata
-)
+CockroachOrPostgresMetadata = FoundationDB
 
-METADATA_STORE: str = (
-    "cockroach" if CockroachOrPostgresMetadata == Cockroach else "postgres-metadata"
-)
+METADATA_STORE = "foundationdb"
+# METADATA_STORE: str = (
+#     "cockroach" if CockroachOrPostgresMetadata == Cockroach else "postgres-metadata"
+# )

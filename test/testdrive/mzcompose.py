@@ -40,6 +40,7 @@ from materialize.mzcompose.services.zookeeper import Zookeeper
 SERVICES = [
     Zookeeper(),
     Kafka(),
+    FoundationDB(),
     SchemaRegistry(),
     Redpanda(),
     Postgres(),
@@ -50,7 +51,6 @@ SERVICES = [
     Materialized(external_blob_store=True, sanity_restart=False),
     FivetranDestination(volumes_extra=["tmp:/share/tmp"]),
     Testdrive(external_blob_store=True),
-    FoundationDB(),
     Cockroach(),
     PostgresMetadata(),
 ]
