@@ -401,9 +401,7 @@ steps:
         env:
           CLOUDTEST_CLUSTER_DEFINITION_FILE: "misc/kind/cluster.yaml"
         agents:
-          # TODO(def-): Debezium DNS flakiness doesn't allow running on hetzner
-          # queue: hetzner-aarch64-4cpu-8gb
-          queue: linux-aarch64-medium
+          queue: hetzner-aarch64-4cpu-8gb
         plugins:
           - ./ci/plugins/cloudtest:
               # Uses .td-file based parallelism instead
@@ -1160,8 +1158,7 @@ steps:
         env:
           CLOUDTEST_CLUSTER_DEFINITION_FILE: "misc/kind/cluster.yaml"
         agents:
-          # TODO(def-): Debezium DNS flakiness doesn't allow running on hetzner
-          queue: linux-x86_64-large
+          queue: hetzner-aarch64-4cpu-8gb
         plugins:
           - ./ci/plugins/cloudtest:
               # Uses .td-file based parallelism instead
@@ -1249,19 +1246,8 @@ steps:
         label: "K8s recovery: storage on failing node"
         depends_on: build-aarch64
         timeout_in_minutes: 60
-        # TODO: database-issues#7499 (k8s node recovery tests flaky)
-        retry:
-          automatic:
-            - exit_status: 1
-              limit: 2
-            - exit_status: 143 # SIGTERM
-              limit: 2
-            - exit_status: 255
-              limit: 2
         agents:
-          # TODO(def-): Debezium DNS flakiness doesn't allow running on hetzner
-          # queue: hetzner-aarch64-4cpu-8gb
-          queue: linux-aarch64-medium
+          queue: hetzner-aarch64-4cpu-8gb
         inputs:
           - test/cloudtest
           - misc/python/materialize/cloudtest
@@ -1277,19 +1263,8 @@ steps:
         label: "K8s recovery: compute on failing node"
         depends_on: build-aarch64
         timeout_in_minutes: 60
-        # TODO: database-issues#7499 (k8s node recovery tests flaky)
-        retry:
-          automatic:
-            - exit_status: 1
-              limit: 2
-            - exit_status: 143 # SIGTERM
-              limit: 2
-            - exit_status: 255
-              limit: 2
         agents:
-          # TODO(def-): Debezium DNS flakiness doesn't allow running on hetzner
-          # queue: hetzner-aarch64-4cpu-8gb
-          queue: linux-aarch64
+          queue: hetzner-aarch64-4cpu-8gb
         inputs:
           - test/cloudtest
           - misc/python/materialize/cloudtest
@@ -1305,19 +1280,8 @@ steps:
         label: "K8s recovery: replicated compute on failing node"
         depends_on: build-aarch64
         timeout_in_minutes: 60
-        # TODO: database-issues#7499 (k8s node recovery tests flaky)
-        retry:
-          automatic:
-            - exit_status: 1
-              limit: 2
-            - exit_status: 143 # SIGTERM
-              limit: 2
-            - exit_status: 255
-              limit: 2
         agents:
-          # TODO(def-): Debezium DNS flakiness doesn't allow running on hetzner
-          # queue: hetzner-aarch64-4cpu-8gb
-          queue: linux-aarch64
+          queue: hetzner-aarch64-4cpu-8gb
         inputs:
           - test/cloudtest
           - misc/python/materialize/cloudtest
@@ -1333,19 +1297,8 @@ steps:
         label: "K8s recovery: envd on failing node"
         depends_on: build-aarch64
         timeout_in_minutes: 60
-        # TODO: database-issues#7499 (k8s node recovery tests flaky)
-        retry:
-          automatic:
-            - exit_status: 1
-              limit: 2
-            - exit_status: 143 # SIGTERM
-              limit: 2
-            - exit_status: 255
-              limit: 2
         agents:
-          # TODO(def-): Debezium DNS flakiness doesn't allow running on hetzner
-          # queue: hetzner-aarch64-4cpu-8gb
-          queue: linux-aarch64
+          queue: hetzner-aarch64-4cpu-8gb
         inputs:
           - test/cloudtest
           - misc/python/materialize/cloudtest
@@ -2099,9 +2052,7 @@ steps:
                   test/cloudtest/,
                 ]
         agents:
-          # TODO(def-): Debezium DNS flakiness doesn't allow running on hetzner
-          # queue: hetzner-aarch64-4cpu-8gb
-          queue: linux-aarch64
+          queue: hetzner-aarch64-4cpu-8gb
         sanitizer: skip
 
 
@@ -2112,9 +2063,7 @@ steps:
         env:
           CLOUDTEST_CLUSTER_DEFINITION_FILE: "misc/kind/cluster.yaml"
         agents:
-          # TODO: Debezium DNS flakiness doesn't allow running on hetzner
-          # queue: hetzner-aarch64-4cpu-8gb
-          queue: linux-aarch64-medium
+          queue: hetzner-aarch64-4cpu-8gb
         plugins:
           - ./ci/plugins/cloudtest:
               args: [-m=long, test/cloudtest/test_storage_shared_fate.py]
