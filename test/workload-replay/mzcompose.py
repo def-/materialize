@@ -3126,7 +3126,7 @@ def benchmark(
             verbose,
             True,
             True,
-            early_initial_data,
+            False,
             True,
             True,
         )
@@ -3159,7 +3159,7 @@ def benchmark(
             verbose,
             True,
             True,
-            early_initial_data,
+            True,
             True,
             True,
         )
