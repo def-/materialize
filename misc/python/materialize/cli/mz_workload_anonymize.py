@@ -113,7 +113,7 @@ def main() -> int:
                 count["tables"] += 1
                 new_table_name = set_name(table_name, f"table_{count['tables']}")
                 old_columns = table["columns"]
-                table["columns"] = {}
+                table["columns"] = []
                 for column in old_columns:
                     count["columns"] += 1
                     new_column_name = set_name(
@@ -246,9 +246,11 @@ def main() -> int:
             for sink in schema["sinks"].values():
                 replace_substr(sink, "create_sql")
     for query in workload["queries"]:
-        query["cluster"] = mapping[query["cluster"]]
-        query["database"] = mapping[query["database"]]
-        query["search_path"] = [mapping[schema] for schema in query["search_path"]]
+        query["cluster"] = mapping.get(query["cluster"], query["cluster"])
+        query["database"] = mapping.get(query["database"], query["database"])
+        query["search_path"] = [
+            mapping.get(schema, schema) for schema in query["search_path"]
+        ]
         replace_substr(query, "sql")
         new["queries"].append(query)
     # TODO: Anonymize literals in queries?
