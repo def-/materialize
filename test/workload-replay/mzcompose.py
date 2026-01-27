@@ -3155,6 +3155,8 @@ def benchmark(
         "testdrive",
     ]
 
+    spawn.runv(["bin/mz-workload-anonymize", file])
+
     with open(file) as f:
         workload = yaml.load(f, Loader=yaml.CSafeLoader)
 
