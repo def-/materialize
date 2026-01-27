@@ -2510,20 +2510,53 @@ def run_query(
         cur.execute(SQL("SET cluster = {}").format(Literal(query["cluster"])))
         cur.execute(SQL("SET database = {}").format(Literal(query["database"])))
         cur.execute(f"SET search_path = {','.join(query['search_path'])}".encode())
+
         stats["total"] += 1
+
         try:
             sql, params = pg_params_to_psycopg(query["sql"], query["params"])
             # TODO: Better repacements for <REDACTED>, but requires parsing the SQL, figuring out the column name, object name, looking up the data type, etc.
             sql = sql.replace("'<REDACTED'>", "NULL")
+
             start_time = time.time()
-            cur.execute(sql.encode(), params)
-            end_time = time.time()
-            stats["timings"].append((sql, end_time - start_time))
-            if verbose:
-                print(f"Success: {sql} (params: {params})")
+
+            if query["statement_type"] == "subscribe":
+                cur.execute(
+                    SQL("SET LOCAL statement_timeout = {}").format(
+                        Literal(int(query["duration"] * 1000))
+                    )
+                )
+                end_deadline = start_time + query["duration"]
+                row_count = 0
+                try:
+                    for row in cur.stream(sql.encode(), params):
+                        row_count += 1
+                        if time.time() >= end_deadline:
+                            break
+                except psycopg.errors.QueryCanceled:
+                    pass
+
+                end_time = time.time()
+                stats["timings"].append((sql, end_time - start_time))
+                stats.setdefault("subscribe_rows", 0)
+
+                if verbose:
+                    print(
+                        f"Success: {sql} ({end_time - start_time:.2f}s), rows: {row_count}"
+                    )
+
+            else:
+                cur.execute(sql.encode(), params)
+                end_time = time.time()
+                stats["timings"].append((sql, end_time - start_time))
+
+                if verbose:
+                    print(f"Success: {sql} (params: {params})")
+
         except psycopg.Error as e:
             stats["failed"] += 1
             stats["errors"][f"{e.sqlstate}: {e}"].append(sql)
+
             if query["finished_status"] == "success":
                 if "unknown catalog item" not in str(e):
                     print(f"Failed: {sql} (params: {params})")
