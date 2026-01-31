@@ -99,7 +99,7 @@ class Materialized(Service):
         metadata_store: str = METADATA_STORE,
         cluster_replica_size: dict[str, dict[str, Any]] | None = None,
         bootstrap_replica_size: str | None = None,
-        default_replication_factor: int = 1,
+        default_replication_factor: int = 2,
         listeners_config_path: str = f"{MZ_ROOT}/src/materialized/ci/listener_configs/testdrive.json",
         config_sync_file_path: str | None = None,
         support_external_clusterd: bool = False,
