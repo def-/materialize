@@ -9,6 +9,7 @@
 
 
 import json
+import multiprocessing
 import os
 import shutil
 import tempfile
@@ -150,7 +151,7 @@ class Materialized(Service):
             "MZ_LOG_FILTER",
             "CLUSTERD_LOG_FILTER",
             f"MZ_CLUSTER_REPLICA_SIZES={json.dumps(cluster_replica_size)}",
-            f"MZ_BOOTSTRAP_DEFAULT_CLUSTER_REPLICA_SIZE={bootstrap_replica_size}",
+            f"MZ_BOOTSTRAP_DEFAULT_CLUSTER_REPLICA_SIZE=scale=1,workers={multiprocessing.cpu_count()}",
             f"MZ_BOOTSTRAP_BUILTIN_SYSTEM_CLUSTER_REPLICA_SIZE={bootstrap_replica_size}",
             f"MZ_BOOTSTRAP_BUILTIN_PROBE_CLUSTER_REPLICA_SIZE={bootstrap_replica_size}",
             f"MZ_BOOTSTRAP_BUILTIN_SUPPORT_CLUSTER_REPLICA_SIZE={bootstrap_replica_size}",
