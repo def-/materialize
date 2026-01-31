@@ -147,11 +147,11 @@ class Materialized(Service):
             # then accidentally dependent on the state of the host machine.
             #
             # To dynamically change the environment during a workflow run,
-            # use Composition.override.
+            # use Composition.override
             "MZ_LOG_FILTER",
             "CLUSTERD_LOG_FILTER",
             f"MZ_CLUSTER_REPLICA_SIZES={json.dumps(cluster_replica_size)}",
-            f"MZ_BOOTSTRAP_DEFAULT_CLUSTER_REPLICA_SIZE=scale=1,workers={multiprocessing.cpu_count()}",
+            f"MZ_BOOTSTRAP_DEFAULT_CLUSTER_REPLICA_SIZE=scale=2,workers={multiprocessing.cpu_count()}",
             f"MZ_BOOTSTRAP_BUILTIN_SYSTEM_CLUSTER_REPLICA_SIZE={bootstrap_replica_size}",
             f"MZ_BOOTSTRAP_BUILTIN_PROBE_CLUSTER_REPLICA_SIZE={bootstrap_replica_size}",
             f"MZ_BOOTSTRAP_BUILTIN_SUPPORT_CLUSTER_REPLICA_SIZE={bootstrap_replica_size}",
