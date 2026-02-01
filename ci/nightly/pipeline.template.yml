@@ -1715,7 +1715,7 @@ steps:
               composition: sqlsmith
               args: [--max-joins=5, --explain-only, --runtime=1500]
 
-  - group: SQLancer
+  - group: "SQLancer(++)"
     key: sqlancer
     steps:
       - id: sqlancer-pqs
@@ -1723,7 +1723,7 @@ steps:
         depends_on: build-aarch64
         timeout_in_minutes: 40
         agents:
-          queue: hetzner-aarch64-4cpu-8gb
+          queue: hetzner-aarch64-8cpu-16gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: sqlancer
@@ -1734,7 +1734,7 @@ steps:
         depends_on: build-aarch64
         timeout_in_minutes: 40
         agents:
-          queue: hetzner-aarch64-4cpu-8gb
+          queue: hetzner-aarch64-8cpu-16gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: sqlancer
@@ -1745,7 +1745,6 @@ steps:
         depends_on: build-aarch64
         timeout_in_minutes: 40
         agents:
-          # Ran out of memory retrieving query results.
           queue: hetzner-aarch64-8cpu-16gb
         plugins:
           - ./ci/plugins/mzcompose:
@@ -1757,11 +1756,44 @@ steps:
         depends_on: build-aarch64
         timeout_in_minutes: 40
         agents:
-          queue: hetzner-aarch64-4cpu-8gb
+          queue: hetzner-aarch64-8cpu-16gb
         plugins:
           - ./ci/plugins/mzcompose:
               composition: sqlancer
               args: [--runtime=1500, --oracle=HAVING]
+
+      - id: sqlancerplusplus-where
+        label: "SQLancer++ Where"
+        depends_on: build-aarch64
+        timeout_in_minutes: 40
+        agents:
+          queue: hetzner-aarch64-16cpu-32gb
+        plugins:
+          - ./ci/plugins/mzcompose:
+              composition: sqlancerplusplus
+              args: [--runtime=1500, --oracle=WHERE]
+
+      - id: sqlancerplusplus-norec
+        label: "SQLancer++ NoREC"
+        depends_on: build-aarch64
+        timeout_in_minutes: 40
+        agents:
+          queue: hetzner-aarch64-16cpu-32gb
+        plugins:
+          - ./ci/plugins/mzcompose:
+              composition: sqlancerplusplus
+              args: [--runtime=1500, --oracle=NOREC]
+
+      - id: sqlancerplusplus-query-partitioning
+        label: "SQLancer++ Query Partitioning"
+        depends_on: build-aarch64
+        timeout_in_minutes: 40
+        agents:
+          queue: hetzner-aarch64-16cpu-32gb
+        plugins:
+          - ./ci/plugins/mzcompose:
+              composition: sqlancerplusplus
+              args: [--runtime=1500, --oracle=QUERY_PARTITIONING]
 
   - group: RQG
     key: rqg
