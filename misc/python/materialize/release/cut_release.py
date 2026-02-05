@@ -83,38 +83,38 @@ def main():
                 env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
             )
 
-        print(f"Bumping console version to {version}")
-        existing_tag = spawn.capture(["git", "tag", "-l", version], cwd=console_dir)
-        if not existing_tag:
-            spawn.runv(["git", "tag", "-a", version, "-m", version], cwd=console_dir)
-            spawn.runv(["git", "push", "origin", version], cwd=console_dir)
+        # print(f"Bumping console version to {version}")
+        # existing_tag = spawn.capture(["git", "tag", "-l", version], cwd=console_dir)
+        # if not existing_tag:
+        #     spawn.runv(["git", "tag", "-a", version, "-m", version], cwd=console_dir)
+        #     spawn.runv(["git", "push", "origin", version], cwd=console_dir)
 
-        print("Waiting for console version to be released on DockerHub (~15 min)")
+        # print("Waiting for console version to be released on DockerHub (~15 min)")
         console_version = version[1:]
         console_image = f"materialize/console:{console_version}"
-        while True:
-            try:
-                spawn.capture(["docker", "manifest", "inspect", console_image])
-            except subprocess.CalledProcessError:
-                print(f"{console_image} not yet on DockerHub, sleeping 1 min")
-                time.sleep(60)
-                continue
-            break
-        print(f"{console_image} found on DockerHub")
+        # while True:
+        #     try:
+        #         spawn.capture(["docker", "manifest", "inspect", console_image])
+        #     except subprocess.CalledProcessError:
+        #         print(f"{console_image} not yet on DockerHub, sleeping 1 min")
+        #         time.sleep(60)
+        #         continue
+        #     break
+        # print(f"{console_image} found on DockerHub")
 
-        print(f"Bumping version to {version}")
-        spawn.runv(
-            [
-                MZ_ROOT / "bin" / "ci-builder",
-                "run",
-                "stable",
-                MZ_ROOT / "bin" / "bump-version",
-                version,
-                "--no-commit",
-                "--no-console-bump",
-                "--sbom",
-            ]
-        )
+        # print(f"Bumping version to {version}")
+        # spawn.runv(
+        #     [
+        #         MZ_ROOT / "bin" / "ci-builder",
+        #         "run",
+        #         "stable",
+        #         MZ_ROOT / "bin" / "bump-version",
+        #         version,
+        #         "--no-commit",
+        #         "--no-console-bump",
+        #         "--sbom",
+        #     ]
+        # )
         dockerfile = pathlib.Path("misc/images/materialized-base/Dockerfile")
         dockerfile_text = dockerfile.read_text()
         dockerfile.write_text(
