@@ -1,0 +1,2151 @@
+// Copyright Materialize, Inc. and contributors. All rights reserved.
+//
+// Use of this software is governed by the Business Source License
+// included in the LICENSE file.
+//
+// As of the Change Date specified in that file, in accordance with
+// the Business Source License, use of this software will be governed
+// by the Apache License, Version 2.0.
+
+use bencher::{Bencher, benchmark_group, benchmark_main};
+use dec::OrderedDecimal;
+use mz_expr::{MirScalarExpr, UnaryFunc, func};
+use mz_repr::adt::numeric::Numeric;
+use mz_repr::{Datum, RowArena, SqlScalarType};
+use ordered_float::OrderedFloat;
+
+fn lit(datum: Datum, typ: SqlScalarType) -> MirScalarExpr {
+    MirScalarExpr::literal_ok(datum, typ)
+}
+
+macro_rules! bench_unary {
+    ($bench_name:ident, $variant:ident, $struct_expr:expr,
+     $a_datum:expr, $a_type:expr) => {
+        fn $bench_name(b: &mut Bencher) {
+            let f = UnaryFunc::$variant($struct_expr);
+            let a = lit($a_datum, $a_type);
+            let arena = RowArena::new();
+            let datums: &[Datum] = &[];
+            b.iter(|| f.eval(datums, &arena, &a));
+        }
+    };
+}
+
+/// Like bench_unary! but evaluates multiple inputs per iteration to get a
+/// more representative average across diverse parameter values.
+/// Reports total time for all inputs; divide by N to get per-call average.
+macro_rules! bench_unary_multi {
+    ($bench_name:ident, $variant:ident, $struct_expr:expr, $a_type:expr,
+     [ $( $a_datum:expr ),+ $(,)? ]) => {
+        fn $bench_name(b: &mut Bencher) {
+            let f = UnaryFunc::$variant($struct_expr);
+            let inputs: Vec<MirScalarExpr> = vec![ $( lit($a_datum, $a_type) ),+ ];
+            let arena = RowArena::new();
+            let datums: &[Datum] = &[];
+            b.iter(|| {
+                for a in &inputs {
+                    let _ = f.eval(datums, &arena, a);
+                }
+            });
+        }
+    };
+}
+
+// ===========================================================================
+// Step 6: Unary arithmetic + bitwise functions
+// ===========================================================================
+
+// --- Boolean ---
+bench_unary!(
+    bench_not_happy,
+    Not,
+    func::Not,
+    Datum::True,
+    SqlScalarType::Bool
+);
+bench_unary!(
+    bench_is_null_happy,
+    IsNull,
+    func::IsNull,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_is_true_happy,
+    IsTrue,
+    func::IsTrue,
+    Datum::True,
+    SqlScalarType::Bool
+);
+bench_unary!(
+    bench_is_false_happy,
+    IsFalse,
+    func::IsFalse,
+    Datum::False,
+    SqlScalarType::Bool
+);
+
+// --- Neg ---
+bench_unary!(
+    bench_neg_int16_happy,
+    NegInt16,
+    func::NegInt16,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_neg_int16_error,
+    NegInt16,
+    func::NegInt16,
+    Datum::Int16(i16::MIN),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_neg_int32_happy,
+    NegInt32,
+    func::NegInt32,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_neg_int32_error,
+    NegInt32,
+    func::NegInt32,
+    Datum::Int32(i32::MIN),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_neg_int64_happy,
+    NegInt64,
+    func::NegInt64,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_neg_int64_error,
+    NegInt64,
+    func::NegInt64,
+    Datum::Int64(i64::MIN),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_neg_float32_happy,
+    NegFloat32,
+    func::NegFloat32,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_neg_float64_happy,
+    NegFloat64,
+    func::NegFloat64,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_neg_numeric_happy,
+    NegNumeric,
+    func::NegNumeric,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_neg_interval_happy,
+    NegInterval,
+    func::NegInterval,
+    Datum::Interval(mz_repr::adt::interval::Interval::new(1, 2, 3_000_000)),
+    SqlScalarType::Interval
+);
+
+// --- Abs ---
+bench_unary!(
+    bench_abs_int16_happy,
+    AbsInt16,
+    func::AbsInt16,
+    Datum::Int16(-42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_abs_int32_happy,
+    AbsInt32,
+    func::AbsInt32,
+    Datum::Int32(-42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_abs_int64_happy,
+    AbsInt64,
+    func::AbsInt64,
+    Datum::Int64(-42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_abs_float32_happy,
+    AbsFloat32,
+    func::AbsFloat32,
+    Datum::Float32(OrderedFloat(-42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_abs_float64_happy,
+    AbsFloat64,
+    func::AbsFloat64,
+    Datum::Float64(OrderedFloat(-42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_abs_numeric_happy,
+    AbsNumeric,
+    func::AbsNumeric,
+    Datum::Numeric(OrderedDecimal(Numeric::from(-42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+
+// --- BitNot ---
+bench_unary!(
+    bench_bit_not_int16_happy,
+    BitNotInt16,
+    func::BitNotInt16,
+    Datum::Int16(0x0F0F),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_bit_not_int32_happy,
+    BitNotInt32,
+    func::BitNotInt32,
+    Datum::Int32(0x0F0F0F0F),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_bit_not_int64_happy,
+    BitNotInt64,
+    func::BitNotInt64,
+    Datum::Int64(0x0F0F0F0F),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_bit_not_uint16_happy,
+    BitNotUint16,
+    func::BitNotUint16,
+    Datum::UInt16(0x0F0F),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_bit_not_uint32_happy,
+    BitNotUint32,
+    func::BitNotUint32,
+    Datum::UInt32(0x0F0F),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_bit_not_uint64_happy,
+    BitNotUint64,
+    func::BitNotUint64,
+    Datum::UInt64(0x0F0F),
+    SqlScalarType::UInt64
+);
+
+// --- Sqrt/Cbrt (8 diverse inputs each: perfect squares, primes, tiny, huge, fractional) ---
+bench_unary_multi!(
+    bench_sqrt_float64_happy,
+    SqrtFloat64,
+    func::SqrtFloat64,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.001)),
+        Datum::Float64(OrderedFloat(2.0)),
+        Datum::Float64(OrderedFloat(16.0)),
+        Datum::Float64(OrderedFloat(17.3)),
+        Datum::Float64(OrderedFloat(999.999)),
+        Datum::Float64(OrderedFloat(1e12)),
+        Datum::Float64(OrderedFloat(1.7976931348623157e100)),
+    ]
+);
+bench_unary_multi!(
+    bench_sqrt_numeric_happy,
+    SqrtNumeric,
+    func::SqrtNumeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(2))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(16))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(17))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(9999))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(1000000))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(999999999))),
+    ]
+);
+bench_unary_multi!(
+    bench_cbrt_float64_happy,
+    CbrtFloat64,
+    func::CbrtFloat64,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.001)),
+        Datum::Float64(OrderedFloat(2.0)),
+        Datum::Float64(OrderedFloat(27.0)),
+        Datum::Float64(OrderedFloat(30.7)),
+        Datum::Float64(OrderedFloat(1e9)),
+        Datum::Float64(OrderedFloat(1.5e100)),
+        Datum::Float64(OrderedFloat(-8.0)),
+    ]
+);
+
+// --- Ceil/Floor/Round/Trunc (diverse fractional values) ---
+bench_unary_multi!(
+    bench_ceil_float32_happy,
+    CeilFloat32,
+    func::CeilFloat32,
+    SqlScalarType::Float32,
+    [
+        Datum::Float32(OrderedFloat(0.0f32)),
+        Datum::Float32(OrderedFloat(0.1)),
+        Datum::Float32(OrderedFloat(3.17)),
+        Datum::Float32(OrderedFloat(-2.7)),
+        Datum::Float32(OrderedFloat(999.999)),
+        Datum::Float32(OrderedFloat(-0.001)),
+        Datum::Float32(OrderedFloat(1e10)),
+        Datum::Float32(OrderedFloat(0.5)),
+    ]
+);
+bench_unary_multi!(
+    bench_ceil_float64_happy,
+    CeilFloat64,
+    func::CeilFloat64,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.1)),
+        Datum::Float64(OrderedFloat(3.17)),
+        Datum::Float64(OrderedFloat(-2.7)),
+        Datum::Float64(OrderedFloat(999.999)),
+        Datum::Float64(OrderedFloat(-0.001)),
+        Datum::Float64(OrderedFloat(1e15)),
+        Datum::Float64(OrderedFloat(0.5)),
+    ]
+);
+bench_unary_multi!(
+    bench_ceil_numeric_happy,
+    CeilNumeric,
+    func::CeilNumeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(0))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(314))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(-42))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(999999))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(1))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(-1))),
+    ]
+);
+bench_unary_multi!(
+    bench_floor_float32_happy,
+    FloorFloat32,
+    func::FloorFloat32,
+    SqlScalarType::Float32,
+    [
+        Datum::Float32(OrderedFloat(0.0f32)),
+        Datum::Float32(OrderedFloat(3.17)),
+        Datum::Float32(OrderedFloat(-2.7)),
+        Datum::Float32(OrderedFloat(999.999)),
+        Datum::Float32(OrderedFloat(-0.001)),
+        Datum::Float32(OrderedFloat(0.5)),
+    ]
+);
+bench_unary_multi!(
+    bench_floor_float64_happy,
+    FloorFloat64,
+    func::FloorFloat64,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(3.17)),
+        Datum::Float64(OrderedFloat(-2.7)),
+        Datum::Float64(OrderedFloat(999.999)),
+        Datum::Float64(OrderedFloat(-0.001)),
+        Datum::Float64(OrderedFloat(0.5)),
+    ]
+);
+bench_unary_multi!(
+    bench_floor_numeric_happy,
+    FloorNumeric,
+    func::FloorNumeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(0))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(314))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(-42))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(999999))),
+    ]
+);
+bench_unary_multi!(
+    bench_round_float32_happy,
+    RoundFloat32,
+    func::RoundFloat32,
+    SqlScalarType::Float32,
+    [
+        Datum::Float32(OrderedFloat(0.0f32)),
+        Datum::Float32(OrderedFloat(3.17)),
+        Datum::Float32(OrderedFloat(-2.7)),
+        Datum::Float32(OrderedFloat(0.5)),
+        Datum::Float32(OrderedFloat(999.999)),
+        Datum::Float32(OrderedFloat(-0.5)),
+    ]
+);
+bench_unary_multi!(
+    bench_round_float64_happy,
+    RoundFloat64,
+    func::RoundFloat64,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(3.17)),
+        Datum::Float64(OrderedFloat(-2.7)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(999.999)),
+        Datum::Float64(OrderedFloat(-0.5)),
+    ]
+);
+bench_unary_multi!(
+    bench_round_numeric_happy,
+    RoundNumeric,
+    func::RoundNumeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(0))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(314))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(-42))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(999999))),
+    ]
+);
+bench_unary_multi!(
+    bench_trunc_float32_happy,
+    TruncFloat32,
+    func::TruncFloat32,
+    SqlScalarType::Float32,
+    [
+        Datum::Float32(OrderedFloat(0.0f32)),
+        Datum::Float32(OrderedFloat(3.17)),
+        Datum::Float32(OrderedFloat(-2.7)),
+        Datum::Float32(OrderedFloat(999.999)),
+    ]
+);
+bench_unary_multi!(
+    bench_trunc_float64_happy,
+    TruncFloat64,
+    func::TruncFloat64,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(3.17)),
+        Datum::Float64(OrderedFloat(-2.7)),
+        Datum::Float64(OrderedFloat(999.999)),
+    ]
+);
+bench_unary_multi!(
+    bench_trunc_numeric_happy,
+    TruncNumeric,
+    func::TruncNumeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(0))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(314))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(-42))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(999999))),
+    ]
+);
+
+// --- Log/Ln/Exp (diverse magnitudes) ---
+bench_unary_multi!(
+    bench_log10_happy,
+    Log10,
+    func::Log10,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.001)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(10.0)),
+        Datum::Float64(OrderedFloat(100.0)),
+        Datum::Float64(OrderedFloat(99999.9)),
+        Datum::Float64(OrderedFloat(1e15)),
+        Datum::Float64(OrderedFloat(0.123456789)),
+        Datum::Float64(OrderedFloat(42.42)),
+    ]
+);
+bench_unary_multi!(
+    bench_log10_numeric_happy,
+    Log10Numeric,
+    func::Log10Numeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(1))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(10))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(100))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(99999))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    ]
+);
+bench_unary_multi!(
+    bench_ln_happy,
+    Ln,
+    func::Ln,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.001)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(std::f64::consts::E)),
+        Datum::Float64(OrderedFloat(100.0)),
+        Datum::Float64(OrderedFloat(99999.9)),
+        Datum::Float64(OrderedFloat(1e15)),
+        Datum::Float64(OrderedFloat(0.123456789)),
+        Datum::Float64(OrderedFloat(42.42)),
+    ]
+);
+bench_unary_multi!(
+    bench_ln_numeric_happy,
+    LnNumeric,
+    func::LnNumeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(1))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(3))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(100))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(99999))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    ]
+);
+bench_unary_multi!(
+    bench_exp_happy,
+    Exp,
+    func::Exp,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(2.0)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(10.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(-5.0)),
+        Datum::Float64(OrderedFloat(20.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_exp_numeric_happy,
+    ExpNumeric,
+    func::ExpNumeric,
+    SqlScalarType::Numeric { max_scale: None },
+    [
+        Datum::Numeric(OrderedDecimal(Numeric::from(0))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(1))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(2))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(10))),
+        Datum::Numeric(OrderedDecimal(Numeric::from(-1))),
+    ]
+);
+
+// --- Trig (diverse angles spanning the domain) ---
+bench_unary_multi!(
+    bench_cos_happy,
+    Cos,
+    func::Cos,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(std::f64::consts::PI)),
+        Datum::Float64(OrderedFloat(std::f64::consts::FRAC_PI_2)),
+        Datum::Float64(OrderedFloat(2.5)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(100.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_acos_happy,
+    Acos,
+    func::Acos,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(-0.5)),
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.1)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(0.9)),
+        Datum::Float64(OrderedFloat(0.999)),
+        Datum::Float64(OrderedFloat(1.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_cosh_happy,
+    Cosh,
+    func::Cosh,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(2.0)),
+        Datum::Float64(OrderedFloat(5.0)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(10.0)),
+        Datum::Float64(OrderedFloat(-5.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_acosh_happy,
+    Acosh,
+    func::Acosh,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(1.5)),
+        Datum::Float64(OrderedFloat(2.0)),
+        Datum::Float64(OrderedFloat(5.0)),
+        Datum::Float64(OrderedFloat(10.0)),
+        Datum::Float64(OrderedFloat(100.0)),
+        Datum::Float64(OrderedFloat(1.001)),
+        Datum::Float64(OrderedFloat(50.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_sin_happy,
+    Sin,
+    func::Sin,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(std::f64::consts::PI)),
+        Datum::Float64(OrderedFloat(std::f64::consts::FRAC_PI_2)),
+        Datum::Float64(OrderedFloat(2.5)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(100.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_asin_happy,
+    Asin,
+    func::Asin,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(-0.5)),
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.1)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(0.9)),
+        Datum::Float64(OrderedFloat(0.999)),
+        Datum::Float64(OrderedFloat(1.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_sinh_happy,
+    Sinh,
+    func::Sinh,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(2.0)),
+        Datum::Float64(OrderedFloat(5.0)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(10.0)),
+        Datum::Float64(OrderedFloat(-5.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_asinh_happy,
+    Asinh,
+    func::Asinh,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(10.0)),
+        Datum::Float64(OrderedFloat(100.0)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(-10.0)),
+        Datum::Float64(OrderedFloat(0.001)),
+    ]
+);
+bench_unary_multi!(
+    bench_tan_happy,
+    Tan,
+    func::Tan,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(0.785)), // ~pi/4
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(1.5)), // close to pi/2
+        Datum::Float64(OrderedFloat(3.0)),
+        Datum::Float64(OrderedFloat(100.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_atan_happy,
+    Atan,
+    func::Atan,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(10.0)),
+        Datum::Float64(OrderedFloat(100.0)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(-100.0)),
+        Datum::Float64(OrderedFloat(0.001)),
+    ]
+);
+bench_unary_multi!(
+    bench_tanh_happy,
+    Tanh,
+    func::Tanh,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(5.0)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(-5.0)),
+        Datum::Float64(OrderedFloat(20.0)),
+        Datum::Float64(OrderedFloat(0.001)),
+    ]
+);
+bench_unary_multi!(
+    bench_atanh_happy,
+    Atanh,
+    func::Atanh,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(0.1)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(0.9)),
+        Datum::Float64(OrderedFloat(0.99)),
+        Datum::Float64(OrderedFloat(-0.5)),
+        Datum::Float64(OrderedFloat(-0.9)),
+        Datum::Float64(OrderedFloat(0.001)),
+    ]
+);
+bench_unary_multi!(
+    bench_cot_happy,
+    Cot,
+    func::Cot,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.1)),
+        Datum::Float64(OrderedFloat(0.5)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(std::f64::consts::FRAC_PI_4)),
+        Datum::Float64(OrderedFloat(2.0)),
+        Datum::Float64(OrderedFloat(3.0)),
+        Datum::Float64(OrderedFloat(-1.0)),
+        Datum::Float64(OrderedFloat(0.01)),
+    ]
+);
+bench_unary_multi!(
+    bench_degrees_happy,
+    Degrees,
+    func::Degrees,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(std::f64::consts::PI)),
+        Datum::Float64(OrderedFloat(std::f64::consts::FRAC_PI_2)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(-std::f64::consts::PI)),
+        Datum::Float64(OrderedFloat(6.37)),
+        Datum::Float64(OrderedFloat(0.001)),
+        Datum::Float64(OrderedFloat(100.0)),
+    ]
+);
+bench_unary_multi!(
+    bench_radians_happy,
+    Radians,
+    func::Radians,
+    SqlScalarType::Float64,
+    [
+        Datum::Float64(OrderedFloat(0.0)),
+        Datum::Float64(OrderedFloat(45.0)),
+        Datum::Float64(OrderedFloat(90.0)),
+        Datum::Float64(OrderedFloat(180.0)),
+        Datum::Float64(OrderedFloat(360.0)),
+        Datum::Float64(OrderedFloat(-180.0)),
+        Datum::Float64(OrderedFloat(1.0)),
+        Datum::Float64(OrderedFloat(0.001)),
+    ]
+);
+
+// ===========================================================================
+// Step 7: Unary cast functions (unit struct casts only)
+// ===========================================================================
+
+// --- Bool casts ---
+bench_unary!(
+    bench_cast_bool_to_string_happy,
+    CastBoolToString,
+    func::CastBoolToString,
+    Datum::True,
+    SqlScalarType::Bool
+);
+bench_unary!(
+    bench_cast_bool_to_string_nonstandard_happy,
+    CastBoolToStringNonstandard,
+    func::CastBoolToStringNonstandard,
+    Datum::True,
+    SqlScalarType::Bool
+);
+bench_unary!(
+    bench_cast_bool_to_int32_happy,
+    CastBoolToInt32,
+    func::CastBoolToInt32,
+    Datum::True,
+    SqlScalarType::Bool
+);
+bench_unary!(
+    bench_cast_bool_to_int64_happy,
+    CastBoolToInt64,
+    func::CastBoolToInt64,
+    Datum::True,
+    SqlScalarType::Bool
+);
+
+// --- Int16 casts ---
+bench_unary!(
+    bench_cast_int16_to_float32_happy,
+    CastInt16ToFloat32,
+    func::CastInt16ToFloat32,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int16_to_float64_happy,
+    CastInt16ToFloat64,
+    func::CastInt16ToFloat64,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int16_to_int32_happy,
+    CastInt16ToInt32,
+    func::CastInt16ToInt32,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int16_to_int64_happy,
+    CastInt16ToInt64,
+    func::CastInt16ToInt64,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int16_to_uint16_happy,
+    CastInt16ToUint16,
+    func::CastInt16ToUint16,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int16_to_uint32_happy,
+    CastInt16ToUint32,
+    func::CastInt16ToUint32,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int16_to_uint64_happy,
+    CastInt16ToUint64,
+    func::CastInt16ToUint64,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int16_to_string_happy,
+    CastInt16ToString,
+    func::CastInt16ToString,
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+
+// --- Int32 casts ---
+bench_unary!(
+    bench_cast_int32_to_bool_happy,
+    CastInt32ToBool,
+    func::CastInt32ToBool,
+    Datum::Int32(1),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_float32_happy,
+    CastInt32ToFloat32,
+    func::CastInt32ToFloat32,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_float64_happy,
+    CastInt32ToFloat64,
+    func::CastInt32ToFloat64,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_int16_happy,
+    CastInt32ToInt16,
+    func::CastInt32ToInt16,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_int64_happy,
+    CastInt32ToInt64,
+    func::CastInt32ToInt64,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_uint16_happy,
+    CastInt32ToUint16,
+    func::CastInt32ToUint16,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_uint32_happy,
+    CastInt32ToUint32,
+    func::CastInt32ToUint32,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_uint64_happy,
+    CastInt32ToUint64,
+    func::CastInt32ToUint64,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_string_happy,
+    CastInt32ToString,
+    func::CastInt32ToString,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int32_to_oid_happy,
+    CastInt32ToOid,
+    func::CastInt32ToOid,
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+
+// --- Int64 casts ---
+bench_unary!(
+    bench_cast_int64_to_int16_happy,
+    CastInt64ToInt16,
+    func::CastInt64ToInt16,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_int32_happy,
+    CastInt64ToInt32,
+    func::CastInt64ToInt32,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_uint16_happy,
+    CastInt64ToUint16,
+    func::CastInt64ToUint16,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_uint32_happy,
+    CastInt64ToUint32,
+    func::CastInt64ToUint32,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_uint64_happy,
+    CastInt64ToUint64,
+    func::CastInt64ToUint64,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_bool_happy,
+    CastInt64ToBool,
+    func::CastInt64ToBool,
+    Datum::Int64(1),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_float32_happy,
+    CastInt64ToFloat32,
+    func::CastInt64ToFloat32,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_float64_happy,
+    CastInt64ToFloat64,
+    func::CastInt64ToFloat64,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_string_happy,
+    CastInt64ToString,
+    func::CastInt64ToString,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_int64_to_oid_happy,
+    CastInt64ToOid,
+    func::CastInt64ToOid,
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+
+// --- Uint16 casts ---
+bench_unary!(
+    bench_cast_uint16_to_uint32_happy,
+    CastUint16ToUint32,
+    func::CastUint16ToUint32,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint16_to_uint64_happy,
+    CastUint16ToUint64,
+    func::CastUint16ToUint64,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint16_to_int16_happy,
+    CastUint16ToInt16,
+    func::CastUint16ToInt16,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint16_to_int32_happy,
+    CastUint16ToInt32,
+    func::CastUint16ToInt32,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint16_to_int64_happy,
+    CastUint16ToInt64,
+    func::CastUint16ToInt64,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint16_to_float32_happy,
+    CastUint16ToFloat32,
+    func::CastUint16ToFloat32,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint16_to_float64_happy,
+    CastUint16ToFloat64,
+    func::CastUint16ToFloat64,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint16_to_string_happy,
+    CastUint16ToString,
+    func::CastUint16ToString,
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+
+// --- Uint32 casts ---
+bench_unary!(
+    bench_cast_uint32_to_uint16_happy,
+    CastUint32ToUint16,
+    func::CastUint32ToUint16,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint32_to_uint64_happy,
+    CastUint32ToUint64,
+    func::CastUint32ToUint64,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint32_to_int16_happy,
+    CastUint32ToInt16,
+    func::CastUint32ToInt16,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint32_to_int32_happy,
+    CastUint32ToInt32,
+    func::CastUint32ToInt32,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint32_to_int64_happy,
+    CastUint32ToInt64,
+    func::CastUint32ToInt64,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint32_to_float32_happy,
+    CastUint32ToFloat32,
+    func::CastUint32ToFloat32,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint32_to_float64_happy,
+    CastUint32ToFloat64,
+    func::CastUint32ToFloat64,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint32_to_string_happy,
+    CastUint32ToString,
+    func::CastUint32ToString,
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+
+// --- Uint64 casts ---
+bench_unary!(
+    bench_cast_uint64_to_uint16_happy,
+    CastUint64ToUint16,
+    func::CastUint64ToUint16,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_uint64_to_uint32_happy,
+    CastUint64ToUint32,
+    func::CastUint64ToUint32,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_uint64_to_int16_happy,
+    CastUint64ToInt16,
+    func::CastUint64ToInt16,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_uint64_to_int32_happy,
+    CastUint64ToInt32,
+    func::CastUint64ToInt32,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_uint64_to_int64_happy,
+    CastUint64ToInt64,
+    func::CastUint64ToInt64,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_uint64_to_float32_happy,
+    CastUint64ToFloat32,
+    func::CastUint64ToFloat32,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_uint64_to_float64_happy,
+    CastUint64ToFloat64,
+    func::CastUint64ToFloat64,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_uint64_to_string_happy,
+    CastUint64ToString,
+    func::CastUint64ToString,
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+
+// --- Float32 casts ---
+bench_unary!(
+    bench_cast_float32_to_int16_happy,
+    CastFloat32ToInt16,
+    func::CastFloat32ToInt16,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float32_to_int32_happy,
+    CastFloat32ToInt32,
+    func::CastFloat32ToInt32,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float32_to_int64_happy,
+    CastFloat32ToInt64,
+    func::CastFloat32ToInt64,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float32_to_uint16_happy,
+    CastFloat32ToUint16,
+    func::CastFloat32ToUint16,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float32_to_uint32_happy,
+    CastFloat32ToUint32,
+    func::CastFloat32ToUint32,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float32_to_uint64_happy,
+    CastFloat32ToUint64,
+    func::CastFloat32ToUint64,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float32_to_float64_happy,
+    CastFloat32ToFloat64,
+    func::CastFloat32ToFloat64,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float32_to_string_happy,
+    CastFloat32ToString,
+    func::CastFloat32ToString,
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+
+// --- Float64 casts ---
+bench_unary!(
+    bench_cast_float64_to_int16_happy,
+    CastFloat64ToInt16,
+    func::CastFloat64ToInt16,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_cast_float64_to_int32_happy,
+    CastFloat64ToInt32,
+    func::CastFloat64ToInt32,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_cast_float64_to_int64_happy,
+    CastFloat64ToInt64,
+    func::CastFloat64ToInt64,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_cast_float64_to_uint16_happy,
+    CastFloat64ToUint16,
+    func::CastFloat64ToUint16,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_cast_float64_to_uint32_happy,
+    CastFloat64ToUint32,
+    func::CastFloat64ToUint32,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_cast_float64_to_uint64_happy,
+    CastFloat64ToUint64,
+    func::CastFloat64ToUint64,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_cast_float64_to_float32_happy,
+    CastFloat64ToFloat32,
+    func::CastFloat64ToFloat32,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+bench_unary!(
+    bench_cast_float64_to_string_happy,
+    CastFloat64ToString,
+    func::CastFloat64ToString,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+
+// --- Numeric casts ---
+bench_unary!(
+    bench_cast_numeric_to_float32_happy,
+    CastNumericToFloat32,
+    func::CastNumericToFloat32,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_float64_happy,
+    CastNumericToFloat64,
+    func::CastNumericToFloat64,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_int16_happy,
+    CastNumericToInt16,
+    func::CastNumericToInt16,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_int32_happy,
+    CastNumericToInt32,
+    func::CastNumericToInt32,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_int64_happy,
+    CastNumericToInt64,
+    func::CastNumericToInt64,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_uint16_happy,
+    CastNumericToUint16,
+    func::CastNumericToUint16,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_uint32_happy,
+    CastNumericToUint32,
+    func::CastNumericToUint32,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_uint64_happy,
+    CastNumericToUint64,
+    func::CastNumericToUint64,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+bench_unary!(
+    bench_cast_numeric_to_string_happy,
+    CastNumericToString,
+    func::CastNumericToString,
+    Datum::Numeric(OrderedDecimal(Numeric::from(42))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+
+// --- Parameterized casts (XToNumeric) ---
+bench_unary!(
+    bench_cast_int16_to_numeric_happy,
+    CastInt16ToNumeric,
+    func::CastInt16ToNumeric(None),
+    Datum::Int16(42),
+    SqlScalarType::Int16
+);
+bench_unary!(
+    bench_cast_int32_to_numeric_happy,
+    CastInt32ToNumeric,
+    func::CastInt32ToNumeric(None),
+    Datum::Int32(42),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_cast_int64_to_numeric_happy,
+    CastInt64ToNumeric,
+    func::CastInt64ToNumeric(None),
+    Datum::Int64(42),
+    SqlScalarType::Int64
+);
+bench_unary!(
+    bench_cast_uint16_to_numeric_happy,
+    CastUint16ToNumeric,
+    func::CastUint16ToNumeric(None),
+    Datum::UInt16(42),
+    SqlScalarType::UInt16
+);
+bench_unary!(
+    bench_cast_uint32_to_numeric_happy,
+    CastUint32ToNumeric,
+    func::CastUint32ToNumeric(None),
+    Datum::UInt32(42),
+    SqlScalarType::UInt32
+);
+bench_unary!(
+    bench_cast_uint64_to_numeric_happy,
+    CastUint64ToNumeric,
+    func::CastUint64ToNumeric(None),
+    Datum::UInt64(42),
+    SqlScalarType::UInt64
+);
+bench_unary!(
+    bench_cast_float32_to_numeric_happy,
+    CastFloat32ToNumeric,
+    func::CastFloat32ToNumeric(None),
+    Datum::Float32(OrderedFloat(42.0)),
+    SqlScalarType::Float32
+);
+bench_unary!(
+    bench_cast_float64_to_numeric_happy,
+    CastFloat64ToNumeric,
+    func::CastFloat64ToNumeric(None),
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Float64
+);
+
+// --- String parsing casts ---
+bench_unary!(
+    bench_cast_string_to_bool_happy,
+    CastStringToBool,
+    func::CastStringToBool,
+    Datum::String("true"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_int16_happy,
+    CastStringToInt16,
+    func::CastStringToInt16,
+    Datum::String("42"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_int32_happy,
+    CastStringToInt32,
+    func::CastStringToInt32,
+    Datum::String("42"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_int64_happy,
+    CastStringToInt64,
+    func::CastStringToInt64,
+    Datum::String("42"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_uint16_happy,
+    CastStringToUint16,
+    func::CastStringToUint16,
+    Datum::String("42"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_uint32_happy,
+    CastStringToUint32,
+    func::CastStringToUint32,
+    Datum::String("42"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_uint64_happy,
+    CastStringToUint64,
+    func::CastStringToUint64,
+    Datum::String("42"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_float32_happy,
+    CastStringToFloat32,
+    func::CastStringToFloat32,
+    Datum::String("42.0"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_float64_happy,
+    CastStringToFloat64,
+    func::CastStringToFloat64,
+    Datum::String("42.0"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_date_happy,
+    CastStringToDate,
+    func::CastStringToDate,
+    Datum::String("2024-01-15"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_time_happy,
+    CastStringToTime,
+    func::CastStringToTime,
+    Datum::String("12:30:45"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_timestamp_happy,
+    CastStringToTimestamp,
+    func::CastStringToTimestamp(None),
+    Datum::String("2024-01-15 12:30:45"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_timestamp_tz_happy,
+    CastStringToTimestampTz,
+    func::CastStringToTimestampTz(None),
+    Datum::String("2024-01-15 12:30:45+00"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_interval_happy,
+    CastStringToInterval,
+    func::CastStringToInterval,
+    Datum::String("1 day 2 hours"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_uuid_happy,
+    CastStringToUuid,
+    func::CastStringToUuid,
+    Datum::String("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_jsonb_happy,
+    CastStringToJsonb,
+    func::CastStringToJsonb,
+    Datum::String("42"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_cast_string_to_bytes_happy,
+    CastStringToBytes,
+    func::CastStringToBytes,
+    Datum::String("\\xDEADBEEF"),
+    SqlScalarType::String
+);
+
+// --- Other casts ---
+bench_unary!(
+    bench_cast_oid_to_int32_happy,
+    CastOidToInt32,
+    func::CastOidToInt32,
+    Datum::UInt32(42),
+    SqlScalarType::Oid
+);
+bench_unary!(
+    bench_cast_oid_to_int64_happy,
+    CastOidToInt64,
+    func::CastOidToInt64,
+    Datum::UInt32(42),
+    SqlScalarType::Oid
+);
+bench_unary!(
+    bench_cast_oid_to_string_happy,
+    CastOidToString,
+    func::CastOidToString,
+    Datum::UInt32(42),
+    SqlScalarType::Oid
+);
+bench_unary!(
+    bench_cast_uuid_to_string_happy,
+    CastUuidToString,
+    func::CastUuidToString,
+    Datum::Uuid(uuid::Uuid::nil()),
+    SqlScalarType::Uuid
+);
+bench_unary!(
+    bench_cast_bytes_to_string_happy,
+    CastBytesToString,
+    func::CastBytesToString,
+    Datum::Bytes(b"hello"),
+    SqlScalarType::Bytes
+);
+bench_unary!(
+    bench_cast_jsonb_to_string_happy,
+    CastJsonbToString,
+    func::CastJsonbToString,
+    Datum::String("hello"),
+    SqlScalarType::Jsonb
+);
+bench_unary!(
+    bench_cast_jsonb_to_int16_happy,
+    CastJsonbToInt16,
+    func::CastJsonbToInt16,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Jsonb
+);
+bench_unary!(
+    bench_cast_jsonb_to_int32_happy,
+    CastJsonbToInt32,
+    func::CastJsonbToInt32,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Jsonb
+);
+bench_unary!(
+    bench_cast_jsonb_to_int64_happy,
+    CastJsonbToInt64,
+    func::CastJsonbToInt64,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Jsonb
+);
+bench_unary!(
+    bench_cast_jsonb_to_float32_happy,
+    CastJsonbToFloat32,
+    func::CastJsonbToFloat32,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Jsonb
+);
+bench_unary!(
+    bench_cast_jsonb_to_float64_happy,
+    CastJsonbToFloat64,
+    func::CastJsonbToFloat64,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Jsonb
+);
+bench_unary!(
+    bench_cast_jsonb_to_bool_happy,
+    CastJsonbToBool,
+    func::CastJsonbToBool,
+    Datum::True,
+    SqlScalarType::Jsonb
+);
+
+// ===========================================================================
+// Step 8: Remaining unary functions
+// ===========================================================================
+
+// --- String operations ---
+bench_unary!(
+    bench_upper_happy,
+    Upper,
+    func::Upper,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_lower_happy,
+    Lower,
+    func::Lower,
+    Datum::String("HELLO"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_initcap_happy,
+    Initcap,
+    func::Initcap,
+    Datum::String("hello world"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_trim_whitespace_happy,
+    TrimWhitespace,
+    func::TrimWhitespace,
+    Datum::String("  hello  "),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_trim_leading_whitespace_happy,
+    TrimLeadingWhitespace,
+    func::TrimLeadingWhitespace,
+    Datum::String("  hello  "),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_trim_trailing_whitespace_happy,
+    TrimTrailingWhitespace,
+    func::TrimTrailingWhitespace,
+    Datum::String("  hello  "),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_ascii_happy,
+    Ascii,
+    func::Ascii,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_char_length_happy,
+    CharLength,
+    func::CharLength,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_bit_length_bytes_happy,
+    BitLengthBytes,
+    func::BitLengthBytes,
+    Datum::Bytes(b"hello"),
+    SqlScalarType::Bytes
+);
+bench_unary!(
+    bench_bit_length_string_happy,
+    BitLengthString,
+    func::BitLengthString,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_byte_length_bytes_happy,
+    ByteLengthBytes,
+    func::ByteLengthBytes,
+    Datum::Bytes(b"hello"),
+    SqlScalarType::Bytes
+);
+bench_unary!(
+    bench_byte_length_string_happy,
+    ByteLengthString,
+    func::ByteLengthString,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_bit_count_bytes_happy,
+    BitCountBytes,
+    func::BitCountBytes,
+    Datum::Bytes(b"\xff"),
+    SqlScalarType::Bytes
+);
+bench_unary!(
+    bench_chr_happy,
+    Chr,
+    func::Chr,
+    Datum::Int32(65),
+    SqlScalarType::Int32
+);
+bench_unary!(
+    bench_reverse_happy,
+    Reverse,
+    func::Reverse,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_quote_ident_happy,
+    QuoteIdent,
+    func::QuoteIdent,
+    Datum::String("my_table"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_pg_size_pretty_happy,
+    PgSizePretty,
+    func::PgSizePretty,
+    Datum::Numeric(OrderedDecimal(Numeric::from(1048576))),
+    SqlScalarType::Numeric { max_scale: None }
+);
+
+// --- Jsonb ---
+bench_unary!(
+    bench_jsonb_typeof_happy,
+    JsonbTypeof,
+    func::JsonbTypeof,
+    Datum::Float64(OrderedFloat(42.0)),
+    SqlScalarType::Jsonb
+);
+bench_unary!(
+    bench_jsonb_pretty_happy,
+    JsonbPretty,
+    func::JsonbPretty,
+    Datum::String("hello"),
+    SqlScalarType::Jsonb
+);
+
+// --- Date/time ---
+bench_unary!(
+    bench_justify_days_happy,
+    JustifyDays,
+    func::JustifyDays,
+    Datum::Interval(mz_repr::adt::interval::Interval::new(0, 35, 0)),
+    SqlScalarType::Interval
+);
+bench_unary!(
+    bench_justify_hours_happy,
+    JustifyHours,
+    func::JustifyHours,
+    Datum::Interval(mz_repr::adt::interval::Interval::new(
+        0,
+        0,
+        30 * 3_600_000_000
+    )),
+    SqlScalarType::Interval
+);
+bench_unary!(
+    bench_justify_interval_happy,
+    JustifyInterval,
+    func::JustifyInterval,
+    Datum::Interval(mz_repr::adt::interval::Interval::new(
+        0,
+        35,
+        30 * 3_600_000_000
+    )),
+    SqlScalarType::Interval
+);
+bench_unary!(
+    bench_cast_date_to_string_happy,
+    CastDateToString,
+    func::CastDateToString,
+    Datum::Date(mz_repr::adt::date::Date::from_pg_epoch(0).unwrap()),
+    SqlScalarType::Date
+);
+bench_unary!(
+    bench_cast_time_to_string_happy,
+    CastTimeToString,
+    func::CastTimeToString,
+    Datum::Time(chrono::NaiveTime::from_hms_opt(12, 30, 45).unwrap()),
+    SqlScalarType::Time
+);
+bench_unary!(
+    bench_cast_interval_to_string_happy,
+    CastIntervalToString,
+    func::CastIntervalToString,
+    Datum::Interval(mz_repr::adt::interval::Interval::new(1, 2, 3_000_000)),
+    SqlScalarType::Interval
+);
+bench_unary!(
+    bench_cast_interval_to_time_happy,
+    CastIntervalToTime,
+    func::CastIntervalToTime,
+    Datum::Interval(mz_repr::adt::interval::Interval::new(0, 0, 45_000_000_000)),
+    SqlScalarType::Interval
+);
+bench_unary!(
+    bench_cast_time_to_interval_happy,
+    CastTimeToInterval,
+    func::CastTimeToInterval,
+    Datum::Time(chrono::NaiveTime::from_hms_opt(12, 30, 45).unwrap()),
+    SqlScalarType::Time
+);
+
+// --- Hash functions ---
+bench_unary!(
+    bench_crc32_bytes_happy,
+    Crc32Bytes,
+    func::Crc32Bytes,
+    Datum::Bytes(b"hello"),
+    SqlScalarType::Bytes
+);
+bench_unary!(
+    bench_crc32_string_happy,
+    Crc32String,
+    func::Crc32String,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_kafka_murmur2_bytes_happy,
+    KafkaMurmur2Bytes,
+    func::KafkaMurmur2Bytes,
+    Datum::Bytes(b"hello"),
+    SqlScalarType::Bytes
+);
+bench_unary!(
+    bench_kafka_murmur2_string_happy,
+    KafkaMurmur2String,
+    func::KafkaMurmur2String,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+bench_unary!(
+    bench_seahash_bytes_happy,
+    SeahashBytes,
+    func::SeahashBytes,
+    Datum::Bytes(b"hello"),
+    SqlScalarType::Bytes
+);
+bench_unary!(
+    bench_seahash_string_happy,
+    SeahashString,
+    func::SeahashString,
+    Datum::String("hello"),
+    SqlScalarType::String
+);
+
+// ===========================================================================
+// Benchmark registration
+// ===========================================================================
+
+benchmark_group!(
+    arithmetic_benches,
+    // Boolean
+    bench_not_happy,
+    bench_is_null_happy,
+    bench_is_true_happy,
+    bench_is_false_happy,
+    // Neg
+    bench_neg_int16_happy,
+    bench_neg_int16_error,
+    bench_neg_int32_happy,
+    bench_neg_int32_error,
+    bench_neg_int64_happy,
+    bench_neg_int64_error,
+    bench_neg_float32_happy,
+    bench_neg_float64_happy,
+    bench_neg_numeric_happy,
+    bench_neg_interval_happy,
+    // Abs
+    bench_abs_int16_happy,
+    bench_abs_int32_happy,
+    bench_abs_int64_happy,
+    bench_abs_float32_happy,
+    bench_abs_float64_happy,
+    bench_abs_numeric_happy,
+    // BitNot
+    bench_bit_not_int16_happy,
+    bench_bit_not_int32_happy,
+    bench_bit_not_int64_happy,
+    bench_bit_not_uint16_happy,
+    bench_bit_not_uint32_happy,
+    bench_bit_not_uint64_happy,
+    // Sqrt/Cbrt
+    bench_sqrt_float64_happy,
+    bench_sqrt_numeric_happy,
+    bench_cbrt_float64_happy,
+    // Ceil/Floor/Round/Trunc
+    bench_ceil_float32_happy,
+    bench_ceil_float64_happy,
+    bench_ceil_numeric_happy,
+    bench_floor_float32_happy,
+    bench_floor_float64_happy,
+    bench_floor_numeric_happy,
+    bench_round_float32_happy,
+    bench_round_float64_happy,
+    bench_round_numeric_happy,
+    bench_trunc_float32_happy,
+    bench_trunc_float64_happy,
+    bench_trunc_numeric_happy,
+    // Log/Ln/Exp
+    bench_log10_happy,
+    bench_log10_numeric_happy,
+    bench_ln_happy,
+    bench_ln_numeric_happy,
+    bench_exp_happy,
+    bench_exp_numeric_happy,
+    // Trig
+    bench_cos_happy,
+    bench_acos_happy,
+    bench_cosh_happy,
+    bench_acosh_happy,
+    bench_sin_happy,
+    bench_asin_happy,
+    bench_sinh_happy,
+    bench_asinh_happy,
+    bench_tan_happy,
+    bench_atan_happy,
+    bench_tanh_happy,
+    bench_atanh_happy,
+    bench_cot_happy,
+    bench_degrees_happy,
+    bench_radians_happy
+);
+
+benchmark_group!(
+    cast_benches,
+    // Bool
+    bench_cast_bool_to_string_happy,
+    bench_cast_bool_to_string_nonstandard_happy,
+    bench_cast_bool_to_int32_happy,
+    bench_cast_bool_to_int64_happy,
+    // Int16
+    bench_cast_int16_to_float32_happy,
+    bench_cast_int16_to_float64_happy,
+    bench_cast_int16_to_int32_happy,
+    bench_cast_int16_to_int64_happy,
+    bench_cast_int16_to_uint16_happy,
+    bench_cast_int16_to_uint32_happy,
+    bench_cast_int16_to_uint64_happy,
+    bench_cast_int16_to_string_happy,
+    bench_cast_int16_to_numeric_happy,
+    // Int32
+    bench_cast_int32_to_bool_happy,
+    bench_cast_int32_to_float32_happy,
+    bench_cast_int32_to_float64_happy,
+    bench_cast_int32_to_int16_happy,
+    bench_cast_int32_to_int64_happy,
+    bench_cast_int32_to_uint16_happy,
+    bench_cast_int32_to_uint32_happy,
+    bench_cast_int32_to_uint64_happy,
+    bench_cast_int32_to_string_happy,
+    bench_cast_int32_to_oid_happy,
+    bench_cast_int32_to_numeric_happy,
+    // Int64
+    bench_cast_int64_to_int16_happy,
+    bench_cast_int64_to_int32_happy,
+    bench_cast_int64_to_uint16_happy,
+    bench_cast_int64_to_uint32_happy,
+    bench_cast_int64_to_uint64_happy,
+    bench_cast_int64_to_bool_happy,
+    bench_cast_int64_to_float32_happy,
+    bench_cast_int64_to_float64_happy,
+    bench_cast_int64_to_string_happy,
+    bench_cast_int64_to_oid_happy,
+    bench_cast_int64_to_numeric_happy,
+    // Uint16
+    bench_cast_uint16_to_uint32_happy,
+    bench_cast_uint16_to_uint64_happy,
+    bench_cast_uint16_to_int16_happy,
+    bench_cast_uint16_to_int32_happy,
+    bench_cast_uint16_to_int64_happy,
+    bench_cast_uint16_to_float32_happy,
+    bench_cast_uint16_to_float64_happy,
+    bench_cast_uint16_to_string_happy,
+    bench_cast_uint16_to_numeric_happy,
+    // Uint32
+    bench_cast_uint32_to_uint16_happy,
+    bench_cast_uint32_to_uint64_happy,
+    bench_cast_uint32_to_int16_happy,
+    bench_cast_uint32_to_int32_happy,
+    bench_cast_uint32_to_int64_happy,
+    bench_cast_uint32_to_float32_happy,
+    bench_cast_uint32_to_float64_happy,
+    bench_cast_uint32_to_string_happy,
+    bench_cast_uint32_to_numeric_happy,
+    // Uint64
+    bench_cast_uint64_to_uint16_happy,
+    bench_cast_uint64_to_uint32_happy,
+    bench_cast_uint64_to_int16_happy,
+    bench_cast_uint64_to_int32_happy,
+    bench_cast_uint64_to_int64_happy,
+    bench_cast_uint64_to_float32_happy,
+    bench_cast_uint64_to_float64_happy,
+    bench_cast_uint64_to_string_happy,
+    bench_cast_uint64_to_numeric_happy,
+    // Float32
+    bench_cast_float32_to_int16_happy,
+    bench_cast_float32_to_int32_happy,
+    bench_cast_float32_to_int64_happy,
+    bench_cast_float32_to_uint16_happy,
+    bench_cast_float32_to_uint32_happy,
+    bench_cast_float32_to_uint64_happy,
+    bench_cast_float32_to_float64_happy,
+    bench_cast_float32_to_string_happy,
+    bench_cast_float32_to_numeric_happy,
+    // Float64
+    bench_cast_float64_to_int16_happy,
+    bench_cast_float64_to_int32_happy,
+    bench_cast_float64_to_int64_happy,
+    bench_cast_float64_to_uint16_happy,
+    bench_cast_float64_to_uint32_happy,
+    bench_cast_float64_to_uint64_happy,
+    bench_cast_float64_to_float32_happy,
+    bench_cast_float64_to_string_happy,
+    bench_cast_float64_to_numeric_happy,
+    // Numeric
+    bench_cast_numeric_to_float32_happy,
+    bench_cast_numeric_to_float64_happy,
+    bench_cast_numeric_to_int16_happy,
+    bench_cast_numeric_to_int32_happy,
+    bench_cast_numeric_to_int64_happy,
+    bench_cast_numeric_to_uint16_happy,
+    bench_cast_numeric_to_uint32_happy,
+    bench_cast_numeric_to_uint64_happy,
+    bench_cast_numeric_to_string_happy,
+    // String parsing
+    bench_cast_string_to_bool_happy,
+    bench_cast_string_to_int16_happy,
+    bench_cast_string_to_int32_happy,
+    bench_cast_string_to_int64_happy,
+    bench_cast_string_to_uint16_happy,
+    bench_cast_string_to_uint32_happy,
+    bench_cast_string_to_uint64_happy,
+    bench_cast_string_to_float32_happy,
+    bench_cast_string_to_float64_happy,
+    bench_cast_string_to_date_happy,
+    bench_cast_string_to_time_happy,
+    bench_cast_string_to_timestamp_happy,
+    bench_cast_string_to_timestamp_tz_happy,
+    bench_cast_string_to_interval_happy,
+    bench_cast_string_to_uuid_happy,
+    bench_cast_string_to_jsonb_happy,
+    bench_cast_string_to_bytes_happy,
+    // Other casts
+    bench_cast_oid_to_int32_happy,
+    bench_cast_oid_to_int64_happy,
+    bench_cast_oid_to_string_happy,
+    bench_cast_uuid_to_string_happy,
+    bench_cast_bytes_to_string_happy,
+    bench_cast_jsonb_to_string_happy,
+    bench_cast_jsonb_to_int16_happy,
+    bench_cast_jsonb_to_int32_happy,
+    bench_cast_jsonb_to_int64_happy,
+    bench_cast_jsonb_to_float32_happy,
+    bench_cast_jsonb_to_float64_happy,
+    bench_cast_jsonb_to_bool_happy
+);
+
+benchmark_group!(
+    remaining_benches,
+    // String operations
+    bench_upper_happy,
+    bench_lower_happy,
+    bench_initcap_happy,
+    bench_trim_whitespace_happy,
+    bench_trim_leading_whitespace_happy,
+    bench_trim_trailing_whitespace_happy,
+    bench_ascii_happy,
+    bench_char_length_happy,
+    bench_bit_length_bytes_happy,
+    bench_bit_length_string_happy,
+    bench_byte_length_bytes_happy,
+    bench_byte_length_string_happy,
+    bench_bit_count_bytes_happy,
+    bench_chr_happy,
+    bench_reverse_happy,
+    bench_quote_ident_happy,
+    bench_pg_size_pretty_happy,
+    // Jsonb
+    bench_jsonb_typeof_happy,
+    bench_jsonb_pretty_happy,
+    // Date/time
+    bench_justify_days_happy,
+    bench_justify_hours_happy,
+    bench_justify_interval_happy,
+    bench_cast_date_to_string_happy,
+    bench_cast_time_to_string_happy,
+    bench_cast_interval_to_string_happy,
+    bench_cast_interval_to_time_happy,
+    bench_cast_time_to_interval_happy,
+    // Hash functions
+    bench_crc32_bytes_happy,
+    bench_crc32_string_happy,
+    bench_kafka_murmur2_bytes_happy,
+    bench_kafka_murmur2_string_happy,
+    bench_seahash_bytes_happy,
+    bench_seahash_string_happy
+);
+
+benchmark_main!(arithmetic_benches, cast_benches, remaining_benches);
