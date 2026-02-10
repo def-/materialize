@@ -1,6 +1,7 @@
 ---
 source: src/expr/src/scalar/func/impls/numeric.rs
-expression: "#[sqlfunc(sqlname = \"log10numeric\")]\nfn log10_numeric(a: Numeric) -> Result<Numeric, EvalError> {\n    log_numeric(a, dec::Context::log10, \"log10\")\n}\n"
+assertion_line: 219
+expression: "#[sqlfunc(sqlname = \"log10numeric\")]\nfn log10_numeric(a: Numeric) -> Result<Numeric, EvalError> {\n    log_guard_numeric(&a, \"log10\")?;\n    let mut cx = numeric::cx_datum();\n    let d = a.digits() as i32;\n    let e = a.exponent();\n    let k = d - 1 + e;\n    let mut m = a.clone();\n    if k != 0 {\n        let neg_k = Numeric::from(-k);\n        cx.scaleb(&mut m, &neg_k);\n    }\n    if m == Numeric::from(1) {\n        let mut result = Numeric::from(k);\n        numeric::munge_numeric(&mut result).unwrap();\n        return Ok(result);\n    }\n    let mut result = ln_fast(&mut cx, &a);\n    cx.mul(&mut result, &LOG10_E);\n    numeric::munge_numeric(&mut result).unwrap();\n    Ok(result)\n}\n"
 ---
 #[derive(
     proptest_derive::Arbitrary,
@@ -36,5 +37,23 @@ impl std::fmt::Display for Log10Numeric {
     }
 }
 fn log10_numeric(a: Numeric) -> Result<Numeric, EvalError> {
-    log_numeric(a, dec::Context::log10, "log10")
+    log_guard_numeric(&a, "log10")?;
+    let mut cx = numeric::cx_datum();
+    let d = a.digits() as i32;
+    let e = a.exponent();
+    let k = d - 1 + e;
+    let mut m = a.clone();
+    if k != 0 {
+        let neg_k = Numeric::from(-k);
+        cx.scaleb(&mut m, &neg_k);
+    }
+    if m == Numeric::from(1) {
+        let mut result = Numeric::from(k);
+        numeric::munge_numeric(&mut result).unwrap();
+        return Ok(result);
+    }
+    let mut result = ln_fast(&mut cx, &a);
+    cx.mul(&mut result, &LOG10_E);
+    numeric::munge_numeric(&mut result).unwrap();
+    Ok(result)
 }

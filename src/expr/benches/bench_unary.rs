@@ -10,7 +10,7 @@
 use bencher::{Bencher, benchmark_group, benchmark_main};
 use dec::OrderedDecimal;
 use mz_expr::{MirScalarExpr, UnaryFunc, func};
-use mz_repr::adt::numeric::Numeric;
+use mz_repr::adt::numeric::{self, Numeric};
 use mz_repr::{Datum, RowArena, SqlScalarType};
 use ordered_float::OrderedFloat;
 
@@ -545,6 +545,39 @@ bench_unary_multi!(
         Datum::Numeric(OrderedDecimal(Numeric::from(-1))),
     ]
 );
+
+// --- Raw log10/ln benchmarks (isolating the C function from eval overhead) ---
+fn bench_log10_numeric_raw(b: &mut Bencher) {
+    let mut cx = numeric::cx_datum();
+    let base = Numeric::from(42);
+    b.iter(|| {
+        let mut n = base.clone();
+        cx.log10(&mut n);
+        n
+    });
+}
+
+fn bench_ln_numeric_raw(b: &mut Bencher) {
+    let mut cx = numeric::cx_datum();
+    let base = Numeric::from(42);
+    b.iter(|| {
+        let mut n = base.clone();
+        cx.ln(&mut n);
+        n
+    });
+}
+
+fn bench_log10_rust_decimal_raw(b: &mut Bencher) {
+    use rust_decimal::prelude::*;
+    let rd = rust_decimal::Decimal::from(42);
+    b.iter(|| rd.log10());
+}
+
+fn bench_ln_rust_decimal_raw(b: &mut Bencher) {
+    use rust_decimal::prelude::*;
+    let rd = rust_decimal::Decimal::from(42);
+    b.iter(|| rd.ln());
+}
 
 // --- Trig (diverse angles spanning the domain) ---
 bench_unary_multi!(
@@ -1955,6 +1988,11 @@ benchmark_group!(
     bench_ln_numeric_happy,
     bench_exp_happy,
     bench_exp_numeric_happy,
+    // Raw log10/ln (isolating C function)
+    bench_log10_numeric_raw,
+    bench_ln_numeric_raw,
+    bench_log10_rust_decimal_raw,
+    bench_ln_rust_decimal_raw,
     // Trig
     bench_cos_happy,
     bench_acos_happy,

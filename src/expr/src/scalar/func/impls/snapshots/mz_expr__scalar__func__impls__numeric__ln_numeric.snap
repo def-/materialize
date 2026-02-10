@@ -1,6 +1,7 @@
 ---
 source: src/expr/src/scalar/func/impls/numeric.rs
-expression: "#[sqlfunc(sqlname = \"lnnumeric\")]\nfn ln_numeric(a: Numeric) -> Result<Numeric, EvalError> {\n    log_numeric(a, dec::Context::ln, \"ln\")\n}\n"
+assertion_line: 210
+expression: "#[sqlfunc(sqlname = \"lnnumeric\")]\nfn ln_numeric(a: Numeric) -> Result<Numeric, EvalError> {\n    log_guard_numeric(&a, \"ln\")?;\n    let mut cx = numeric::cx_datum();\n    let mut result = ln_fast(&mut cx, &a);\n    numeric::munge_numeric(&mut result).unwrap();\n    Ok(result)\n}\n"
 ---
 #[derive(
     proptest_derive::Arbitrary,
@@ -36,5 +37,9 @@ impl std::fmt::Display for LnNumeric {
     }
 }
 fn ln_numeric(a: Numeric) -> Result<Numeric, EvalError> {
-    log_numeric(a, dec::Context::ln, "ln")
+    log_guard_numeric(&a, "ln")?;
+    let mut cx = numeric::cx_datum();
+    let mut result = ln_fast(&mut cx, &a);
+    numeric::munge_numeric(&mut result).unwrap();
+    Ok(result)
 }

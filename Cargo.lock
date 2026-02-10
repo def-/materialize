@@ -2697,8 +2697,7 @@ dependencies = [
 [[package]]
 name = "dec"
 version = "0.4.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09ae126ef80702bd514a66279b6dac1e58ff1dbcb12024f7110de95608348fd7"
+source = "git+https://github.com/def-/rust-dec?branch=pr-o3#cfa4f059e910b434c4c8cbbc96c994addd7abb59"
 dependencies = [
  "decnumber-sys",
  "libc",
@@ -2711,8 +2710,7 @@ dependencies = [
 [[package]]
 name = "decnumber-sys"
 version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b4bc33814bd5bcd46dd13f9471a29ab1a22c4701ae0c4a182e45e8336d1a5b"
+source = "git+https://github.com/def-/rust-dec?branch=pr-o3#cfa4f059e910b434c4c8cbbc96c994addd7abb59"
 dependencies = [
  "cc",
  "libc",
@@ -6560,6 +6558,7 @@ dependencies = [
  "rand 0.9.2",
  "regex",
  "regex-syntax",
+ "rust_decimal",
  "seahash",
  "serde",
  "serde_json",
