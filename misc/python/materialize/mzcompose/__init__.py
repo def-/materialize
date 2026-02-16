@@ -58,6 +58,9 @@ def get_minimal_system_parameters(
     with the defaults: not changing performance or increasing coverage."""
 
     config = {
+        "min_timestamp_interval": "10ms",
+        "max_timestamp_interval": "10000ms",
+        "timestamp_interval": "10ms",
         # -----
         # Unsafe functions
         "unsafe_enable_unsafe_functions": "true",
