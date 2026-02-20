@@ -39,9 +39,7 @@ def metadata_store_name() -> str:
     Defaults to 'postgres-metadata' unless the BUILDKITE_TAG environment variable is set,
     in which case 'cockroach' is used, or the value of the EXTERNAL_METADATA_STORE environment variable if set.
     """
-    if os.getenv("BUILDKITE_TAG", "") != "":
-        return "cockroach"
-    return os.getenv("EXTERNAL_METADATA_STORE", "postgres-metadata")
+    return "cockroach"
 
 
 def metadata_store_service(
@@ -140,7 +138,7 @@ def metadata_store_services(*args, **kwargs) -> list[Service]:
 def _get_cockroach_or_postgres_metadata() -> type[Cockroach | PostgresMetadata]:
     from materialize.mzcompose.services.postgres import PostgresMetadata
 
-    return Cockroach if os.getenv("BUILDKITE_TAG", "") != "" else PostgresMetadata
+    return Cockroach
 
 
 CockroachOrPostgresMetadata = _get_cockroach_or_postgres_metadata()
