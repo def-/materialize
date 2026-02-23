@@ -675,6 +675,51 @@ true
         )
 
 
+class DistinctWideRow(Dataflow):
+    """Benchmark DISTINCT aggregation over wide rows."""
+
+    SCALE = 5
+    _num_value_cols = 20
+    _distinct_cardinality = 10
+
+    def init(self) -> Action:
+        value_cols = ",\n    ".join(
+            f"((a + {i}) % {self._distinct_cardinality})::bigint AS c{i + 1}"
+            for i in range(self._num_value_cols)
+        )
+
+        return TdAction(
+            f"""
+> CREATE MATERIALIZED VIEW v1 AS
+  SELECT
+    {value_cols}
+  FROM generate_series(1, {self.n()}) AS a;
+
+> SELECT COUNT(*) = {self.n()} FROM v1;
+true
+"""
+        )
+
+    def benchmark(self) -> MeasurementSource:
+        distinct_counts = " +\n    ".join(
+            f"COUNT(DISTINCT c{i + 1})" for i in range(self._num_value_cols)
+        )
+
+        return Td(
+            f"""
+> SELECT 1
+  /* A */
+1
+
+> SELECT
+    ({distinct_counts}) > 0
+  FROM v1
+  /* B */
+true
+"""
+        )
+
+
 class CrossJoin(Dataflow):
     def init(self) -> Action:
         return self.view_ten()
