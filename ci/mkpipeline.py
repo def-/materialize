@@ -162,19 +162,6 @@ so it is executed.""",
             print("Coverage/Sanitizer build, not trimming pipeline")
         elif os.environ["BUILDKITE_BRANCH"] == "main" or os.environ["BUILDKITE_TAG"]:
             print("On main branch or tag, so not trimming pipeline")
-        elif have_paths_changed(CI_GLUE_GLOBS):
-            # We still execute pipeline trimming on a copy of the pipeline to
-            # protect against bugs in the pipeline trimming itself.
-            print("[DRY RUN] Trimming unchanged steps from pipeline")
-            print(
-                "Repository glue code has changed, so the trimmed pipeline below does not apply"
-            )
-            trim_tests_pipeline(
-                copy.deepcopy(pipeline),
-                args.coverage,
-                args.sanitizer,
-                lto,
-            )
         else:
             print("Trimming unchanged steps from pipeline")
             trim_tests_pipeline(
