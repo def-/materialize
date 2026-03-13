@@ -1038,7 +1038,7 @@ fn did_process_crash(status: ExitStatus) -> bool {
     // discovered.
     matches!(
         status.signal(),
-        Some(SIGABRT | SIGBUS | SIGSEGV | SIGTRAP | SIGILL)
+        Some(SIGABRT) | Some(SIGBUS) | Some(SIGSEGV) | Some(SIGTRAP) | Some(SIGILL)
     )
 }
 
