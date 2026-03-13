@@ -471,11 +471,11 @@ impl NamespacedOrchestrator for NamespacedTracingOrchestrator {
                     tokio_console_listen_addr,
                 ));
                 args.push(format!(
-                    "--tokio-console-publish-interval={} us",
+                    "--tokio-console-publish-interval={}us",
                     tokio_console_publish_interval.as_micros(),
                 ));
                 args.push(format!(
-                    "--tokio-console-retention={} us",
+                    "--tokio-console-retention={}us",
                     tokio_console_retention.as_micros(),
                 ));
             }
