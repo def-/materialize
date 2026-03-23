@@ -161,10 +161,12 @@ pub(crate) async fn run_line_reader(
     }
     let mut consistency_checks_succeeded = true;
     if config.consistency_checks == action::consistency::Level::File {
+        let t_cc = std::time::Instant::now();
         if let Err(e) = action::consistency::run_consistency_checks(&state).await {
             consistency_checks_succeeded = false;
             errors.push(e.into());
         }
+        eprintln!("consistency_checks: {:?}", t_cc.elapsed());
     }
     state.clear_skip_consistency_checks();
 

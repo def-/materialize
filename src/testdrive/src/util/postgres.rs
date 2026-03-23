@@ -8,7 +8,7 @@
 // by the Apache License, Version 2.0.
 
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, anyhow, bail};
 use mz_ore::retry::Retry;
@@ -53,20 +53,37 @@ pub async fn postgres_client(
     url: &str,
     default_timeout: Duration,
 ) -> Result<(Client, task::JoinHandle<Result<(), tokio_postgres::Error>>), anyhow::Error> {
+    let t0 = Instant::now();
     let (client, connection) = Retry::default()
         .max_duration(default_timeout)
-        .retry_async_canceling(|_| async move {
-            let pgconfig = &mut Config::from_str(url)?;
-            pgconfig.connect_timeout(default_timeout);
-            let tls = make_tls(pgconfig)?;
-            pgconfig.connect(tls).await.map_err(|e| anyhow!(e))
+        .retry_async_canceling(|retry_state| {
+            let t_retry = Instant::now();
+            async move {
+                let t_config = Instant::now();
+                let pgconfig = &mut Config::from_str(url)?;
+                pgconfig.connect_timeout(default_timeout);
+                let tls = make_tls(pgconfig)?;
+                let config_dur = t_config.elapsed();
+                let t_connect = Instant::now();
+                let result = pgconfig.connect(tls).await.map_err(|e| anyhow!(e));
+                eprintln!(
+                    "postgres_client: retry={} config={:?} connect={:?} total_retry={:?} ok={}",
+                    retry_state.i,
+                    config_dur,
+                    t_connect.elapsed(),
+                    t_retry.elapsed(),
+                    result.is_ok(),
+                );
+                result
+            }
         })
         .await?;
+    let total = t0.elapsed();
 
     if url.contains("mzp_") {
-        println!("Connecting to PostgreSQL server at [REDACTED]...");
+        println!("Connecting to PostgreSQL server at [REDACTED]... ({total:?})");
     } else {
-        println!("Connecting to PostgreSQL server at {}...", url);
+        println!("Connecting to PostgreSQL server at {url}... ({total:?})");
     }
     let handle = task::spawn(|| "postgres_client_task", connection);
 

@@ -284,8 +284,10 @@ pub struct Rewrite {
 
 impl State {
     pub async fn initialize_cmd_vars(&mut self) -> Result<(), anyhow::Error> {
+        let t0 = std::time::Instant::now();
         self.cmd_vars
             .insert("testdrive.kafka-addr".into(), self.kafka_addr.clone());
+        let t_dns = std::time::Instant::now();
         self.cmd_vars.insert(
             "testdrive.kafka-addr-resolved".into(),
             self.kafka_addr
@@ -295,6 +297,7 @@ impl State {
                 .map(|addr| addr.to_string())
                 .unwrap_or_else(|| "#RESOLUTION-FAILURE#".into()),
         );
+        eprintln!("init_cmd_vars: kafka_dns={:?}", t_dns.elapsed());
         self.cmd_vars.insert(
             "testdrive.schema-registry-url".into(),
             self.schema_registry_url.to_string(),
@@ -312,6 +315,7 @@ impl State {
         self.cmd_vars
             .insert("testdrive.aws-account".into(), self.aws_account.clone());
         {
+            let t_aws = std::time::Instant::now();
             let aws_credentials = self
                 .aws_config
                 .credentials_provider()
@@ -319,6 +323,7 @@ impl State {
                 .provide_credentials()
                 .await
                 .context("fetching AWS credentials")?;
+            eprintln!("init_cmd_vars: aws_creds={:?}", t_aws.elapsed());
             self.cmd_vars.insert(
                 "testdrive.aws-access-key-id".into(),
                 aws_credentials.access_key_id().to_owned(),
@@ -378,6 +383,7 @@ impl State {
                 .insert(format!("arg.{}", key), value.to_string());
         }
 
+        eprintln!("init_cmd_vars: total={:?}", t0.elapsed());
         Ok(())
     }
     /// Makes of copy of the durable catalog and runs a function on its
@@ -1025,6 +1031,7 @@ pub async fn create_state(
 
     let materialize_catalog_config = config.materialize_catalog_config.clone();
 
+    let t_create_state = std::time::Instant::now();
     let materialize_url = util::postgres::config_url(&config.materialize_pgconfig)?;
     info!("Connecting to {}", materialize_url.as_str());
     let (pgclient, pgconn) = Retry::default()
@@ -1036,15 +1043,19 @@ pub async fn create_state(
             pgconfig.connect(tls).await.map_err(|e| anyhow!(e))
         })
         .await?;
+    eprintln!("create_state: mz_connect={:?}", t_create_state.elapsed());
 
     let pgconn_task =
         task::spawn(|| "pgconn_task", pgconn).map(|join| join.context("running SQL connection"));
 
+    let t_mz_state = std::time::Instant::now();
     let materialize_state =
         create_materialize_state(&config, materialize_catalog_config, pgclient).await?;
+    eprintln!("create_state: mz_state={:?}", t_mz_state.elapsed());
 
     let schema_registry_url = config.schema_registry_url.to_owned();
 
+    let t_ccsr = std::time::Instant::now();
     let ccsr_client = {
         let mut ccsr_config = mz_ccsr::ClientConfig::new(schema_registry_url.clone());
 
@@ -1062,7 +1073,9 @@ pub async fn create_state(
 
         ccsr_config.build().context("Creating CCSR client")?
     };
+    eprintln!("create_state: ccsr={:?}", t_ccsr.elapsed());
 
+    let t_kafka = std::time::Instant::now();
     let (kafka_addr, kafka_admin, kafka_admin_opts, kafka_producer, kafka_topics, kafka_config) = {
         use rdkafka::admin::{AdminClient, AdminOptions};
         use rdkafka::producer::FutureProducer;
@@ -1106,6 +1119,8 @@ pub async fn create_state(
             kafka_config,
         )
     };
+    eprintln!("create_state: kafka={:?}", t_kafka.elapsed());
+    eprintln!("create_state: total={:?}", t_create_state.elapsed());
 
     let mut state = State {
         config: config.clone(),
@@ -1172,7 +1187,9 @@ pub async fn create_state(
         rewrite_pos_start: 0,
         rewrite_pos_end: 0,
     };
+    let t_init = std::time::Instant::now();
     state.initialize_cmd_vars().await?;
+    eprintln!("create_state: init_cmd_vars={:?}", t_init.elapsed());
     Ok((state, pgconn_task))
 }
 
