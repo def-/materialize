@@ -439,4 +439,8 @@ needless_pass_by_ref_mut = "warn"
 borrow_interior_mutable_const = "warn"
 or_fun_call = "warn"
 let_unit_value = "warn"
+manual_assert = "warn"
+debug_assert_with_mut_call = "warn"
+inconsistent_struct_constructor = "warn"
+explicit_into_iter_loop = "warn"
 # END LINT CONFIG

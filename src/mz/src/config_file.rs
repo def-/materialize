@@ -314,9 +314,11 @@ impl ConfigFile {
 
     /// Sets the value of a configuration parameter.
     pub async fn set_param(&self, name: &str, value: Option<&str>) -> Result<(), Error> {
-        if !GLOBAL_PARAMS.contains_key(name) {
-            panic!("unknown configuration parameter {}", name.quoted());
-        }
+        assert!(
+            GLOBAL_PARAMS.contains_key(name),
+            "unknown configuration parameter {}",
+            name.quoted()
+        );
         let mut editable = self.editable.clone();
         match value {
             None => {

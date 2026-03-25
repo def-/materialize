@@ -290,9 +290,11 @@ pub mod common {
             if !self.result.order.contains(&type_id) {
                 // If we have not sequenced `type_id` but have a bundle, it means
                 // we are in the process of fulfilling its requirements: a cycle.
-                if self.result.analyses.contains_key(&type_id) {
-                    panic!("Cyclic dependency detected: {}", std::any::type_name::<A>());
-                }
+                assert!(
+                    !self.result.analyses.contains_key(&type_id),
+                    "Cyclic dependency detected: {}",
+                    std::any::type_name::<A>()
+                );
                 // Insert the analysis bundle first, so that we can detect cycles.
                 self.result.analyses.insert(
                     type_id,
@@ -858,7 +860,8 @@ mod non_negative {
                             let mut children = depends.children_of_rev(index, 2);
                             let _negate = children.next().unwrap();
                             let base_id = children.next().unwrap();
-                            debug_assert_eq!(children.next(), None);
+                            let extra = children.next();
+                            debug_assert_eq!(extra, None);
                             if results[base_id] && is_superset_of(&*base, &*input) {
                                 return true;
                             }

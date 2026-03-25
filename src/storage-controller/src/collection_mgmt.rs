@@ -391,9 +391,11 @@ where
     /// - If this [`CollectionManager`] is in read-only mode.
     /// - If the collection closed.
     pub(super) fn blind_write(&self, id: GlobalId, updates: Vec<AppendOnlyUpdate>) {
-        if self.read_only {
-            panic!("attempting blind write to {} while in read-only mode", id);
-        }
+        assert!(
+            !self.read_only,
+            "attempting blind write to {} while in read-only mode",
+            id
+        );
 
         if updates.is_empty() {
             return;
@@ -1132,11 +1134,11 @@ where
         let mut task = Self {
             id,
             write_handle,
-            rx,
-            shutdown_rx,
             read_only,
             now,
             user_batch_duration_ms,
+            rx,
+            shutdown_rx,
             previous_statuses,
         };
 

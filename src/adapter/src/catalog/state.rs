@@ -2026,7 +2026,7 @@ impl CatalogState {
                 SchemaSpecifier::Id(self.get_pg_catalog_schema_id()),
             ),
         ];
-        for schema in default_schemas.into_iter() {
+        for schema in default_schemas {
             if !search_path.contains(&schema) {
                 v.push(schema);
             }

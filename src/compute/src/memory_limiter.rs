@@ -41,9 +41,7 @@ static LIMITER: Mutex<Option<Limiter>> = Mutex::new(None);
 pub fn start_limiter(memory_limit: usize, metrics_registry: &MetricsRegistry) {
     let mut limiter = LIMITER.lock().expect("poisoned");
 
-    if limiter.is_some() {
-        panic!("memory limiter is already running");
-    }
+    assert!(!limiter.is_some(), "memory limiter is already running");
 
     let metrics = LimiterMetrics::new(metrics_registry);
     let (config_tx, config_rx) = mpsc::unbounded_channel();

@@ -726,7 +726,7 @@ impl<'w, A: Allocate + 'static> Worker<'w, A> {
         }
 
         // Execute the commands to bring us to `new_commands`.
-        for command in todo_commands.into_iter() {
+        for command in todo_commands {
             self.handle_command(command);
         }
 

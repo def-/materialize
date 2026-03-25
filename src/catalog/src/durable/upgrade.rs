@@ -436,9 +436,10 @@ async fn run_versioned_upgrade<V1: IntoStateUpdateKindJson, V2: IntoStateUpdateK
         .collect();
     // Validate that we're not migrating an un-migratable collection.
     for (update, _) in &updates {
-        if update.is_always_deserializable() {
-            panic!("migration to un-migratable collection: {update:?}\nall updates: {updates:?}");
-        }
+        assert!(
+            !update.is_always_deserializable(),
+            "migration to un-migratable collection: {update:?}\nall updates: {updates:?}"
+        );
     }
 
     // 3. Add a retraction for old version and insertion for new version into updates.

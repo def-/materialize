@@ -672,9 +672,10 @@ impl<'a, A: Allocate + 'static> ActiveComputeState<'a, A> {
 
     /// Initializes timely dataflow logging and publishes as a view.
     pub fn initialize_logging(&mut self, config: LoggingConfig) {
-        if self.compute_state.compute_logger.is_some() {
-            panic!("dataflow server has already initialized logging");
-        }
+        assert!(
+            !self.compute_state.compute_logger.is_some(),
+            "dataflow server has already initialized logging"
+        );
 
         let LoggingTraces {
             traces,

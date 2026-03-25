@@ -195,7 +195,7 @@ pub(crate) fn render<G: Scope<Timestamp = GtidPartition>>(
             // Calculate the lowest frontier across all outputs, which represents the point which
             // we should start replication from.
             let min_frontier = Antichain::from_elem(GtidPartition::minimum());
-            for output in source_outputs.into_iter() {
+            for output in source_outputs {
                 // If an output is resuming at the minimum frontier then its snapshot
                 // has not yet been committed.
                 // We need to resume from a frontier before the output's snapshot frontier

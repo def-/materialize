@@ -2161,7 +2161,7 @@ impl MirRelationExpr {
     ) -> Vec<(LocalId, I)> {
         let mut expired_infos = Vec::new();
         if let Some(expirations) = expire_whens.remove(&redefined_id) {
-            for expired_id in expirations.into_iter() {
+            for expired_id in expirations {
                 if let Some(offer) = id_infos.remove(&expired_id) {
                     expired_infos.push((expired_id, offer));
                 }

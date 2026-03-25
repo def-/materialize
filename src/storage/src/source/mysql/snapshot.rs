@@ -154,7 +154,7 @@ pub(crate) fn render<G: Scope<Timestamp = GtidPartition>>(
     // Maps MySQL table name to export `SourceStatistics`. Same info exists in reader_snapshot_table_info,
     // but this avoids having to iterate + map each time the statistics are needed.
     let mut export_statistics = BTreeMap::new();
-    for output in source_outputs.into_iter() {
+    for output in source_outputs {
         // Determine which outputs need to be snapshot and which already have been.
         if *output.resume_upper != [GtidPartition::minimum()] {
             // Already has been snapshotted.

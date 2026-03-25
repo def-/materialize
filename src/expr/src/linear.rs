@@ -511,7 +511,7 @@ impl MapFilterProject {
                     done = common.is_empty();
 
                     // Migrate each expression in `common` to `result_mfp`.
-                    for expr in common.into_iter() {
+                    for expr in common {
                         // Update each mfp by removing expr and updating column references.
                         for mfp in mfps.iter_mut() {
                             // With `expr` next in `result_mfp`, it is as if we are rotating it to
@@ -723,7 +723,7 @@ impl MapFilterProject {
         for index in available.keys() {
             available_expr[*index] = true;
         }
-        for expr in self.expressions.into_iter() {
+        for expr in self.expressions {
             // We treat an expression as available if its supporting columns are available,
             // and if it is not a literal (we want to avoid pushing down literals). This
             // choice is ad-hoc, but the intent is that we partition the operators so
@@ -745,7 +745,7 @@ impl MapFilterProject {
         }
 
         // Determine which predicates can be computed from the available subset.
-        for (_when, pred) in self.predicates.into_iter() {
+        for (_when, pred) in self.predicates {
             let is_available = pred.support().into_iter().all(|i| available_expr[i]);
             if is_available {
                 before_pred.push(pred);
@@ -1762,7 +1762,7 @@ pub mod plan {
                 }
             });
 
-            for mut predicate in temporal.into_iter() {
+            for mut predicate in temporal {
                 let (func, expr2) = predicate.as_mut_temporal_filter()?;
                 let expr2 = expr2.clone();
 

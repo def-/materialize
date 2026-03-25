@@ -564,8 +564,8 @@ pub(crate) fn render<G: Scope<Timestamp = MzOffset>>(
                     let snapshot_info = SnapshotInfo {
                         snapshot_id,
                         snapshot_lsn,
-                        upstream_info,
                         table_block_counts,
+                        upstream_info,
                     };
                     trace!(
                         %id,

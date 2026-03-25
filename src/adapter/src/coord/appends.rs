@@ -516,7 +516,7 @@ impl Coordinator {
         // Consolidate all Rows for a given table. We do not consolidate the
         // staged batches, that's up to whoever staged them.
         let mut all_appends = Vec::with_capacity(appends.len());
-        for (item_id, table_data) in appends.into_iter() {
+        for (item_id, table_data) in appends {
             let mut all_rows = Vec::new();
             let mut all_data = Vec::new();
             for data in table_data {
@@ -622,12 +622,11 @@ impl Coordinator {
 
     /// Submit a write to be executed during the next group commit and trigger a group commit.
     pub(crate) fn submit_write(&mut self, pending_write_txn: PendingWriteTxn) {
-        if self.controller.read_only() {
-            panic!(
-                "attempting table write in read-only mode: {:?}",
-                pending_write_txn
-            );
-        }
+        assert!(
+            !self.controller.read_only(),
+            "attempting table write in read-only mode: {:?}",
+            pending_write_txn
+        );
         self.pending_writes.push(pending_write_txn);
         self.trigger_group_commit();
     }

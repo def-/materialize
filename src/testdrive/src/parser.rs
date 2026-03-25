@@ -129,7 +129,7 @@ pub(crate) fn parse(line_reader: &mut LineReader) -> Result<Vec<PosCommand>, Pos
                 });
             }
         };
-        out.push(PosCommand { command, pos });
+        out.push(PosCommand { pos, command });
     }
     Ok(out)
 }

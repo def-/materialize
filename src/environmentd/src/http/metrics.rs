@@ -69,7 +69,7 @@ pub struct PrometheusLayer {
 
 impl PrometheusLayer {
     pub fn new(source: &'static str, metrics: Metrics) -> Self {
-        PrometheusLayer { source, metrics }
+        PrometheusLayer { metrics, source }
     }
 }
 

@@ -328,8 +328,8 @@ impl Coordinator {
                                     item_id,
                                     global_id,
                                     plan,
-                                    optimized_expr,
                                     resolved_ids,
+                                    optimized_expr,
                                 })
                             }
                         }

@@ -200,8 +200,8 @@ impl LocalMirPlan<Unresolved> {
             df_meta: self.df_meta,
             context: Resolved {
                 timestamp_ctx,
-                session,
                 stats,
+                session,
             },
         }
     }

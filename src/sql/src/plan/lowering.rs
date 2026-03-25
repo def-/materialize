@@ -404,7 +404,7 @@ impl HirRelationExpr {
                     }
 
                     let mut mir_values = Vec::with_capacity(num_bindings);
-                    for (_name, _id, value, _typ) in bindings.into_iter() {
+                    for (_name, _id, value, _typ) in bindings {
                         mir_values.push(value.applied_to(
                             id_gen,
                             get_outer.clone(),
@@ -1633,7 +1633,7 @@ impl HirScalarExpr {
                 let mut total_arity = inner_arity;
                 let mut join_inputs = vec![get_inner];
                 let mut join_input_arities = vec![inner_arity];
-                for (expr, subquery) in subqueries.into_iter() {
+                for (expr, subquery) in subqueries {
                     // Avoid lowering duplicated subqueries
                     if !subquery_map.contains_key(&expr) {
                         let subquery_arity = subquery.arity();

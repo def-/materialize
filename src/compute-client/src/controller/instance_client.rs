@@ -209,7 +209,7 @@ impl<T: ComputeControllerTimestamp> InstanceClient<T> {
     ) -> Result<Vec<(GlobalId, ReadHold<T>, Antichain<T>)>, AcquireReadHoldsError> {
         self.call_sync(move |i| {
             let mut result = Vec::new();
-            for id in ids.into_iter() {
+            for id in ids {
                 result.push((
                     id,
                     i.acquire_read_hold(id)?,

@@ -180,7 +180,7 @@ impl Analysis for Equivalences {
                 let arity = depends.results::<Arity>();
                 let mut columns = 0;
                 let mut result = Some(EquivalenceClasses::default());
-                for child in children.into_iter() {
+                for child in children {
                     let input_arity = arity[child];
                     let equivalences = results[child].clone();
                     if let Some(mut equivalences) = equivalences {

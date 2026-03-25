@@ -223,9 +223,10 @@ impl S3BlobConfig {
         let bucket = match std::env::var(Self::EXTERNAL_TESTS_S3_BUCKET) {
             Ok(bucket) => bucket,
             Err(_) => {
-                if mz_ore::env::is_var_truthy("CI") {
-                    panic!("CI is supposed to run this test but something has gone wrong!");
-                }
+                assert!(
+                    !mz_ore::env::is_var_truthy("CI"),
+                    "CI is supposed to run this test but something has gone wrong!"
+                );
                 return Ok(None);
             }
         };
@@ -862,7 +863,7 @@ impl S3Blob {
         // latencies. Investigate.
         let min_part_elapsed = MinElapsed::default();
         let mut parts = Vec::with_capacity(parts_len);
-        for (part_num, part_fut) in part_futs.into_iter() {
+        for (part_num, part_fut) in part_futs {
             let (this_part_elapsed, part_res) = part_fut
                 .inspect(|_| {
                     self.metrics

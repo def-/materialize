@@ -346,9 +346,11 @@ impl<T: Timestamp + Lattice + Codec64 + TimestampManipulation> TxnsTableWorker<T
                 write_handle.shard_id().to_string()
             );
             let previous = self.write_handles.insert(*id, write_handle.shard_id());
-            if previous.is_some() {
-                panic!("already registered a WriteHandle for collection {:?}", id);
-            }
+            assert!(
+                !previous.is_some(),
+                "already registered a WriteHandle for collection {:?}",
+                id
+            )
         }
 
         // Registering also advances the logical upper of all shards in the txns set.

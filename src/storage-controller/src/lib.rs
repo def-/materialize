@@ -2897,7 +2897,7 @@ where
     fn set_hold_policies(&mut self, policies: Vec<(GlobalId, ReadPolicy<T>)>) {
         let mut read_capability_changes = BTreeMap::default();
 
-        for (id, policy) in policies.into_iter() {
+        for (id, policy) in policies {
             if let Some(collection) = self.collections.get_mut(&id) {
                 let (write_frontier, derived_since, hold_policy) = match &mut collection.extra_state
                 {

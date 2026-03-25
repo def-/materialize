@@ -374,7 +374,7 @@ pub fn build_compute_dataflow<A: Allocate>(
                     dataflow_expiration,
                 );
 
-                for (id, (oks, errs)) in imported_sources.into_iter() {
+                for (id, (oks, errs)) in imported_sources {
                     let bundle = crate::render::CollectionBundle::from_collections(
                         oks.enter(region),
                         errs.enter(region),
@@ -472,7 +472,7 @@ pub fn build_compute_dataflow<A: Allocate>(
                     dataflow_expiration,
                 );
 
-                for (id, (oks, errs)) in imported_sources.into_iter() {
+                for (id, (oks, errs)) in imported_sources {
                     let oks = if ENABLE_TEMPORAL_BUCKETING.get(&compute_state.worker_config) {
                         let as_of = context.as_of_frontier.clone();
                         let summary = TEMPORAL_BUCKETING_SUMMARY
@@ -994,7 +994,7 @@ where
                 err_v.set(errs);
             }
             // Now extract each of the rec bindings into the outer scope.
-            for id in rec_ids.into_iter() {
+            for id in rec_ids {
                 let bundle = self.remove_id(Id::Local(id)).unwrap();
                 let (oks, err) = bundle.collection.unwrap();
                 self.insert_id(
@@ -1326,7 +1326,7 @@ where
             } => {
                 let mut oks = Vec::new();
                 let mut errs = Vec::new();
-                for input in inputs.into_iter() {
+                for input in inputs {
                     let (os, es) =
                         expect_input(input).as_specific_collection(None, &self.config_set);
                     oks.push(os);

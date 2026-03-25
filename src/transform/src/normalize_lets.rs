@@ -839,7 +839,7 @@ mod inlining {
             inline_lets_helper(body, &mut inline_offers)?;
 
             // Re-introduce expired offers for the subsequent logic that expects to see them all.
-            for (id, offer) in expired_offers.into_iter() {
+            for (id, offer) in expired_offers {
                 inline_offers.insert(id, offer);
             }
 

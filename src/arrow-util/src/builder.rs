@@ -174,7 +174,7 @@ impl ArrowBuilder {
     pub fn to_record_batch(self) -> Result<RecordBatch, ArrowError> {
         let mut arrays = vec![];
         let mut fields: Vec<Field> = vec![];
-        for mut col in self.columns.into_iter() {
+        for mut col in self.columns {
             arrays.push(col.finish());
             fields.push((&col).into());
         }
@@ -769,7 +769,7 @@ impl ArrowColumn {
                 let list_builder: &mut ArrowColumn = struct_builder.field_builder(0).unwrap();
                 if let ColBuilder::ListBuilder(list_builder) = &mut list_builder.inner {
                     let inner_builder = list_builder.values();
-                    for datum in arr.elements().into_iter() {
+                    for datum in arr.elements() {
                         inner_builder.append_datum(datum)?;
                     }
                     list_builder.append(true);
@@ -792,7 +792,7 @@ impl ArrowColumn {
             }
             (ColBuilder::ListBuilder(list_builder), Datum::List(list)) => {
                 let inner_builder = list_builder.values();
-                for datum in list.into_iter() {
+                for datum in list {
                     inner_builder.append_datum(datum)?;
                 }
                 list_builder.append(true)

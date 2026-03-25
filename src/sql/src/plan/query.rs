@@ -1653,7 +1653,7 @@ fn plan_query_inner(qcx: &mut QueryContext, q: &Query<Aug>) -> Result<PlannedQue
             })?;
 
             let mut bindings = Vec::new();
-            for (id, value, shadowed_val) in cte_bindings.into_iter() {
+            for (id, value, shadowed_val) in cte_bindings {
                 if let Some(cte) = qcx.ctes.remove(&id) {
                     bindings.push((cte.name, id, value, cte.desc.into_typ()));
                 }

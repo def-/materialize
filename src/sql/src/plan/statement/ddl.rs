@@ -457,7 +457,7 @@ pub fn plan_create_table(
 
     let desc = RelationDesc::new(typ, names);
     let mut desc = VersionedRelationDesc::new(desc);
-    for (version, (_action, name, typ)) in changes.into_iter() {
+    for (version, (_action, name, typ)) in changes {
         let new_version = desc.add_column(name, typ);
         if version != new_version {
             return Err(PlanError::InvalidTable {
@@ -647,7 +647,7 @@ pub fn plan_create_webhook_source(
                     itertools::Either::Left(filter.header_name)
                 }
             });
-        headers.header_column = Some(WebhookHeaderFilters { allow, block });
+        headers.header_column = Some(WebhookHeaderFilters { block, allow });
     }
 
     // Map headers to specific columns.

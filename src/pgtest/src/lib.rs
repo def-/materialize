@@ -605,9 +605,7 @@ pub fn run_test(tf: &mut datadriven::TestFile, addr: String, user: String, timeo
                         ignore.insert(v);
                     }
                 }
-                if !args.is_empty() {
-                    panic!("extra until arguments: {:?}", args);
-                }
+                assert!(args.is_empty(), "extra until arguments: {:?}", args);
                 format!(
                     "{}\n",
                     pgt.until(conn, options, lines.collect(), err_field_typs, ignore)

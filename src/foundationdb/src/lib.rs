@@ -41,9 +41,10 @@ static FDB_NETWORK: Mutex<(Option<NetworkAutoStop>, bool)> = Mutex::new((None, f
 pub fn init_network() {
     let mut guard = FDB_NETWORK.lock().expect("mutex poisoned");
     if guard.0.is_none() {
-        if guard.1 {
-            panic!("attempted to re-initialize FoundationDB network after shutdown");
-        }
+        assert!(
+            !guard.1,
+            "attempted to re-initialize FoundationDB network after shutdown"
+        );
         // SAFETY: The `foundationdb::boot()` call is unsafe because it must only
         // be called once per process. We use a mutex to ensure this guarantee
         // is upheld - subsequent calls to `init_network()` will see `guard.is_some()`

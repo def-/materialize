@@ -182,7 +182,7 @@ pub struct UnreliableConsensus {
 impl UnreliableConsensus {
     /// Returns a new [UnreliableConsensus].
     pub fn new(consensus: Arc<dyn Consensus>, handle: UnreliableHandle) -> Self {
-        UnreliableConsensus { consensus, handle }
+        UnreliableConsensus { handle, consensus }
     }
 }
 

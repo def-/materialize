@@ -773,17 +773,16 @@ fn add_new_remove_old_builtin_items_migration(
             object_name: builtin.name().to_string(),
         };
         // Validate that the description is unique.
-        if !builtin_descs.insert(desc.clone()) {
-            panic!(
-                "duplicate builtin description: {:?}, {:?}",
-                SystemObjectDescription {
-                    schema_name: builtin.schema().to_string(),
-                    object_type: builtin.catalog_item_type(),
-                    object_name: builtin.name().to_string(),
-                },
-                builtin
-            );
-        }
+        assert!(
+            builtin_descs.insert(desc.clone()),
+            "duplicate builtin description: {:?}, {:?}",
+            SystemObjectDescription {
+                schema_name: builtin.schema().to_string(),
+                object_type: builtin.catalog_item_type(),
+                object_name: builtin.name().to_string(),
+            },
+            builtin
+        );
         builtins.push((desc, builtin));
     }
 

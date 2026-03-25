@@ -1047,7 +1047,7 @@ where
 
     let mut generated = |elem| gen_elem(elem).map_err(|e| e.to_string());
 
-    for elem in raw_elems.into_iter() {
+    for elem in raw_elems {
         elems.push(match elem {
             Some(elem) => generated(elem)?,
             None => make_null(),

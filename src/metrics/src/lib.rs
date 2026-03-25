@@ -76,10 +76,10 @@ pub async fn register_metrics_into(metrics_registry: &MetricsRegistry, config_se
     );
 
     *METRICS.lock().expect("lock poisoned") = Some(Metrics {
+        config_set,
         lgalloc,
         lgalloc_map,
         rusage,
-        config_set,
     });
 }
 
@@ -160,8 +160,8 @@ impl Metrics {
         });
 
         MetricsTask {
-            tx,
             interval_config,
+            tx,
         }
     }
 }

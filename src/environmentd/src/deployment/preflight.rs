@@ -131,9 +131,7 @@ pub async fn preflight_0dt(
                         break;
                     }
                     () = &mut caught_up_max_wait_fut => {
-                        if panic_after_timeout {
-                            panic!("not caught up within {:?}", caught_up_max_wait);
-                        }
+                        assert!(!panic_after_timeout, "not caught up within {:?}", caught_up_max_wait);
                         info!("not caught up within {:?}, proceeding now", caught_up_max_wait);
                         break;
                     }

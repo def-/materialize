@@ -774,7 +774,7 @@ impl Coordinator {
         azs: I,
     ) -> Result<(), AdapterError> {
         let cat_azs = self.catalog().state().availability_zones();
-        for az in azs.into_iter() {
+        for az in azs {
             if !cat_azs.contains(az) {
                 return Err(AdapterError::InvalidClusterReplicaAz {
                     az: az.to_string(),

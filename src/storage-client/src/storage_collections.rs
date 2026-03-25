@@ -1169,7 +1169,7 @@ where
 
         let mut read_capability_changes = BTreeMap::default();
 
-        for (id, policy) in policies.into_iter() {
+        for (id, policy) in policies {
             let collection = match collections.get_mut(&id) {
                 Some(c) => c,
                 None => {
@@ -2791,14 +2791,10 @@ where
                             } => {
                                 debug!("registering handles for {}", id);
                                 let previous = self.shard_by_id.insert(id, write_handle.shard_id());
-                                if previous.is_some() {
-                                    panic!("already registered a WriteHandle for collection {id}");
-                                }
+                                assert!(!previous.is_some(), "already registered a WriteHandle for collection {id}");
 
                                 let previous = self.since_handles.insert(id, since_handle);
-                                if previous.is_some() {
-                                    panic!("already registered a SinceHandle for collection {id}");
-                                }
+                                assert!(!previous.is_some(), "already registered a SinceHandle for collection {id}");
 
                                 if is_in_txns {
                                     self.txns_shards.insert(id);

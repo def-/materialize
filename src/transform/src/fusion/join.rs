@@ -164,7 +164,7 @@ impl Join {
                 let mut arity_so_far = 0;
 
                 let mut new_inputs = Vec::new();
-                for child in children.into_iter() {
+                for child in children {
                     match child {
                         Ok((mut mfp, (inputs, equivalences))) => {
                             // Add the join inputs to the new join inputs.

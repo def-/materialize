@@ -136,9 +136,11 @@ where
                     assert!(id.is_system(), "trying to register non-system id {id}");
 
                     let previous = write_handles.insert(id, write_handle);
-                    if previous.is_some() {
-                        panic!("already registered a WriteHandle for collection {:?}", id);
-                    }
+                    assert!(
+                        !previous.is_some(),
+                        "already registered a WriteHandle for collection {:?}",
+                        id
+                    )
                 }
                 // We don't care if our waiter has gone away.
                 let _ = tx.send(());

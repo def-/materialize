@@ -147,9 +147,7 @@ impl Retry {
     ///
     /// Panics if `max_tries` is zero.
     pub fn max_tries(mut self, max_tries: usize) -> Self {
-        if max_tries == 0 {
-            panic!("max tries must be greater than zero");
-        }
+        assert!(!(max_tries == 0), "max tries must be greater than zero");
         self.max_tries = max_tries;
         self
     }

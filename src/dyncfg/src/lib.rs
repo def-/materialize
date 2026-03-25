@@ -98,8 +98,8 @@ impl<D: ConfigDefault> Config<D> {
     pub const fn new(name: &'static str, default: D, desc: &'static str) -> Self {
         Config {
             name,
-            default,
             desc,
+            default,
         }
     }
 

@@ -937,13 +937,12 @@ impl CatalogState {
                             mv.name,
                         )
                     });
-                if !matches!(item, CatalogItem::MaterializedView(_)) {
-                    panic!(
-                        "internal error: builtin materialized view {}'s SQL does not begin \
-                         with \"CREATE MATERIALIZED VIEW\".",
-                        mv.name,
-                    );
-                };
+                assert!(
+                    matches!(item, CatalogItem::MaterializedView(_)),
+                    "internal error: builtin materialized view {}'s SQL does not begin \
+                     with \"CREATE MATERIALIZED VIEW\".",
+                    mv.name,
+                );
 
                 self.insert_item(
                     item_id,

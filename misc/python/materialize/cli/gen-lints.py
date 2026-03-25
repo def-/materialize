@@ -179,6 +179,15 @@ WARN_CLIPPY_LINTS = [
     # Catches bindings that silently become `()` after a refactor, preventing
     # wrong-variable bugs when a function's return type changes.
     "let_unit_value",
+    # Prefer `assert!(cond, ...)` over `if !cond { panic!(...) }`.
+    "manual_assert",
+    # Side effects inside `debug_assert!` silently disappear in release builds
+    "debug_assert_with_mut_call",
+    # Struct literal fields in a different order than the definition can
+    # mask bugs when adjacent fields share a type.
+    "inconsistent_struct_constructor",
+    # `for x in y.into_iter()` -> `for x in y`
+    "explicit_into_iter_loop",
 ]
 
 MESSAGE_LINT_MISSING = (

@@ -252,7 +252,7 @@ mod relation {
     ) -> Result {
         if recursive {
             let (mut ids, mut values, mut limits) = (vec![], vec![], vec![]);
-            for (id, analyses, value) in ctes.into_iter() {
+            for (id, analyses, value) in ctes {
                 let typ = {
                     let Some(column_types) = analyses.types else {
                         let msg = format!("`let {}` needs a `types` analyses", id);

@@ -314,12 +314,12 @@ impl ParquetFile {
         .await?;
 
         Ok(Self {
+            builder,
             writer,
             uploader,
             arrow_builder_buffer_bytes,
             row_group_size,
             desc,
-            builder,
         })
     }
 

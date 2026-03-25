@@ -169,7 +169,7 @@ where
             ));
 
             // Load up deferred work using trace2 cursors and batches captured just above.
-            for (batch2_cursor, batch2) in batch2_cursors.into_iter() {
+            for (batch2_cursor, batch2) in batch2_cursors {
                 trace!(
                     operator_id,
                     input = 2,

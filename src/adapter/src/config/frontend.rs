@@ -89,7 +89,7 @@ impl SystemParameterFrontend {
     /// value was modified.
     pub fn pull(&self, params: &mut SynchronizedParameters) -> bool {
         let mut changed = false;
-        for param_name in params.synchronized().into_iter() {
+        for param_name in params.synchronized() {
             let flag_name = self
                 .key_map
                 .get(param_name)

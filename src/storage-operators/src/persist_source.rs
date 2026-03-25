@@ -629,12 +629,11 @@ impl PendingWork {
                                             ?result,
                                             "persist filter pushdown correctness violation!"
                                         );
-                                        if self.panic_on_audit_failure {
-                                            panic!(
-                                                "persist filter pushdown correctness violation! {}",
-                                                name
-                                            );
-                                        }
+                                        assert!(
+                                            !self.panic_on_audit_failure,
+                                            "persist filter pushdown correctness violation! {}",
+                                            name
+                                        )
                                     },
                                 );
                             }

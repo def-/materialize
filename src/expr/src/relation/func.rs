@@ -733,9 +733,10 @@ fn lag_lead_inner_ignore_nulls<'a>(
 ) -> Vec<Datum<'a>> {
     // We check here once that even the largest index fits in `i64`, and then do silent `as`
     // conversions from `usize` indexes to `i64` indexes throughout this function.
-    if i64::try_from(args.len()).is_err() {
-        panic!("window partition way too big")
-    }
+    assert!(
+        !i64::try_from(args.len()).is_err(),
+        "window partition way too big"
+    );
     // Preparation: Make sure we can jump over a run of nulls in constant time, i.e., regardless of
     // how many nulls the run has. The following skip tables will point to the next non-null index.
     let mut skip_nulls_backward = vec![None; args.len()];
@@ -1002,7 +1003,7 @@ where
     let mut args = Vec::with_capacity(size_hint);
     let mut original_rows = Vec::with_capacity(size_hint);
     let mut order_by_rows = Vec::with_capacity(size_hint);
-    for (d, order_by_row) in datums.into_iter() {
+    for (d, order_by_row) in datums {
         let mut iter = d.unwrap_list().iter();
         let original_row = iter.next().unwrap();
         let arg = iter.next().unwrap();
@@ -1281,7 +1282,7 @@ where
     let mut args: Vec<Datum> = Vec::with_capacity(size_hint);
     let mut original_rows: Vec<Datum> = Vec::with_capacity(size_hint);
     let mut order_by_rows = Vec::with_capacity(size_hint);
-    for (d, order_by_row) in datums.into_iter() {
+    for (d, order_by_row) in datums {
         let mut iter = d.unwrap_list().iter();
         let original_row = iter.next().unwrap();
         let arg = iter.next().unwrap();
@@ -1368,7 +1369,7 @@ where
         ) where
             A: OneByOneAggr,
         {
-            for current_arg in args.into_iter() {
+            for current_arg in args {
                 one_by_one_aggr.give(&current_arg);
                 let result_value = one_by_one_aggr.get_current_aggregate(temp_storage);
                 result.push(result_value);

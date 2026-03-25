@@ -1342,7 +1342,7 @@ where
         }
 
         // Next, collect all aggregations that require distinctness.
-        for (datum_index, aggr) in distinct_aggrs.into_iter() {
+        for (datum_index, aggr) in distinct_aggrs {
             let pairer = Pairer::new(key_arity);
             let collection = collection
                 .clone()

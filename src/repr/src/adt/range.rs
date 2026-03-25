@@ -908,7 +908,7 @@ impl<'a, T: FromSql<'a>> FromSql<'a> for Range<T> {
             types::Range::Nonempty(lower, upper) => {
                 let mut bounds = Vec::with_capacity(2);
 
-                for bound_outer in [lower, upper].into_iter() {
+                for bound_outer in [lower, upper] {
                     let bound = match bound_outer {
                         types::RangeBound::Exclusive(bound)
                         | types::RangeBound::Inclusive(bound) => bound
@@ -917,7 +917,7 @@ impl<'a, T: FromSql<'a>> FromSql<'a> for Range<T> {
                         types::RangeBound::Unbounded => None,
                     };
                     let inclusive = matches!(bound_outer, types::RangeBound::Inclusive(_));
-                    bounds.push(RangeBound { bound, inclusive });
+                    bounds.push(RangeBound { inclusive, bound });
                 }
 
                 let lower = bounds.remove(0);

@@ -81,9 +81,11 @@ impl UnitColumnar {
 
 impl ColumnDecoder<()> for UnitColumnar {
     fn decode(&self, idx: usize, _val: &mut ()) {
-        if idx >= self.len {
-            panic!("index out of bounds, idx: {idx}, len: {}", self.len);
-        }
+        assert!(
+            !(idx >= self.len),
+            "index out of bounds, idx: {idx}, len: {}",
+            self.len
+        );
     }
 
     fn is_null(&self, idx: usize) -> bool {

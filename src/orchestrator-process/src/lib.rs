@@ -857,11 +857,10 @@ impl OrchestratorWorker {
                     .await
                 {
                     Ok(status) => {
-                        if propagate_crashes && did_process_crash(status) {
-                            panic!(
-                                "{full_id}-{i} crashed; aborting because propagate_crashes is enabled"
-                            );
-                        }
+                        assert!(
+                            !(propagate_crashes && did_process_crash(status)),
+                            "{full_id}-{i} crashed; aborting because propagate_crashes is enabled"
+                        );
                         error!("{full_id}-{i} exited: {:?}; relaunching in 5s", status);
                     }
                     Err(e) => {

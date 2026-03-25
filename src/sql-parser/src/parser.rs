@@ -339,7 +339,7 @@ impl<'a> Parser<'a> {
     }
 
     fn error(&self, pos: usize, message: String) -> ParserError {
-        ParserError { pos, message }
+        ParserError { message, pos }
     }
 
     fn parse_statements(&mut self) -> Result<Vec<StatementParseResult<'a>>, ParserStatementError> {
@@ -2310,9 +2310,9 @@ impl<'a> Parser<'a> {
 
         Ok(CsrConnectionAvro {
             connection,
-            seed,
             key_strategy,
             value_strategy,
+            seed,
         })
     }
 
@@ -2484,8 +2484,8 @@ impl<'a> Parser<'a> {
         Ok(Statement::CreateConnection(CreateConnectionStatement {
             name,
             connection_type,
-            values,
             if_not_exists,
+            values,
             with_options,
         }))
     }
@@ -2901,10 +2901,10 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::CreateSubsource(CreateSubsourceStatement {
             name,
-            if_not_exists,
             columns,
             of_source,
             constraints,
+            if_not_exists,
             with_options,
         }))
     }
@@ -3870,8 +3870,8 @@ impl<'a> Parser<'a> {
 
         let definition = self.parse_view_definition()?;
         Ok(Statement::CreateView(CreateViewStatement {
-            temporary,
             if_exists,
+            temporary,
             definition,
         }))
     }
@@ -6699,10 +6699,10 @@ impl<'a> Parser<'a> {
             .parse_raw_ident()
             .map_parser_err(StatementKind::AlterSetCluster)?;
         Ok(Statement::AlterSetCluster(AlterSetClusterStatement {
-            name,
             if_exists,
-            set_cluster,
+            name,
             object_type,
+            set_cluster,
         }))
     }
 

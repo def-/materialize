@@ -747,7 +747,7 @@ impl Coordinator {
         }
 
         let mut timeline_associations = BTreeMap::new();
-        for (timeline, id_bundle) in timeline_id_bundles.into_iter() {
+        for (timeline, id_bundle) in timeline_id_bundles {
             let TimelineState { read_holds, .. } = self
                 .global_timelines
                 .get(&timeline)

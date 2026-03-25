@@ -1445,8 +1445,8 @@ fn create_connection_info(
     );
     ConnectionInfo {
         environmentd_url,
-        listeners_configmap,
         mz_system_secret_name,
+        listeners_configmap,
     }
 }
 

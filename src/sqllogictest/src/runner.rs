@@ -1911,7 +1911,7 @@ impl<'a> RunnerInner<'a> {
                 Ok(result) => {
                     let mut rows = Vec::new();
 
-                    for m in result.into_iter() {
+                    for m in result {
                         match m {
                             SimpleQueryMessage::Row(row) => {
                                 let mut s = vec![];

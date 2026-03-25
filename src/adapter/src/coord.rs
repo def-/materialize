@@ -1573,9 +1573,9 @@ impl ExecuteContext {
         Self {
             inner: ExecuteContextInner {
                 tx,
+                internal_cmd_tx,
                 session,
                 extra,
-                internal_cmd_tx,
             }
             .into(),
         }
@@ -2433,7 +2433,7 @@ impl Coordinator {
 
                 // Consolidate Row data, staged batches must already be consolidated.
                 let mut all_appends = Vec::with_capacity(grouped_appends.len());
-                for (item_id, table_data) in grouped_appends.into_iter() {
+                for (item_id, table_data) in grouped_appends {
                     let mut all_rows = Vec::new();
                     let mut all_data = Vec::new();
                     for data in table_data {

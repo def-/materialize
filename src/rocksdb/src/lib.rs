@@ -505,7 +505,7 @@ where
         if puts.peek().is_some() {
             let puts = puts.chunks(batch_size);
 
-            for puts in puts.into_iter() {
+            for puts in &puts {
                 let ret = self.multi_update_inner(puts).await?;
                 stats.processed_updates += ret.processed_updates;
                 stats.size_written += ret.size_written;

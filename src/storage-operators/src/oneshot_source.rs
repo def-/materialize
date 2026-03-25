@@ -646,9 +646,7 @@ pub fn render_completion_operator<G, F>(
                         .expect("only 1 event on the result stream");
 
                     // TODO(cf2): Lift this restriction.
-                    if maybe_payload.is_some() {
-                        panic!("expected only one batch!");
-                    }
+                    assert!(!maybe_payload.is_some(), "expected only one batch!");
 
                     maybe_payload = Some(result.map_err(|e| e.to_string())?);
                 }

@@ -554,12 +554,12 @@ where
         // TODO: Even better would be to write the rollup in the
         // tombstone transition so it's a single terminal state
         // transition, but it'll be tricky to get right.
-        if was_tombstone_before && !(is_rollup || is_become_tombstone) {
-            panic!(
-                "cmd {} unexpectedly tried to commit a new state on a tombstone: {:?}",
-                cmd.name, state
-            );
-        }
+        assert!(
+            !(was_tombstone_before && !(is_rollup || is_become_tombstone)),
+            "cmd {} unexpectedly tried to commit a new state on a tombstone: {:?}",
+            cmd.name,
+            state
+        );
 
         let now = (cfg.now)();
         let write_rollup = new_state.need_rollup(

@@ -1577,7 +1577,7 @@ pub fn describe_subscribe(
     match stmt.output {
         SubscribeOutput::Diffs | SubscribeOutput::WithinTimestampOrderBy { .. } => {
             desc = desc.with_column("mz_diff", SqlScalarType::Int64.nullable(true));
-            for (name, mut ty) in relation_desc.into_iter() {
+            for (name, mut ty) in relation_desc {
                 if progress {
                     ty.nullable = true;
                 }

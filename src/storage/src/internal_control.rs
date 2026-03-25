@@ -137,9 +137,10 @@ pub struct InternalCommandSender {
 impl InternalCommandSender {
     /// Broadcasts the given command to all workers.
     pub fn send(&self, cmd: InternalStorageCommand) {
-        if self.tx.send(cmd).is_err() {
-            panic!("internal command channel disconnected");
-        }
+        assert!(
+            !self.tx.send(cmd).is_err(),
+            "internal command channel disconnected"
+        );
 
         self.activator.borrow().as_ref().map(|a| a.activate());
     }

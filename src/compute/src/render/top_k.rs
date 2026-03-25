@@ -309,7 +309,7 @@ where
             // These bucket values define the shifts that happen to the 64 bit hash of the
             // record, and should have the properties that 1. there are not too many of them,
             // and 2. each has a modest difference to the next.
-            for bucket in buckets.into_iter() {
+            for bucket in buckets {
                 // here we do not apply `offset`, but instead restrict ourself with a limit
                 // that includes the offset. We cannot apply `offset` until we perform the
                 // final, complete reduction.
@@ -650,7 +650,7 @@ where
 
                 // We now need to lay out the data in order of `buffer`, but respecting
                 // the `offset` and `limit` constraints.
-                for index in indexes.into_iter() {
+                for index in indexes {
                     let (datums, mut diff) = source[index];
                     if !diff.is_positive() {
                         continue;

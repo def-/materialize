@@ -177,7 +177,7 @@ where
             if collection.collection.is_some() {
                 binding.collection = collection.collection;
             }
-            for (key, flavor) in collection.arranged.into_iter() {
+            for (key, flavor) in collection.arranged {
                 binding.arranged.insert(key, flavor);
             }
         }

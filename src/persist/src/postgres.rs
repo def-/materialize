@@ -151,9 +151,10 @@ impl PostgresConsensusConfig {
         let url = match std::env::var(Self::EXTERNAL_TESTS_POSTGRES_URL) {
             Ok(url) => SensitiveUrl::from_str(&url).map_err(|e| e.to_string())?,
             Err(_) => {
-                if mz_ore::env::is_var_truthy("CI") {
-                    panic!("CI is supposed to run this test but something has gone wrong!");
-                }
+                assert!(
+                    !mz_ore::env::is_var_truthy("CI"),
+                    "CI is supposed to run this test but something has gone wrong!"
+                );
                 return Ok(None);
             }
         };

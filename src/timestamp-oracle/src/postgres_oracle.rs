@@ -135,9 +135,10 @@ impl PostgresTimestampOracleConfig {
         let url = match std::env::var(Self::EXTERNAL_TESTS_POSTGRES_URL) {
             Ok(url) => SensitiveUrl::from_str(&url).expect("invalid Postgres URL"),
             Err(_) => {
-                if mz_ore::env::is_var_truthy("CI") {
-                    panic!("CI is supposed to run this test but something has gone wrong!");
-                }
+                assert!(
+                    !mz_ore::env::is_var_truthy("CI"),
+                    "CI is supposed to run this test but something has gone wrong!"
+                );
                 return None;
             }
         };
@@ -704,9 +705,7 @@ where
 
     #[mz_ore::instrument(name = "oracle::write_ts")]
     async fn fallible_write_ts(&self) -> Result<WriteTimestamp<Timestamp>, anyhow::Error> {
-        if self.read_only {
-            panic!("attempting write_ts in read-only mode");
-        }
+        assert!(!self.read_only, "attempting write_ts in read-only mode");
 
         let proposed_next_ts = self.next.now();
         let proposed_next_ts = Self::ts_to_decimal(proposed_next_ts);
@@ -783,9 +782,7 @@ where
 
     #[mz_ore::instrument(name = "oracle::apply_write")]
     async fn fallible_apply_write(&self, write_ts: Timestamp) -> Result<(), anyhow::Error> {
-        if self.read_only {
-            panic!("attempting apply_write in read-only mode");
-        }
+        assert!(!self.read_only, "attempting apply_write in read-only mode");
 
         let q = r#"
             UPDATE timestamp_oracle SET write_ts = GREATEST(write_ts, $2), read_ts = GREATEST(read_ts, $2)

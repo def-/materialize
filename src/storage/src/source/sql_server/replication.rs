@@ -110,9 +110,7 @@ pub(crate) fn render<G: Scope<Timestamp = Lsn>>(
 
             for (export_id, output) in outputs.iter() {
                 let key = output.partition_index;
-                if decoder_map.insert(key, Arc::clone(&output.decoder)).is_some() {
-                    panic!("Multiple decoders for output index {}", output.partition_index);
-                }
+                assert!(!decoder_map.insert(key, Arc::clone(&output.decoder)).is_some(), "Multiple decoders for output index {}", output.partition_index);
                 // Collect the included columns from decoder for schema
                 // change validation. The decoder serves as an effective
                 // source of truth for which columns are "included", as we

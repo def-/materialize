@@ -1054,9 +1054,10 @@ where
             Err(anyhow::anyhow!("Error consolidating values"))
         });
 
-        if completed && self.snapshot_completed {
-            panic!("attempted completion of already completed upsert snapshot")
-        }
+        assert!(
+            !(completed && self.snapshot_completed),
+            "attempted completion of already completed upsert snapshot"
+        );
 
         let phase = if !self.snapshot_completed {
             "rehydration"

@@ -283,7 +283,7 @@ where
         };
 
         // progress through stages, updating partial results and errors.
-        for stage_plan in linear_plan.stage_plans.into_iter() {
+        for stage_plan in linear_plan.stage_plans {
             // Different variants of `joined` implement this differently,
             // and the logic is centralized there.
             let stream = self.differential_join(

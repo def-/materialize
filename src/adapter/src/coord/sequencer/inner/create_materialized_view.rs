@@ -491,8 +491,8 @@ impl Coordinator {
                                 let (_, df_meta) = global_lir_plan.unapply();
                                 CreateMaterializedViewStage::Explain(
                                     CreateMaterializedViewExplain {
-                                        validity,
                                         global_id,
+                                        validity,
                                         plan,
                                         df_meta,
                                         explain_ctx,

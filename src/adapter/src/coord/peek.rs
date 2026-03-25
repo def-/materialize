@@ -949,7 +949,7 @@ impl crate::coord::Coordinator {
                     let shard_id = response.shard_id;
 
                     let mut batches = Vec::new();
-                    for proto_batch in response.batches.into_iter() {
+                    for proto_batch in response.batches {
                         let batch =
                             persist_client.batch_from_transmittable_batch(&shard_id, proto_batch);
 

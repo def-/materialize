@@ -388,10 +388,10 @@ impl Coordinator {
                                 SubscribeStage::Finish(SubscribeFinish {
                                     validity,
                                     cluster_id,
+                                    replica_id,
                                     plan,
                                     global_lir_plan,
                                     dependency_ids,
-                                    replica_id,
                                 })
                             }
                         }

@@ -188,9 +188,10 @@ impl CompletedClientTransmitter {
 
 impl<T: Transmittable> Drop for ClientTransmitter<T> {
     fn drop(&mut self) {
-        if self.tx.is_some() {
-            panic!("client transmitter dropped without send")
-        }
+        assert!(
+            !self.tx.is_some(),
+            "client transmitter dropped without send"
+        );
     }
 }
 
@@ -539,7 +540,8 @@ where
     }
 
     // Cycle detection: if we didn't process all items, there's a cycle.
-    if !items_by_key.is_empty() {
-        panic!("dependency cycle: {items_by_key:?}");
-    }
+    assert!(
+        items_by_key.is_empty(),
+        "dependency cycle: {items_by_key:?}"
+    )
 }

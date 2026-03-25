@@ -626,9 +626,10 @@ impl<T: TryIntoStateUpdateKind, U: ApplyUpdate<T>> PersistHandle<T, U> {
         let mut errors = Vec::new();
 
         for (kind, ts, diff) in updates {
-            if diff != Diff::ONE && diff != Diff::MINUS_ONE {
-                panic!("invalid update in consolidated trace: ({kind:?}, {ts:?}, {diff:?})");
-            }
+            assert!(
+                !(diff != Diff::ONE && diff != Diff::MINUS_ONE),
+                "invalid update in consolidated trace: ({kind:?}, {ts:?}, {diff:?})"
+            );
 
             match self.update_applier.apply_update(
                 StateUpdate { kind, ts, diff },
@@ -744,9 +745,10 @@ impl<U: ApplyUpdate<StateUpdateKind>> PersistHandle<StateUpdateKind, U> {
             let mut snapshot = Snapshot::empty();
             for (kind, ts, diff) in trace {
                 let diff = *diff;
-                if diff != Diff::ONE && diff != Diff::MINUS_ONE {
-                    panic!("invalid update in consolidated trace: ({kind:?}, {ts:?}, {diff:?})");
-                }
+                assert!(
+                    !(diff != Diff::ONE && diff != Diff::MINUS_ONE),
+                    "invalid update in consolidated trace: ({kind:?}, {ts:?}, {diff:?})"
+                );
 
                 match kind {
                     StateUpdateKind::AuditLog(_key, ()) => {
