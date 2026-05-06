@@ -122,12 +122,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--release",
-        help="Build artifacts in release mode, with optimizations",
+        help="Build artifacts in release mode, with optimizations and LTO",
         action="store_true",
     )
     parser.add_argument(
-        "--optimized",
-        help="Build artifacts in optimized mode, with optimizations (but no LTO and debug symbols)",
+        "--debug",
+        help="Build artifacts in debug mode, without optimizations",
         action="store_true",
     )
     parser.add_argument(
@@ -316,7 +316,7 @@ def main() -> int:
             if args.monitoring:
                 command += ["--opentelemetry-endpoint=http://localhost:4317"]
             # Common stack overflows in Debug mode
-            if not args.release and not args.optimized:
+            if args.debug:
                 env["RUST_MIN_STACK"] = RUST_MIN_STACK
         elif args.program == "sqllogictest":
             for arg in args.args:
@@ -340,7 +340,7 @@ def main() -> int:
                 *args.args,
             ]
             # Common stack overflows in Debug mode
-            if not args.release and not args.optimized:
+            if args.debug:
                 env["RUST_MIN_STACK"] = RUST_MIN_STACK
             # Always enable soft assertions in SLTs for un-redacted debug formatting and additional testing.
             env["MZ_SOFT_ASSERTIONS"] = "1"
@@ -505,7 +505,7 @@ def _cargo_command(args: argparse.Namespace, *subcommands: str) -> list[str]:
     command += subcommands
     if args.release:
         command += ["--release"]
-    if args.optimized:
+    elif not args.debug:
         command += [
             "--cargo-profile" if subcommands == ("nextest", "run") else "--profile",
             "optimized",
@@ -520,7 +520,7 @@ def _cargo_command(args: argparse.Namespace, *subcommands: str) -> list[str]:
 
 
 def _cargo_artifact_path(args: argparse.Namespace, program: str) -> pathlib.Path:
-    dir_name = "release" if args.release else "optimized" if args.optimized else "debug"
+    dir_name = "release" if args.release else "debug" if args.debug else "optimized"
     if args.sanitizer != "none":
         artifact_path = MZ_ROOT / "target" / SANITIZER_TARGET / dir_name
     else:
