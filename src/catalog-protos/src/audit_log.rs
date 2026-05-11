@@ -15,12 +15,12 @@
 
 use mz_audit_log::{
     AlterApplyReplacementV1, AlterDefaultPrivilegeV1, AlterRetainHistoryV1, AlterSetClusterV1,
-    AlterSourceSinkV1, CreateClusterReplicaV1, CreateClusterReplicaV2, CreateClusterReplicaV3,
-    CreateClusterReplicaV4, CreateIndexV1, CreateMaterializedViewV1,
-    CreateOrDropClusterReplicaReasonV1, CreateRoleV1, CreateSourceSinkV1, CreateSourceSinkV2,
-    CreateSourceSinkV3, CreateSourceSinkV4, DropClusterReplicaV1, DropClusterReplicaV2,
-    DropClusterReplicaV3, EventDetails, EventType, EventV1, FromPreviousIdV1, FullNameV1,
-    GrantRoleV1, GrantRoleV2, IdFullNameV1, IdNameV1, RefreshDecisionWithReasonV1,
+    AlterSourceSinkV1, AlterSourceTimestampIntervalV1, CreateClusterReplicaV1,
+    CreateClusterReplicaV2, CreateClusterReplicaV3, CreateClusterReplicaV4, CreateIndexV1,
+    CreateMaterializedViewV1, CreateOrDropClusterReplicaReasonV1, CreateRoleV1, CreateSourceSinkV1,
+    CreateSourceSinkV2, CreateSourceSinkV3, CreateSourceSinkV4, DropClusterReplicaV1,
+    DropClusterReplicaV2, DropClusterReplicaV3, EventDetails, EventType, EventV1, FromPreviousIdV1,
+    FullNameV1, GrantRoleV1, GrantRoleV2, IdFullNameV1, IdNameV1, RefreshDecisionWithReasonV1,
     RefreshDecisionWithReasonV2, RenameClusterReplicaV1, RenameClusterV1, RenameItemV1,
     RenameSchemaV1, RevokeRoleV1, RevokeRoleV2, RotateKeysV1, SchedulingDecisionV1,
     SchedulingDecisionsWithReasonsV1, SchedulingDecisionsWithReasonsV2, SchemaV1, SchemaV2, SetV1,
@@ -1188,6 +1188,28 @@ impl RustType<crate::objects::audit_log_event_v1::AlterRetainHistoryV1> for Alte
     }
 }
 
+impl RustType<crate::objects::audit_log_event_v1::AlterSourceTimestampIntervalV1>
+    for AlterSourceTimestampIntervalV1
+{
+    fn into_proto(&self) -> crate::objects::audit_log_event_v1::AlterSourceTimestampIntervalV1 {
+        crate::objects::audit_log_event_v1::AlterSourceTimestampIntervalV1 {
+            id: self.id.to_string(),
+            old_interval: self.old_interval.clone(),
+            new_interval: self.new_interval.clone(),
+        }
+    }
+
+    fn from_proto(
+        proto: crate::objects::audit_log_event_v1::AlterSourceTimestampIntervalV1,
+    ) -> Result<Self, TryFromProtoError> {
+        Ok(AlterSourceTimestampIntervalV1 {
+            id: proto.id,
+            old_interval: proto.old_interval,
+            new_interval: proto.new_interval,
+        })
+    }
+}
+
 impl RustType<crate::objects::audit_log_event_v1::ToNewIdV1> for ToNewIdV1 {
     fn into_proto(&self) -> crate::objects::audit_log_event_v1::ToNewIdV1 {
         crate::objects::audit_log_event_v1::ToNewIdV1 {
@@ -1342,6 +1364,9 @@ impl RustType<crate::objects::audit_log_event_v1::Details> for EventDetails {
             EventDetails::AlterRetainHistoryV1(details) => {
                 AlterRetainHistoryV1(details.into_proto())
             }
+            EventDetails::AlterSourceTimestampIntervalV1(details) => {
+                AlterSourceTimestampIntervalV1(details.into_proto())
+            }
             EventDetails::ToNewIdV1(details) => ToNewIdV1(details.into_proto()),
             EventDetails::FromPreviousIdV1(details) => FromPreviousIdV1(details.into_proto()),
             EventDetails::SetV1(details) => SetV1(details.into_proto()),
@@ -1422,6 +1447,9 @@ impl RustType<crate::objects::audit_log_event_v1::Details> for EventDetails {
             AlterRetainHistoryV1(details) => {
                 Ok(EventDetails::AlterRetainHistoryV1(details.into_rust()?))
             }
+            AlterSourceTimestampIntervalV1(details) => Ok(
+                EventDetails::AlterSourceTimestampIntervalV1(details.into_rust()?),
+            ),
             ToNewIdV1(details) => Ok(EventDetails::ToNewIdV1(details.into_rust()?)),
             FromPreviousIdV1(details) => Ok(EventDetails::FromPreviousIdV1(details.into_rust()?)),
             SetV1(details) => Ok(EventDetails::SetV1(details.into_rust()?)),
