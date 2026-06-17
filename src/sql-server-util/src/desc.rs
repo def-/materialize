@@ -541,8 +541,19 @@ fn parse_data_type(
             }
             "text" | "ntext" | "image" => {
                 // SQL Server docs indicate this should always be 16. There's no
-                // issue if it's not, but it's good to track.
-                mz_ore::soft_assert_eq_no_log!(raw.max_length, 16);
+                // issue if it's not, but it's good to track. `max_length` comes
+                // from upstream metadata (or on-disk catalog bytes), so we can't
+                // assert on it: a deviation is harmless here — the column is
+                // rejected below regardless — but a `soft_assert_eq!` would panic
+                // on otherwise-benign external input wherever soft assertions are
+                // enabled (CI, staging). Found by the proto-roundtrip fuzz target.
+                if raw.max_length != 16 {
+                    tracing::debug!(
+                        max_length = raw.max_length,
+                        data_type = %raw.data_type,
+                        "unexpected max_length for SQL Server LOB type, expected 16"
+                    );
+                }
 
                 // TODO(sql_server3): Support UPSERT semantics for SQL Server.
                 return Err(UnsupportedDataType {
@@ -1357,6 +1368,25 @@ mod tests {
             panic!("unexpected decode type {desc:?}");
         };
         assert_contains!(context, "columns with unlimited size do not support CDC");
+    }
+
+    /// Regression for a fuzz-found panic: a `text`/`ntext`/`image` column whose
+    /// `max_length` is not the documented `16` must be rejected gracefully, not
+    /// panic. `max_length` comes from upstream metadata, so it can be any value;
+    /// it used to drive a `soft_assert_eq!` that fired with soft assertions on
+    /// (as in `#[mz_ore::test]`).
+    #[mz_ore::test]
+    fn smoketest_lob_unexpected_max_length() {
+        for data_type in ["text", "ntext", "image"] {
+            for max_length in [-1i16, 0, 16, 42, i16::MIN, i16::MAX] {
+                let raw = SqlServerColumnRaw::new("foo", data_type).max_length(max_length);
+                let desc = SqlServerColumnDesc::new(&raw);
+                let SqlServerColumnDecodeType::Unsupported { context } = desc.decode_type else {
+                    panic!("unexpected decode type for {data_type}({max_length}): {desc:?}");
+                };
+                assert_contains!(context, "columns with unlimited size do not support CDC");
+            }
+        }
     }
 
     #[mz_ore::test]
