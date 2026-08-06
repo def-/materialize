@@ -34,6 +34,23 @@ fn datum_is_nan(datum: Datum) -> bool {
     }
 }
 
+/// Whether a datum is a timestamp carrying chrono's leap-second representation
+/// (a `:60` second, held as second 59 with nanos >= 1e9).
+///
+/// Such a value sorts below the second it names while the functions we treat as
+/// monotone count it at or past that second, so evaluating the endpoints does
+/// not bound the interior and the [ResultSpec::flat_map] shortcut must be
+/// skipped. Parsing rolls a `:60` second over, so only rows persisted before
+/// that carry the representation, and only their stats can bound a part with it.
+fn datum_is_leap_timestamp(datum: Datum) -> bool {
+    use chrono::Timelike;
+    match datum {
+        Datum::Timestamp(ts) => ts.nanosecond() >= 1_000_000_000,
+        Datum::TimestampTz(ts) => ts.nanosecond() >= 1_000_000_000,
+        _ => false,
+    }
+}
+
 /// Whether a datum is a floating-point or numeric infinity.
 fn datum_is_infinite(datum: Datum) -> bool {
     match datum {
@@ -393,12 +410,18 @@ impl<'a> ResultSpec<'a> {
                 result_map(Ok(Datum::False)).union(result_map(Ok(Datum::True)))
             }
             // Otherwise, if our function is monotonic, we can try mapping the input
-            // range to an output range. A range whose bounds include `NaN` is
-            // excluded: `NaN` is ordered as the maximum but is a fixed point of
-            // most monotone functions, so evaluating the endpoints does not
-            // bound the interior. Such ranges fall through to the
-            // overapproximation below.
-            Values::Within(min, max) if is_monotone && !datum_is_nan(min) && !datum_is_nan(max) => {
+            // range to an output range. Ranges whose bounds include `NaN` or a
+            // leap second are excluded: those values are ordered inconsistently
+            // with the functions we treat as monotone, so evaluating the
+            // endpoints does not bound the interior. Such ranges fall through to
+            // the overapproximation below.
+            Values::Within(min, max)
+                if is_monotone
+                    && !datum_is_nan(min)
+                    && !datum_is_nan(max)
+                    && !datum_is_leap_timestamp(min)
+                    && !datum_is_leap_timestamp(max) =>
+            {
                 let min_result = result_map(Ok(min));
                 let max_result = result_map(Ok(max));
                 // Value, null, and error are orthogonal channels. Monotonicity
@@ -2500,6 +2523,51 @@ mod tests {
         // When the CASE selects column 1, "y" is absent and `->> 'y'` yields NULL, so
         // `IS NULL` is True. The filter must not prune a part that could match.
         assert!(range_out.may_contain(Datum::True));
+    }
+
+    /// Regression test for PER-63: rounding to second precision leaves a leap
+    /// second alone while lifting the row below it into the next second, so
+    /// bounds of `[23:59:59.1, 23:59:60]` mapped to a range that excluded the
+    /// `00:00:00` an interior row rounds to, and a filter on that value would
+    /// prune the part holding it. (Not reachable end to end: every monotone
+    /// function over a timestamp is fallible, and `persist_source` keeps a part
+    /// whose filter may error. The unsoundness is in the range itself.)
+    #[mz_ore::test]
+    fn test_leap_second_bound() {
+        use chrono::NaiveDate;
+        use mz_repr::adt::timestamp::TimestampPrecision;
+
+        let arena = RowArena::new();
+        let expr = MirScalarExpr::CallUnary {
+            func: UnaryFunc::AdjustTimestampPrecision(AdjustTimestampPrecision {
+                from: None,
+                to: Some(TimestampPrecision::try_from(0i64).unwrap()),
+            }),
+            expr: Box::new(MirScalarExpr::column(0)),
+        };
+        let timestamp = |(y, m, d), (h, min, s), nanos| {
+            Datum::Timestamp(
+                NaiveDate::from_ymd_opt(y, m, d)
+                    .unwrap()
+                    .and_hms_nano_opt(h, min, s, nanos)
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            )
+        };
+
+        let relation = ReprRelationType::new(vec![ReprScalarType::Timestamp.nullable(false)]);
+        let mut interpreter = ColumnSpecs::new(&relation, &arena);
+        interpreter.push_column(
+            0,
+            ResultSpec::value_between(
+                timestamp((2015, 6, 30), (23, 59, 59), 100_000_000),
+                timestamp((2015, 6, 30), (23, 59, 59), 1_000_000_000),
+            ),
+        );
+
+        let range_out = interpreter.expr(&expr).range;
+        assert!(range_out.may_contain(timestamp((2015, 7, 1), (0, 0, 0), 0)));
     }
 
     #[mz_ore::test]

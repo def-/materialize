@@ -185,6 +185,40 @@ ALTER SYSTEM RESET persist_stats_audit_percent
 ----
 COMPLETE 0
 
+# Leap-second timestamps roll over at parse time (Postgres compat). The chrono
+# leap representation sorts below the second it names while the epoch family
+# (extract epoch, casts to mz_timestamp, subtraction, date_bin, precision
+# rounding) counts it at or past that second, so it breaks the bounds pushdown
+# derives from a part's stats and must not enter a timestamp at all. Rows
+# written before that was true still carry it, which
+# `interpret::datum_is_leap_timestamp` keeps out of the narrowing shortcut.
+
+query TT
+SELECT TIMESTAMP '2015-06-30 23:59:60' = TIMESTAMP '2015-07-01 00:00:00', TIMESTAMPTZ '2015-06-30 23:59:60+00' = TIMESTAMPTZ '2015-07-01 00:00:00+00'
+----
+true  true
+
+statement ok
+CREATE TABLE leap (ts timestamp)
+
+statement ok
+INSERT INTO leap VALUES ('2015-06-30 23:59:59.1'), ('2015-06-30 23:59:59.7'), ('2015-06-30 23:59:60')
+
+# Rounding to second precision moves 23:59:59.7 into the next second, which
+# the rolled-over leap row already is. Without the rollover the leap row kept
+# the chrono representation, which rounds to itself and sorts below both.
+query I
+SELECT count(*) FROM leap WHERE ts::timestamp(0) = TIMESTAMP '2015-07-01 00:00:00'
+----
+2
+
+# DATE + TIME rolls a leap second over the same way the timestamp literal
+# does, so the two spellings agree.
+query T
+SELECT DATE '2015-06-30' + TIME '23:59:60' = TIMESTAMP '2015-07-01 00:00:00'
+----
+true
+
 # EXPLAIN FILTER PUSHDOWN FOR MATERIALIZED VIEW is also supported
 
 statement ok

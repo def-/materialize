@@ -252,6 +252,23 @@ impl CastFunc {
                 }
                 Ok(Datum::from(d.into_inner()))
             }
+            // NOTE: The timestamp casts below are an accepted exception to the
+            // stability contract. `parse_timestamp_legacy` rolls a `:60` second
+            // into the next minute instead of keeping chrono's leap
+            // representation (nanos >= 1e9), and on the maximum date the
+            // rollover overflows and errors where it used to succeed. Keeping
+            // the leap representation out of a timestamp is what makes epoch
+            // conversions monotone, which persist filter pushdown needs to
+            // derive correct ranges, so storage wants the rollover as much as
+            // SQL does.
+            //
+            // No migration accompanies the change because the differing inputs
+            // cannot reach here. These casts are built only for a PostgreSQL
+            // source column of type `timestamp`/`timestamptz`
+            // (`mz_sql::pure::postgres::pg_type_to_cast_func`), so their input
+            // is PostgreSQL's own text output for that type. PostgreSQL
+            // normalizes `:60` on input and has no leap representation to emit.
+            // `timestamp_frozen_leap_second` pins the behavior.
             CastFunc::CastStringToTimestamp(precision) => {
                 let out = strconv::parse_timestamp_legacy(a)?;
                 let updated = out.round_to_precision(*precision)?;
@@ -755,6 +772,15 @@ mod tests {
             })
         }
 
+        fn out_of_range_err(type_name: &'static str, input: &str) -> EvalError {
+            EvalError::Parse(ParseError {
+                kind: ParseErrorKind::OutOfRange,
+                type_name: type_name.into(),
+                input: input.into(),
+                details: None,
+            })
+        }
+
         #[mz_ore::test]
         fn error_bool() {
             assert_eq!(
@@ -915,6 +941,63 @@ mod tests {
                     "4294967296",
                     "number too large to fit in target type"
                 ),
+            );
+        }
+
+        #[mz_ore::test]
+        fn timestamp_frozen_leap_second() {
+            // A `:60` second rolls into the next minute rather than keeping
+            // chrono's leap representation, and the rollover overflows into an
+            // out-of-range error on the maximum date. This is the deliberate
+            // exception to the stability contract described at the eval arm.
+            let arena = RowArena::new();
+
+            let ts_expr = cast_col0(CastFunc::CastStringToTimestamp(None));
+            let result = ts_expr
+                .eval(&[Datum::String("2015-06-30 23:59:60")], &arena)
+                .unwrap();
+            let Datum::Timestamp(t) = result else {
+                panic!("expected Timestamp, got {result:?}");
+            };
+            let mut buf = String::new();
+            strconv::format_timestamp(&mut buf, &t);
+            assert_eq!(buf, "2015-07-01 00:00:00");
+
+            let tstz_expr = cast_col0(CastFunc::CastStringToTimestampTz(None));
+            let result = tstz_expr
+                .eval(&[Datum::String("2015-06-30 23:59:60+00")], &arena)
+                .unwrap();
+            let Datum::TimestampTz(t) = result else {
+                panic!("expected TimestampTz, got {result:?}");
+            };
+            let mut buf = String::new();
+            strconv::format_timestamptz(&mut buf, &t);
+            assert_eq!(buf, "2015-07-01 00:00:00+00");
+
+            // The mz_timestamp cast shares the same parse but converts to epoch
+            // milliseconds, which already counted a leap value at the following
+            // second, so the rollover left it unchanged.
+            let mz_ts_expr = cast_col0(CastFunc::CastStringToMzTimestamp);
+            assert_eq!(
+                mz_ts_expr
+                    .eval(&[Datum::String("2015-06-30 23:59:60+00")], &arena)
+                    .unwrap(),
+                Datum::MzTimestamp(mz_repr::Timestamp::from(1_435_708_800_000u64)),
+            );
+
+            assert_eq!(
+                eval_cast_err(
+                    CastFunc::CastStringToTimestamp(None),
+                    "262142-12-31 23:59:60"
+                ),
+                out_of_range_err("timestamp", "262142-12-31 23:59:60"),
+            );
+            assert_eq!(
+                eval_cast_err(
+                    CastFunc::CastStringToTimestampTz(None),
+                    "262142-12-31 23:59:60+00"
+                ),
+                out_of_range_err("timestamp with time zone", "262142-12-31 23:59:60+00"),
             );
         }
 
@@ -1143,7 +1226,15 @@ mod tests {
                 "Timestamp",
                 CastFunc::CastStringToTimestamp(None),
                 UnaryFunc::CastStringToTimestamp(CastStringToTimestamp(None)),
-                &["2023-01-15 12:34:56", "bad", ""],
+                &[
+                    "2023-01-15 12:34:56",
+                    // The leap-second rollover must stay on both sides. See
+                    // `timestamp_frozen_leap_second`.
+                    "2015-06-30 23:59:60",
+                    "262142-12-31 23:59:60",
+                    "bad",
+                    "",
+                ],
             );
         }
 
@@ -1154,7 +1245,15 @@ mod tests {
                 "TimestampTz",
                 CastFunc::CastStringToTimestampTz(None),
                 UnaryFunc::CastStringToTimestampTz(CastStringToTimestampTz(None)),
-                &["2023-01-15 12:34:56+00", "bad", ""],
+                &[
+                    "2023-01-15 12:34:56+00",
+                    // The leap-second rollover must stay on both sides. See
+                    // `timestamp_frozen_leap_second`.
+                    "2015-06-30 23:59:60+00",
+                    "262142-12-31 23:59:60+00",
+                    "bad",
+                    "",
+                ],
             );
         }
 
