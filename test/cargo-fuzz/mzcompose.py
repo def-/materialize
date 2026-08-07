@@ -103,6 +103,7 @@ FRUITFUL = [
     "upsert_state_consolidate",
     "upsert_runtime",
     "row_arrow_roundtrip",
+    "pushdown_soundness",
 ]
 
 say = ui.speaker("")
@@ -427,22 +428,20 @@ class FuzzRunner:
         # A zero exit does NOT mean "no crash": fork mode writes the crash
         # artifact and keeps fuzzing, exiting 0 at the time limit. Fail the job if
         # it exited non-zero OR produced any new crash artifact.
+        #
+        # Anything else fails, including a negative returncode (POSIX for "died
+        # on signal"). Runner-initiated cancellation never reaches `_reap`:
+        # targets run in their own session so a terminal Ctrl-C does not touch
+        # them, and `_shutdown` collects the children it signals itself, leaving
+        # them counted as unfinished rather than passed. libFuzzer also handles
+        # SIGINT/SIGTERM itself and exits with a positive interrupt code. So a
+        # signal death observed here is abnormal (kernel OOM killer, an external
+        # supervisor, a fault taken before libFuzzer installed its handlers), and
+        # it means this target fuzzed nothing to completion. Treating it as a
+        # pass would keep the run green while silently losing that coverage.
         if job.returncode == 0 and not self._new_artifacts(job):
             self.succeeded.append(job)
             say(f"✓ {job.name}  [{secs}s]  {final_stats(job.log_path)}")
-        elif (
-            job.returncode is not None
-            and job.returncode < 0
-            and not self._new_artifacts(job)
-        ):
-            # Killed by a signal (Ctrl-C, step timeout, an external kill)
-            # without a crash artifact: an interrupted run, not a crash.
-            # Crashes always leave an artifact, so this cannot mask one.
-            self.succeeded.append(job)
-            say(
-                f"- {job.name} interrupted by signal {-job.returncode} [{secs}s]  "
-                f"{final_stats(job.log_path)}"
-            )
         else:
             self.failed.append(job)
             say(self._failure_block(job, secs))
@@ -476,6 +475,17 @@ class FuzzRunner:
             f"target: {job.name}  ({job.crate})",
             f"exit code: {job.returncode}  (after {secs}s)",
         ]
+        if job.returncode is not None and job.returncode < 0:
+            # A signal death leaves no artifact and no libFuzzer diagnostic, so
+            # the signal name is the whole clue. SIGKILL here is most often the
+            # kernel OOM killer or an external supervisor, not a bug in the
+            # target.
+            sig = -job.returncode
+            lines.append(
+                f"killed by signal {sig} ({signal.strsignal(sig) or 'unknown'}): "
+                "abnormal death, not a libFuzzer-detected crash. This target's "
+                "coverage for the run was lost."
+            )
         if artifacts:
             lines.append(f"new artifacts: {', '.join(artifacts)}")
         san = f"--sanitizer={self.sanitizer} " if self.sanitizer else ""
