@@ -234,8 +234,6 @@ class Indexes(Generator):
 
 
 class IndexedViews(Generator):
-    MAX_COUNT = 1000  # TODO: Bump when https://github.com/MaterializeInc/database-issues/issues/9307 is fixed
-
     @classmethod
     def body(cls) -> None:
         print("$ postgres-execute connection=mz_system")

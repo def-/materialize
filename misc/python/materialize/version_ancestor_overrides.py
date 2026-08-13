@@ -28,6 +28,12 @@ def get_ancestor_overrides_for_performance_regressions(
 
     min_ancestor_mz_version_per_commit = dict()
 
+    if scenario_class_name == "FastPathFilterNoIndex":
+        # See https://linear.app/materializeinc/issue/SQL-633
+        min_ancestor_mz_version_per_commit[
+            "f4650d00ba6bdd5fcb86f55c29ada9ed603d7c7f"
+        ] = MzVersion.parse_mz("v26.38.0")
+
     if scenario_class_name == "ParallelDataflows":
         # PR#32095 (Dictionary compressed arrangements) increased wallclock by ~10%
         min_ancestor_mz_version_per_commit[
