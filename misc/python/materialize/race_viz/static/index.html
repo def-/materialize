@@ -1,0 +1,68 @@
+<!doctype html>
+<!--
+Copyright Materialize, Inc. and contributors. All rights reserved.
+
+Use of this software is governed by the Business Source License
+included in the LICENSE file at the root of this repository.
+
+As of the Change Date specified in that file, in accordance with
+the Business Source License, use of this software will be governed
+by the Apache License, Version 2.0.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Race Viewer</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Race Viewer <span id="test-name"></span></h1>
+    <div class="actions">
+      <label class="button secondary">Open run file<input id="open-file" type="file" accept=".json" hidden></label>
+      <button id="download" class="secondary" disabled>Download run</button>
+      <button id="explore" class="secondary server-only">Explore A-B-A</button>
+      <button id="run" class="server-only">Run</button>
+    </div>
+  </header>
+  <main>
+    <aside id="sidebar">
+      <section>
+        <h2>Constraints</h2>
+        <p class="hint">Click a hit, then <b>Order before…</b>, then click the hit that must wait. Right-click two hits does the same.</p>
+        <ul id="constraints"></ul>
+        <p id="pending" class="hint" hidden></p>
+      </section>
+      <section id="explore-section" hidden>
+        <h2>Exploration</h2>
+        <div id="explore-progress"></div>
+        <ul id="outcomes"></ul>
+      </section>
+      <section>
+        <h2>Runs</h2>
+        <ul id="runs"></ul>
+      </section>
+    </aside>
+    <section id="content">
+      <div id="run-summary"></div>
+      <div class="toolbar">
+        <label><input type="checkbox" id="filter-comm"> Communication points only</label>
+        <label><input type="checkbox" id="filter-idle" checked> Hide actors without points</label>
+        <label><input type="checkbox" id="filter-markers" checked> Show wait/wake markers</label>
+        <input id="filter-text" type="search" placeholder="Filter points, keys, notes">
+      </div>
+      <div id="lanes-wrap">
+        <div id="lanes"></div>
+        <svg id="arrows"></svg>
+      </div>
+    </section>
+    <aside id="details">
+      <div id="hit-details"><p class="hint">Select a hit to see its details and source.</p></div>
+      <pre id="source"></pre>
+    </aside>
+  </main>
+  <div id="toast" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

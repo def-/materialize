@@ -4433,6 +4433,11 @@ impl Coordinator {
     /// so either one can see it first.
     fn materialized_view_sealed(&self, entry: &CatalogEntry) -> bool {
         let gid = entry.latest_global_id();
+        let _race = mz_ore::race_point!(
+            "mv_sealed_check",
+            key = gid,
+            kind = mz_ore::race::Access::Read,
+        );
         let compute_upper = self
             .controller
             .compute

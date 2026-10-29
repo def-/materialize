@@ -1902,6 +1902,17 @@ impl Instance {
         id: GlobalId,
         new_frontier: Antichain<Timestamp>,
     ) {
+        // Taken before the frontier lock, which readers of the frontier
+        // contend on while this point may wait.
+        let _race = if new_frontier.is_empty() {
+            mz_ore::race_point!(
+                "compute_write_frontier_sealed",
+                key = id,
+                kind = mz_ore::race::Access::Write,
+            )
+        } else {
+            None
+        };
         let collection = self.expect_collection_mut(id);
 
         let advanced = collection.shared.lock_write_frontier(|f| {

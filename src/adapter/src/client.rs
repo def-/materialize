@@ -804,6 +804,18 @@ impl SessionClient {
     ) -> Result<(ExecuteResponse, Instant), AdapterError> {
         let execute_started = Instant::now();
         let cancel_future = cancel_future.map(|_| ()).shared();
+        // Held until the statement finishes, so ordering constraints can wait
+        // for its completion.
+        let _race = mz_ore::race_point_async!(
+            "execute",
+            note = self
+                .session()
+                .get_portal_unverified(&portal_name)
+                .and_then(|portal| portal.stmt.as_ref())
+                .map(|stmt| stmt.to_ast_string_simple())
+                .unwrap_or_default(),
+        )
+        .await;
 
         // Owning the end-of-execution obligation in this frame is what lets
         // cancellation report an error: the inner future can be dropped without

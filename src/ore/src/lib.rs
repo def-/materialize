@@ -77,6 +77,9 @@ pub mod permutations;
 pub mod pool;
 #[cfg(feature = "process")]
 pub mod process;
+#[cfg_attr(nightly_doc_features, doc(cfg(feature = "async")))]
+#[cfg(feature = "async")]
+pub mod race;
 #[cfg(feature = "region")]
 pub mod region;
 #[cfg_attr(nightly_doc_features, doc(cfg(feature = "process")))]

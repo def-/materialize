@@ -206,6 +206,16 @@ impl Server {
                                     conn,
                                 );
 
+                                if mz_ore::race::enabled() {
+                                    // Gives race-point tests a stable name for this connection.
+                                    let actor = params
+                                        .get("application_name")
+                                        .filter(|name| !name.is_empty())
+                                        .cloned()
+                                        .unwrap_or_else(|| format!("conn-{conn_id}"));
+                                    mz_ore::race::set_actor(actor);
+                                }
+
                                 protocol::run(protocol::RunParams {
                                     tls_mode: tls.as_ref().map(|tls| tls.mode),
                                     adapter_client,

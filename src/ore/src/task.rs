@@ -173,7 +173,7 @@ impl<T> JoinHandle<T> {
 /// information.
 #[cfg(not(tokio_unstable))]
 #[track_caller]
-pub fn spawn<Fut, Name, NameClosure>(_nc: NameClosure, future: Fut) -> JoinHandle<Fut::Output>
+pub fn spawn<Fut, Name, NameClosure>(nc: NameClosure, future: Fut) -> JoinHandle<Fut::Output>
 where
     Name: AsRef<str>,
     NameClosure: FnOnce() -> Name,
@@ -184,6 +184,7 @@ where
     // `Pin<Box<dyn Future<Output = Fut::Output> + Send>>` per output type,
     // rather than over every distinct future type at every call site.
     let future: Pin<Box<dyn Future<Output = Fut::Output> + Send>> = Box::pin(future);
+    let future = crate::race::scope_task(|| nc().as_ref().to_owned(), future);
     #[allow(clippy::disallowed_methods)]
     JoinHandle::new(tokio::spawn(future))
 }
@@ -205,10 +206,12 @@ where
     // `Pin<Box<dyn Future<Output = Fut::Output> + Send>>` per output type,
     // rather than over every distinct future type at every call site.
     let future: Pin<Box<dyn Future<Output = Fut::Output> + Send>> = Box::pin(future);
+    let name = nc();
+    let future = crate::race::scope_task(|| name.as_ref().to_owned(), future);
     #[allow(clippy::disallowed_methods)]
     JoinHandle::new(
         task::Builder::new()
-            .name(&format!("{}:{}", Handle::current().id(), nc().as_ref()))
+            .name(&format!("{}:{}", Handle::current().id(), name.as_ref()))
             .spawn(future)
             .expect("task spawning cannot fail"),
     )
@@ -415,8 +418,6 @@ pub trait JoinSetExt<T> {
 }
 
 impl<T> JoinSetExt<T> for tokio::task::JoinSet<T> {
-    // Allow unused variables until everything in ci uses `tokio_unstable`.
-    #[allow(unused_variables)]
     fn spawn_named<Fut, Name, NameClosure>(
         &mut self,
         nc: NameClosure,
@@ -436,14 +437,17 @@ impl<T> JoinSetExt<T> for tokio::task::JoinSet<T> {
         #[cfg(tokio_unstable)]
         #[allow(clippy::disallowed_methods)]
         {
+            let name = nc();
+            let future = crate::race::scope_task(|| name.as_ref().to_owned(), future);
             self.build_task()
-                .name(&format!("{}:{}", Handle::current().id(), nc().as_ref()))
+                .name(&format!("{}:{}", Handle::current().id(), name.as_ref()))
                 .spawn(future)
                 .expect("task spawning cannot fail")
         }
         #[cfg(not(tokio_unstable))]
         #[allow(clippy::disallowed_methods)]
         {
+            let future = crate::race::scope_task(|| nc().as_ref().to_owned(), future);
             self.spawn(future)
         }
     }

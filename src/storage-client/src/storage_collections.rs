@@ -2921,6 +2921,24 @@ impl BackgroundTask {
 
     #[instrument(level = "debug")]
     async fn update_write_frontiers(&self, updates: &[(GlobalId, &Antichain<Timestamp>)]) {
+        // Hit before taking the collections lock, which readers of the
+        // frontiers contend on while these points may wait.
+        let mut race_guards = Vec::new();
+        if mz_ore::race::enabled() {
+            for (id, new_upper) in updates {
+                if new_upper.is_empty() {
+                    race_guards.push(
+                        mz_ore::race_point_async!(
+                            "storage_write_frontier_sealed",
+                            key = id,
+                            kind = mz_ore::race::Access::Write,
+                        )
+                        .await,
+                    );
+                }
+            }
+        }
+
         let mut read_capability_changes = BTreeMap::default();
 
         let mut self_collections = self.collections.lock().expect("lock poisoned");
@@ -2972,6 +2990,8 @@ impl BackgroundTask {
                 &mut read_capability_changes,
             );
         }
+        // Fires the race points' `post` constraints once the frontiers are applied.
+        drop(race_guards);
     }
 
     async fn downgrade_sinces(&mut self, cmds: BTreeMap<GlobalId, Antichain<Timestamp>>) {
