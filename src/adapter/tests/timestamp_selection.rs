@@ -10,11 +10,12 @@
 // Test determine_timestamp.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use async_trait::async_trait;
-use mz_adapter::ReadHolds;
 use mz_adapter::catalog::CatalogState;
 use mz_adapter::session::Session;
+use mz_adapter::{AdapterError, ReadHolds};
 use mz_adapter::{CollectionIdBundle, TimelineContext, TimestampProvider};
 use mz_compute_types::ComputeInstanceId;
 use mz_repr::{GlobalId, Timestamp};
@@ -23,6 +24,7 @@ use mz_sql::session::vars::IsolationLevel;
 use mz_sql_parser::ast::TransactionIsolationLevel;
 use mz_storage_types::read_holds::ReadHold;
 use mz_storage_types::sources::Timeline;
+use schematic::{assume, supertest};
 use serde::{Deserialize, Serialize};
 use timely::progress::Antichain;
 
@@ -300,4 +302,223 @@ fn test_timestamp_selection() {
             }
         })
     })
+}
+
+// `super check` checks the supertests below. `cargo test` only compiles them.
+
+/// Determines the timestamp for a read of one storage collection that is readable from `since`
+/// and complete before `upper`.
+///
+/// Like the peek path, this passes the oracle timestamp only when the read needs a linearized one.
+fn read_one_collection(
+    since: u64,
+    upper: u64,
+    oracle_ts: u64,
+    when: QueryWhen,
+    isolation_level: IsolationLevel,
+) -> Result<Timestamp, AdapterError> {
+    let id = GlobalId::User(1);
+    let frontiers = Frontiers {
+        compute: BTreeMap::new(),
+        storage: BTreeMap::from([(
+            id,
+            Frontier {
+                read: Antichain::from_elem(since.into()),
+                write: Antichain::from_elem(upper.into()),
+            },
+        )]),
+        oracle: oracle_ts.into(),
+        catalog_state: CatalogState::empty_test(),
+    };
+    let oracle_read_ts =
+        Frontiers::needs_linearized_read_ts(&isolation_level, &when).then_some(frontiers.oracle);
+    let (determination, _read_holds) = frontiers.determine_timestamp_for(
+        &Session::dummy(),
+        &CollectionIdBundle {
+            storage_ids: BTreeSet::from([id]),
+            compute_ids: BTreeMap::new(),
+        },
+        &when,
+        &TimelineContext::TimestampDependent,
+        oracle_read_ts,
+        None, /* real_time_recency_ts */
+        &isolation_level,
+    )?;
+    Ok(*determination
+        .timestamp_context
+        .timestamp()
+        .expect("a read with a timeline has a timestamp"))
+}
+
+/// Every isolation level except strong session serializable, which reads a session-local oracle
+/// that `Session::dummy()` does not have.
+fn isolation_level(selector: u8, bound_ms: u64) -> IsolationLevel {
+    match selector % 6 {
+        0 => IsolationLevel::ReadUncommitted,
+        1 => IsolationLevel::ReadCommitted,
+        2 => IsolationLevel::RepeatableRead,
+        3 => IsolationLevel::Serializable,
+        4 => IsolationLevel::StrictSerializable,
+        _ => IsolationLevel::BoundedStaleness(Duration::from_millis(bound_ms)),
+    }
+}
+
+#[supertest]
+pub fn chosen_timestamp_is_never_below_the_since(
+    since: u64,
+    upper: u64,
+    oracle_ts: u64,
+    isolation: u8,
+    bound_ms: u64,
+    when: u8,
+    as_of: u64,
+) {
+    let when = match when % 4 {
+        0 => QueryWhen::Immediately,
+        1 => QueryWhen::FreshestTableWrite,
+        2 => QueryWhen::AtTimestamp(as_of.into()),
+        _ => QueryWhen::AtLeastTimestamp(as_of.into()),
+    };
+    let isolation_level = isolation_level(isolation, bound_ms);
+    if let Ok(chosen) = read_one_collection(since, upper, oracle_ts, when, isolation_level) {
+        assert!(
+            Timestamp::from(since) <= chosen,
+            "chose {chosen}, below the since {since}"
+        );
+    }
+}
+
+#[supertest]
+pub fn strict_serializable_reads_at_the_later_of_since_and_oracle(
+    since: u64,
+    upper: u64,
+    oracle_ts: u64,
+    freshest_table_write: bool,
+) {
+    let when = if freshest_table_write {
+        QueryWhen::FreshestTableWrite
+    } else {
+        QueryWhen::Immediately
+    };
+    let chosen = read_one_collection(
+        since,
+        upper,
+        oracle_ts,
+        when,
+        IsolationLevel::StrictSerializable,
+    )
+    .expect("a strict serializable read without AS OF always finds a timestamp");
+    assert_eq!(chosen, Timestamp::from(since.max(oracle_ts)));
+}
+
+#[supertest]
+pub fn as_of_reads_exactly_there_or_fails_below_the_since(
+    since: u64,
+    upper: u64,
+    oracle_ts: u64,
+    as_of: u64,
+    isolation: u8,
+    bound_ms: u64,
+) {
+    let result = read_one_collection(
+        since,
+        upper,
+        oracle_ts,
+        QueryWhen::AtTimestamp(as_of.into()),
+        isolation_level(isolation, bound_ms),
+    );
+    if since <= as_of {
+        assert_eq!(
+            result.expect("AS OF at or above the since"),
+            Timestamp::from(as_of)
+        );
+    } else {
+        assert!(result.is_err(), "AS OF {as_of} below the since {since}");
+    }
+}
+
+#[supertest]
+pub fn serializable_reads_the_freshest_complete_time(since: u64, upper: u64) {
+    assume(since < upper);
+
+    let chosen = read_one_collection(
+        since,
+        upper,
+        0, /* oracle_ts, unused */
+        QueryWhen::Immediately,
+        IsolationLevel::Serializable,
+    )
+    .expect("a readable input");
+    assert_eq!(chosen, Timestamp::from(upper - 1));
+}
+
+#[supertest]
+pub fn bounded_staleness_is_within_the_bound_and_never_waits(
+    since: u64,
+    upper: u64,
+    oracle_ts: u64,
+    bound_ms: u64,
+) {
+    let isolation_level = IsolationLevel::BoundedStaleness(Duration::from_millis(bound_ms));
+    if let Ok(chosen) = read_one_collection(
+        since,
+        upper,
+        oracle_ts,
+        QueryWhen::Immediately,
+        isolation_level,
+    ) {
+        let floor = oracle_ts.saturating_sub(bound_ms);
+        assert!(
+            Timestamp::from(floor) <= chosen,
+            "chose {chosen}, staler than the oracle {oracle_ts} minus the bound {bound_ms}"
+        );
+        assert!(
+            chosen < Timestamp::from(upper),
+            "chose {chosen}, which waits for the upper {upper}"
+        );
+    }
+}
+
+#[supertest]
+pub fn bounded_staleness_succeeds_when_the_input_is_fresh_enough(
+    since: u64,
+    upper: u64,
+    oracle_ts: u64,
+    bound_ms: u64,
+) {
+    assume(since < upper);
+    assume(oracle_ts.saturating_sub(bound_ms) < upper);
+
+    let isolation_level = IsolationLevel::BoundedStaleness(Duration::from_millis(bound_ms));
+    let result = read_one_collection(
+        since,
+        upper,
+        oracle_ts,
+        QueryWhen::Immediately,
+        isolation_level,
+    );
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[supertest]
+pub fn subscribe_to_a_constant_starts_at_its_as_of(as_of: u64) {
+    // A constant has no inputs and no timeline, so the frontiers and oracle are never read.
+    let frontiers = Frontiers {
+        compute: BTreeMap::new(),
+        storage: BTreeMap::new(),
+        oracle: Timestamp::MIN,
+        catalog_state: CatalogState::empty_test(),
+    };
+    let (determination, _read_holds) = frontiers
+        .determine_timestamp_for(
+            &Session::dummy(),
+            &CollectionIdBundle::default(),
+            &QueryWhen::AtTimestamp(as_of.into()),
+            &TimelineContext::TimestampIndependent,
+            None, /* oracle_read_ts */
+            None, /* real_time_recency_ts */
+            &IsolationLevel::StrictSerializable,
+        )
+        .expect("a constant is readable at every time");
+    assert_eq!(determination.subscribe_as_of(), Timestamp::from(as_of));
 }

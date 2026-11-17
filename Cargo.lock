@@ -6313,6 +6313,7 @@ dependencies = [
  "prost",
  "qcell",
  "rand 0.10.3",
+ "schematic-supertest",
  "semver",
  "serde",
  "serde_json",
@@ -12307,6 +12308,21 @@ dependencies = [
  "serde_derive_internals",
  "syn 3.0.10",
 ]
+
+[[package]]
+name = "schematic-supertest"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2c9ddd2739c3d4cca8858cb2fedacdfbeaaac0ca2cc65d93e49c8b1591d24fc"
+dependencies = [
+ "schematic-supertest-macros",
+]
+
+[[package]]
+name = "schematic-supertest-macros"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c9c3ca3c41e0718968e47cb46cf3854bcb68c0214a70c3419b31dd906d3989a"
 
 [[package]]
 name = "scoped-tls"

@@ -113,3 +113,44 @@ contains: cannot serve query under bounded staleness
 > DROP TABLE bs_t
 
 > DROP CLUSTER bs_cluster
+
+# --- error path: input that has never been written ---------------------------
+#
+# A source on a cluster without replicas never ingests, so its since and upper
+# both stay at 0. A bound longer than the time since the Unix epoch puts the
+# freshness floor (`oracle.read_ts - D`, saturating) at 0 as well. Selection
+# must not pick 0 then: nothing is readable before an upper of 0, so the SELECT
+# would wait until the source ingests, and `statement_timeout` does not cover
+# SELECT. It must fail fast like the 5s case.
+
+> CREATE CLUSTER bs_src_cluster (SIZE 'scale=1,workers=1', REPLICATION FACTOR 0)
+
+> CREATE SOURCE bs_src IN CLUSTER bs_src_cluster FROM LOAD GENERATOR COUNTER
+
+> CREATE TABLE bs_src_tbl FROM SOURCE bs_src
+
+> SELECT read_frontier, write_frontier
+  FROM mz_internal.mz_frontiers JOIN mz_tables ON object_id = id
+  WHERE name = 'bs_src_tbl'
+0 0
+
+> SET transaction_isolation = 'bounded staleness 5s'
+
+! SELECT * FROM bs_src_tbl
+contains: cannot serve query under bounded staleness
+
+> SET transaction_isolation = 'bounded staleness 100 years'
+
+# Fail after seconds instead of the default timeout if the SELECT waits.
+$ set-sql-timeout duration=10s force=true
+
+! SELECT * FROM bs_src_tbl
+contains: cannot serve query under bounded staleness
+
+$ set-sql-timeout duration=default force=true
+
+> RESET transaction_isolation
+
+> DROP SOURCE bs_src CASCADE
+
+> DROP CLUSTER bs_src_cluster

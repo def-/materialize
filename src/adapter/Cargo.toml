@@ -108,6 +108,7 @@ mz-persist = { path = "../persist", features = ["turmoil"] }
 mz-persist-client = { path = "../persist-client", features = ["turmoil"] }
 mz-repr = { path = "../repr", features = ["proptest"] }
 proptest.workspace = true
+schematic-supertest.workspace = true
 turmoil.workspace = true
 
 [[bench]]
