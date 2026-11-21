@@ -3340,6 +3340,14 @@ mod test {
     }
 
     #[mz_ore::test]
+    fn to_char_renders_escaped_quote_outside_quotes() {
+        assert_eq!(
+            to_char_timestamp_format(ym(2024, 1), r#"\"YYYY\" MM"#),
+            r#""2024" 01"#
+        );
+    }
+
+    #[mz_ore::test]
     fn array_lower_upper_respect_lower_bound() {
         use mz_repr::adt::array::ArrayDimension;
         use mz_repr::{Datum, RowArena};
