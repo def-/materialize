@@ -21,49 +21,7 @@
 use proc_macro::TokenStream;
 
 mod instrument;
-mod static_list;
 mod test;
-
-/// A macro that collects all of the static objects of a specific type in the annotated module into
-/// a single list.
-///
-/// ```
-/// use mz_ore_proc::static_list;
-///
-/// #[static_list(ty = "usize", name = "ALL_NUMS", expected_count = 3)]
-/// pub mod my_items {
-///     pub static FOO: usize = 1;
-///
-///     // Won't get included in the list, because it's not a usize.
-///     pub static NON_USIZE: u8 = 10;
-///
-///     // Nested modules also work.
-///     pub mod inner {
-///         pub static BAR: usize = 5;
-///         pub static BAZ: usize = 11;
-///     }
-/// }
-///
-/// assert_eq!(ALL_NUMS, &[&1usize, &5, &11]);
-/// ```
-///
-/// ### Wrong expected count.
-///
-/// You're required to specify an expected count of items as a smoke test to make sure all of the
-/// items you think should get included, are included.
-///
-/// ```compile_fail
-/// # use mz_ore_proc::static_list;
-/// #[static_list(ty = "usize", name = "ALL_NUMS", expected_count = 2)]
-/// pub mod items {
-///     pub static A: usize = 10;
-///     pub static B: isize = 20;
-/// }
-/// ```
-#[proc_macro_attribute]
-pub fn static_list(args: TokenStream, item: TokenStream) -> TokenStream {
-    static_list::static_list_impl(args, item)
-}
 
 /// Materialize wrapper around the `#[tracing::insrument]` macro.
 ///
