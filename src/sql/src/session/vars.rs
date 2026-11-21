@@ -2535,6 +2535,7 @@ pub fn is_cluster_scheduling_var(name: &str) -> bool {
         || name == cluster_scheduling::CLUSTER_TOPOLOGY_SPREAD_SOFT.name()
         || name == cluster_scheduling::CLUSTER_SOFTEN_AZ_AFFINITY.name()
         || name == cluster_scheduling::CLUSTER_SOFTEN_AZ_AFFINITY_WEIGHT.name()
+        || name == cluster_scheduling::CLUSTER_SECURITY_CONTEXT_ENABLED.name()
 }
 
 /// Returns whether the named variable is an HTTP server related config var.
@@ -2816,5 +2817,12 @@ mod config_var_tests {
             }
         }
         assert!(checked > 0, "no upsert_rocksdb vars found");
+    }
+
+    #[mz_ore::test]
+    fn cluster_security_context_enabled_is_a_cluster_scheduling_var() {
+        assert!(is_cluster_scheduling_var(
+            cluster_scheduling::CLUSTER_SECURITY_CONTEXT_ENABLED.name()
+        ));
     }
 }
