@@ -273,10 +273,7 @@ fn build_row_schema_field_type(
     let mut field_type = match &typ.scalar_type {
         SqlScalarType::AclItem => json!("string"),
         SqlScalarType::Bool => json!("boolean"),
-        SqlScalarType::PgLegacyChar => json!({
-            "type": "fixed",
-            "size": 1,
-        }),
+        SqlScalarType::PgLegacyChar => type_namer.unsigned_type(1),
         SqlScalarType::Int16 | SqlScalarType::Int32 => {
             json!("int")
         }
