@@ -43,7 +43,12 @@ impl JsonEncoder {
 impl Encode for JsonEncoder {
     fn encode_unchecked(&self, row: mz_repr::Row) -> Vec<u8> {
         let value = encode_datums_as_json(row.iter(), self.columns.as_ref());
-        value.to_string().into_bytes()
+        // NOTE: `serde_json::to_vec` preallocates 128 bytes, several times the
+        // size of a small key, and the Kafka sink can hold many encoded
+        // messages in memory while it waits for progress.
+        let mut buf = Vec::new();
+        serde_json::to_writer(&mut buf, &value).expect("serializing a JSON value cannot fail");
+        buf
     }
 }
 
@@ -110,7 +115,9 @@ impl ToJson for TypedDatum<'_> {
             return serde_json::Value::Null;
         }
         let value = match &typ.scalar_type {
-            SqlScalarType::AclItem => json!(datum.unwrap_acl_item().to_string()),
+            SqlScalarType::AclItem => {
+                serde_json::Value::String(datum.unwrap_acl_item().to_string())
+            }
             SqlScalarType::Bool => json!(datum.unwrap_bool()),
             SqlScalarType::PgLegacyChar => json!(datum.unwrap_uint8()),
             SqlScalarType::Int16 => json!(datum.unwrap_int16()),
@@ -132,7 +139,7 @@ impl ToJson for TypedDatum<'_> {
             SqlScalarType::Float32 => json!(datum.unwrap_float32()),
             SqlScalarType::Float64 => json!(datum.unwrap_float64()),
             SqlScalarType::Numeric { .. } => {
-                json!(datum.unwrap_numeric().0.to_standard_notation_string())
+                serde_json::Value::String(datum.unwrap_numeric().0.to_standard_notation_string())
             }
             // https://stackoverflow.com/questions/10286204/what-is-the-right-json-date-format
             SqlScalarType::Date => serde_json::Value::String(format!("{}", datum.unwrap_date())),
@@ -228,14 +235,18 @@ impl ToJson for TypedDatum<'_> {
                     .collect();
                 serde_json::Value::Object(elements)
             }
-            SqlScalarType::MzTimestamp => json!(datum.unwrap_mz_timestamp().to_string()),
+            SqlScalarType::MzTimestamp => {
+                serde_json::Value::String(datum.unwrap_mz_timestamp().to_string())
+            }
             SqlScalarType::Range { .. } => {
                 // Ranges' interiors are not expected to be types whose
                 // string representations are misleading/wrong, e.g.
                 // records.
-                json!(datum.unwrap_range().to_string())
+                serde_json::Value::String(datum.unwrap_range().to_string())
             }
-            SqlScalarType::MzAclItem => json!(datum.unwrap_mz_acl_item().to_string()),
+            SqlScalarType::MzAclItem => {
+                serde_json::Value::String(datum.unwrap_mz_acl_item().to_string())
+            }
         };
         // We don't need to recurse into map or object here because those already recursively call
         // .json() with the number policy to generate the member Values.
