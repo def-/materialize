@@ -22,7 +22,7 @@ use proptest::prelude::{Arbitrary, BoxedStrategy, Strategy, any};
 use serde::{Deserialize, Serialize};
 
 use crate::adt::datetime::DateTimeField;
-use crate::adt::numeric::{DecimalLike, Numeric};
+use crate::adt::numeric::DecimalLike;
 use crate::strconv;
 
 include!(concat!(env!("OUT_DIR"), "/mz_repr.adt.interval.rs"));
@@ -284,11 +284,11 @@ impl Interval {
                 * f64::from(Self::MILLISECOND_PER_SECOND)
                 * f64::from(Self::MICROSECOND_PER_MILLISECOND);
 
-        if micros.is_nan()
-            || micros.is_infinite()
-            || Numeric::from(micros) < Numeric::from(i64::MIN)
-            || Numeric::from(micros) > Numeric::from(i64::MAX)
-        {
+        // An `i64` holds exactly the floats in [-2^63, 2^63), and the range also
+        // rejects NaN and the infinities. The upper bound cannot be written as
+        // `i64::MAX as f64`, which rounds up to 2^63, and `as i64` would then
+        // saturate it.
+        if !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&micros) {
             return None;
         }
 
@@ -1357,6 +1357,28 @@ mod test {
             Some(360),
             Interval::convert_date_time_unit(DateTimeField::Year, DateTimeField::Day, 1)
         );
+    }
+
+    #[mz_ore::test]
+    fn test_checked_mul_micros_bounds() {
+        // The largest f64 below 2^63 is 2^63 - 1024.
+        let below = 9_223_372_036_854_774_784.0;
+        let one = Interval::new(0, 0, 1);
+        assert_eq!(
+            one.checked_mul(below),
+            Some(Interval::new(0, 0, 9_223_372_036_854_774_784))
+        );
+        assert_eq!(
+            one.checked_mul(-below),
+            Some(Interval::new(0, 0, -9_223_372_036_854_774_784))
+        );
+        assert_eq!(one.checked_mul(9_223_372_036_854_775_808.0), None);
+        // -2^63 is i64::MIN, and the next float down, -2^63 - 2048, is out of range.
+        assert_eq!(
+            one.checked_mul(-9_223_372_036_854_775_808.0),
+            Some(Interval::new(0, 0, i64::MIN))
+        );
+        assert_eq!(one.checked_mul(-9_223_372_036_854_777_856.0), None);
     }
 
     #[mz_ore::test]
