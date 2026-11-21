@@ -203,18 +203,6 @@ impl<T: Timestamp + Lattice + TotalOrder + StepForward + Codec64 + Sync> TxnsCac
         data_times.last_reg().forget_ts.is_none()
     }
 
-    /// Returns the set of all data shards registered to the txns set as of the
-    /// current progress. See [Self::registered_at_progress].
-    pub(crate) fn all_registered_at_progress(&self, ts: &T) -> Vec<ShardId> {
-        assert_eq!(self.only_data_id, None);
-        assert_eq!(self.progress_exclusive, *ts);
-        self.datas
-            .iter()
-            .filter(|(_, data_times)| data_times.last_reg().forget_ts.is_none())
-            .map(|(data_id, _)| *data_id)
-            .collect()
-    }
-
     /// Returns a token exchangeable for a snapshot of a data shard.
     ///
     /// A data shard might be definite at times past the physical upper because
