@@ -939,11 +939,11 @@ impl ArrowColumn {
             // The jsonb arms must precede the `Datum::String` arms, which would
             // otherwise write JSON string scalars unquoted and unescaped.
             (ColBuilder::StringBuilder(builder), _) if self.extension_type_name == "jsonb" => {
-                builder.append_value(JsonbRef::from_datum(datum).to_serde_json().to_string())
+                builder.append_value(JsonbRef::from_datum(datum).to_string())
             }
             (ColBuilder::StringBuilder(builder), Datum::String(s)) => builder.append_value(s),
             (ColBuilder::LargeStringBuilder(builder), _) if self.extension_type_name == "jsonb" => {
-                builder.append_value(JsonbRef::from_datum(datum).to_serde_json().to_string())
+                builder.append_value(JsonbRef::from_datum(datum).to_string())
             }
             (ColBuilder::LargeStringBuilder(builder), Datum::String(s)) => builder.append_value(s),
             (ColBuilder::UInt64Builder(builder), Datum::MzTimestamp(ts)) => {
