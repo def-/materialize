@@ -6520,7 +6520,6 @@ name = "mz-balancerd"
 version = "26.53.0-dev.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "axum",
  "bytes",
  "bytesize",
