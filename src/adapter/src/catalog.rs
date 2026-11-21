@@ -3167,6 +3167,113 @@ mod tests {
         .await;
     }
 
+    #[mz_ore::test(tokio::test)]
+    #[cfg_attr(miri, ignore)] //  unsupported operation: can't call foreign function `TLS_client_method` on OS `linux`
+    async fn test_delete_using_subquery_references_target() {
+        use mz_expr::Id;
+        use mz_expr::visit::Visit;
+        use mz_ore::collections::CollectionExt;
+        use mz_repr::Diff;
+        use mz_sql::plan::{HirRelationExpr, Params, Plan};
+
+        use crate::optimize::{Optimize, OptimizerConfig, view};
+
+        Catalog::with_debug(|mut catalog| async move {
+            let (id, global_id) = catalog
+                .allocate_user_id_for_test()
+                .await
+                .expect("allocates an id");
+            let item = catalog
+                .state()
+                .deserialize_item(
+                    global_id,
+                    "CREATE TABLE materialize.public.t (a pg_catalog.int4, b pg_catalog.int4)",
+                    &BTreeMap::new(),
+                    &mut LocalExpressionCache::Closed,
+                    None,
+                )
+                .expect("valid table");
+            let commit_ts = catalog.current_upper().await;
+            catalog
+                .transact(
+                    None,
+                    commit_ts,
+                    None,
+                    vec![Op::CreateItem {
+                        id,
+                        name: QualifiedItemName {
+                            qualifiers: ItemQualifiers {
+                                database_spec: ResolvedDatabaseSpecifier::Id(DatabaseId::User(1)),
+                                schema_spec: SchemaSpecifier::Id(SchemaId::User(3)),
+                            },
+                            item: "t".to_string(),
+                        },
+                        item,
+                        owner_id: MZ_SYSTEM_ROLE_ID,
+                    }],
+                )
+                .await
+                .expect("creates the table");
+
+            // Of these rows of `t`, only (2, 20) has its `a` in `u` and its `b` in `w`.
+            let rows: Vec<Row> = [(1, 10), (2, 20), (3, 30)]
+                .into_iter()
+                .map(|(a, b)| Row::pack_slice(&[Datum::Int32(a), Datum::Int32(b)]))
+                .collect();
+            let conn_catalog = catalog.for_system_session();
+            let pcx = PlanContext::zero();
+            for predicate in [
+                "t.b IN (SELECT y FROM (VALUES (20), (30)) AS w (y))",
+                "EXISTS (SELECT 1 FROM (VALUES (20), (30)) AS w (y) WHERE w.y = t.b)",
+            ] {
+                let sql = format!(
+                    "DELETE FROM public.t USING (VALUES (1), (2)) AS u (a) \
+                     WHERE t.a = u.a AND {predicate}"
+                );
+                let stmt = mz_sql_parser::parser::parse_statements(&sql)
+                    .expect("parses")
+                    .into_element()
+                    .ast;
+                let (stmt, resolved_ids) = names::resolve(&conn_catalog, stmt).expect("resolves");
+                let (plan, _) = mz_sql::plan::plan(
+                    Some(&pcx),
+                    &conn_catalog,
+                    stmt,
+                    &Params::empty(),
+                    &resolved_ids,
+                )
+                .expect("plans");
+                let Plan::ReadThenWrite(plan) = plan else {
+                    panic!("expected a read-then-write plan");
+                };
+
+                // Substitute the rows of `t` for the table, so that the
+                // selection folds to the rows the statement deletes.
+                let mut selection = plan.selection;
+                selection.visit_mut_post(&mut |e| {
+                    if let HirRelationExpr::Get {
+                        id: Id::Global(_),
+                        typ,
+                    } = e
+                    {
+                        *e = HirRelationExpr::Constant {
+                            rows: rows.clone(),
+                            typ: typ.clone(),
+                        };
+                    }
+                });
+                let deleted =
+                    view::Optimizer::new(OptimizerConfig::from(catalog.system_config()), None)
+                        .optimize(selection)
+                        .expect("optimizes");
+                let (deleted, _) = deleted.as_const().expect("folds to a constant");
+                assert_eq!(deleted, &Ok(vec![(rows[1].clone(), Diff::ONE)]), "{sql}");
+            }
+            catalog.expire().await;
+        })
+        .await;
+    }
+
     // Test that if a large catalog item is somehow committed, then we can still load the catalog.
     #[mz_ore::test(tokio::test)]
     #[cfg_attr(miri, ignore)] // slow
