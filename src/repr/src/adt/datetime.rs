@@ -1933,16 +1933,16 @@ pub(crate) fn split_timestamp_string(value: &str) -> (&str, &str, CalendarEra) {
 fn strip_era_from_timezone(timezone: &str) -> (&str, CalendarEra) {
     use CalendarEra::{AD, BC};
     let timezone = timezone.trim();
-    let timezone_upper = timezone.to_uppercase();
+    let ends_with = |suffix: &str| {
+        let (tz, suffix) = (timezone.as_bytes(), suffix.as_bytes());
+        tz.len() >= suffix.len() && tz[tz.len() - suffix.len()..].eq_ignore_ascii_case(suffix)
+    };
 
     // Covers cases 1 and 2.
     if timezone.len() < 3 {
-        return match (
-            timezone_upper.strip_suffix("BC"),
-            timezone_upper.strip_suffix("AD"),
-        ) {
-            (Some(_), None) => ("", BC),
-            (None, Some(_)) => ("", AD),
+        return match (ends_with("BC"), ends_with("AD")) {
+            (true, false) => ("", BC),
+            (false, true) => ("", AD),
             // NB(ptravers): we expect this to fail when we go to check
             // the timezone is valid in the next step.
             _ => (timezone, AD),
@@ -1953,12 +1953,9 @@ fn strip_era_from_timezone(timezone: &str) -> (&str, CalendarEra) {
     //
     // Safety: upper case and lower case chars for a, b, c, d, and \s
     // are all 1 byte so suffix is always of length 3 bytes.
-    match (
-        timezone_upper.strip_suffix(" BC"),
-        timezone_upper.strip_suffix(" AD"),
-    ) {
-        (Some(_), None) => (&timezone[..timezone.len() - 3], BC),
-        (None, Some(_)) => (&timezone[..timezone.len() - 3], AD),
+    match (ends_with(" BC"), ends_with(" AD")) {
+        (true, false) => (&timezone[..timezone.len() - 3], BC),
+        (false, true) => (&timezone[..timezone.len() - 3], AD),
         _ => (timezone, AD),
     }
 }
