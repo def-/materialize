@@ -892,9 +892,10 @@ impl DateTimeFormat {
                 }
             }
 
-            if in_quotes {
+            if in_quotes || matches[i].token == DateTimeToken::EscQuote {
                 // If we see a format specifier inside of a quoted block, it
-                // is taken literally.
+                // is taken literally. As in PostgreSQL, an escaped quote is a
+                // literal `"` outside of a quoted block too.
                 for c in matches[i].token.as_literal().chars() {
                     out.push(DateTimeFormatNode::Literal(c))
                 }
