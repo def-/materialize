@@ -221,6 +221,10 @@ pub trait Transform: fmt::Debug {
         relation: &mut MirRelationExpr,
         args: &mut TransformCtx,
     ) -> Result<(), TransformError> {
+        // The hashes and the timing below only feed `args.metrics`.
+        if args.metrics.is_none() {
+            return self.actually_perform_transform(relation, args);
+        }
         let hash_before = args
             .global_id
             .and_then(|id| args.last_hash.get(&id).copied())
@@ -1057,7 +1061,10 @@ impl Optimizer {
         relation: &mut MirRelationExpr,
         args: &mut TransformCtx,
     ) -> Result<(), TransformError> {
-        args.update_last_hash(relation);
+        // `last_hash` is only read by `Transform::transform`, and only when recording metrics.
+        if args.metrics.is_some() {
+            args.update_last_hash(relation);
+        }
 
         for transform in self.transforms.iter() {
             transform.transform(relation, args)?;
