@@ -21,7 +21,6 @@
 use std::error::Error;
 use std::fmt::{self, Display};
 use std::ops::Sub;
-use std::sync::LazyLock;
 
 use ::chrono::{
     DateTime, Datelike, Days, Duration, FixedOffset, Months, NaiveDate, NaiveDateTime, NaiveTime,
@@ -598,18 +597,16 @@ impl<T: Serialize> Serialize for CheckedTimestamp<T> {
 // Thus on the low end we have 4713-12-31 BC from Postgres, and on the high end
 // 262142-12-31 from chrono.
 
-pub static LOW_DATE: LazyLock<NaiveDate> =
-    LazyLock::new(|| NaiveDate::from_ymd_opt(-4713, 12, 31).unwrap());
-pub static HIGH_DATE: LazyLock<NaiveDate> =
-    LazyLock::new(|| NaiveDate::from_ymd_opt(262142, 12, 31).unwrap());
+pub const LOW_DATE: NaiveDate = NaiveDate::from_ymd_opt(-4713, 12, 31).unwrap();
+pub const HIGH_DATE: NaiveDate = NaiveDate::from_ymd_opt(262142, 12, 31).unwrap();
 
 impl<T: TimestampLike> CheckedTimestamp<T> {
     pub fn from_timestamplike(t: T) -> Result<Self, TimestampError> {
         let d = t.date();
-        if d < *LOW_DATE {
+        if d < LOW_DATE {
             return Err(TimestampError::OutOfRange);
         }
-        if d > *HIGH_DATE {
+        if d > HIGH_DATE {
             return Err(TimestampError::OutOfRange);
         }
         Ok(Self { t })
