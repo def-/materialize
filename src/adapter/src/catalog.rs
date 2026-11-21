@@ -1126,7 +1126,8 @@ impl Catalog {
     }
 
     pub fn resolve_item_id(&self, id: &GlobalId) -> CatalogItemId {
-        self.get_entry_by_global_id(id).id()
+        self.try_resolve_item_id(id)
+            .unwrap_or_else(|| panic!("catalog out of sync, missing id {id:?}"))
     }
 
     pub fn try_resolve_item_id(&self, id: &GlobalId) -> Option<CatalogItemId> {
@@ -2407,7 +2408,10 @@ impl SessionCatalog for ConnCatalog<'_> {
     }
 
     fn resolve_item_id(&self, global_id: &GlobalId) -> CatalogItemId {
-        self.state.get_entry_by_global_id(global_id).id()
+        self.state
+            .try_get_entry_by_global_id(global_id)
+            .unwrap_or_else(|| panic!("catalog out of sync, missing id {global_id:?}"))
+            .id()
     }
 
     fn resolve_global_id(
