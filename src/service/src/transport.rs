@@ -38,7 +38,7 @@ use mz_ore::task::{AbortOnDropHandle, JoinHandle};
 use semver::Version;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{Instrument, info, info_span, trace, warn};
 
@@ -302,8 +302,11 @@ impl<Out: Message, In: Message> Connection<Out, In> {
         let reader = TimedReader::new(reader, timeout);
         let writer = TimedWriter::new(writer, timeout);
         // Track byte count metrics for all connection reads and writes.
-        let mut reader = metrics::Reader::new(reader, metrics.clone());
+        let reader = metrics::Reader::new(reader, metrics.clone());
         let mut writer = metrics::Writer::new(writer, metrics.clone());
+        // Buffer reads, so that a frame's length prefix and payload, or a burst of small frames,
+        // take a single read syscall.
+        let mut reader = BufReader::new(reader);
 
         handshake(&mut reader, &mut writer, version, server_fqdn).await?;
 
