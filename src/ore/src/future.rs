@@ -49,18 +49,6 @@ pub enum InTask {
 /// Extension methods for futures.
 #[async_trait::async_trait]
 pub trait OreFutureExt {
-    /// Wraps a future in a [`SpawnIfCanceled`] future, which will spawn a
-    /// task to poll the inner future to completion if it is dropped.
-    fn spawn_if_canceled<Name, NameClosure>(
-        self,
-        nc: NameClosure,
-    ) -> SpawnIfCanceled<Self::Output, Name, NameClosure>
-    where
-        Name: AsRef<str>,
-        NameClosure: FnOnce() -> Name + Unpin,
-        Self: Future + Send + 'static,
-        Self::Output: Send + 'static;
-
     /// Run a `'static` future in a Tokio task, naming that task, using a convenient
     /// postfix call notation.
     ///
@@ -103,22 +91,6 @@ impl<T> OreFutureExt for T
 where
     T: Future,
 {
-    fn spawn_if_canceled<Name, NameClosure>(
-        self,
-        nc: NameClosure,
-    ) -> SpawnIfCanceled<T::Output, Name, NameClosure>
-    where
-        Name: AsRef<str>,
-        NameClosure: FnOnce() -> Name + Unpin,
-        T: Send + 'static,
-        T::Output: Send + 'static,
-    {
-        SpawnIfCanceled {
-            inner: Some(Box::pin(self)),
-            nc: Some(nc),
-        }
-    }
-
     async fn run_in_task<Name, NameClosure>(self, nc: NameClosure) -> T::Output
     where
         Name: AsRef<str>,
@@ -154,74 +126,6 @@ where
             #[allow(clippy::disallowed_methods)]
             inner: CATCHING_UNWIND_ASYNC.scope(true, FutureExt::catch_unwind(self)),
         }
-    }
-}
-
-/// The future returned by [`OreFutureExt::spawn_if_canceled`].
-pub struct SpawnIfCanceled<T, Name, NameClosure>
-where
-    Name: AsRef<str>,
-    NameClosure: FnOnce() -> Name + Unpin,
-    T: Send + 'static,
-{
-    inner: Option<Pin<Box<dyn Future<Output = T> + Send>>>,
-    nc: Option<NameClosure>,
-}
-
-impl<T, Name, NameClosure> Future for SpawnIfCanceled<T, Name, NameClosure>
-where
-    Name: AsRef<str>,
-    NameClosure: FnOnce() -> Name + Unpin,
-    T: Send + 'static,
-{
-    type Output = T;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<T> {
-        match &mut self.inner {
-            None => panic!("SpawnIfCanceled polled after completion"),
-            Some(f) => match f.as_mut().poll(cx) {
-                Poll::Pending => Poll::Pending,
-                Poll::Ready(res) => {
-                    self.inner = None;
-                    Poll::Ready(res)
-                }
-            },
-        }
-    }
-}
-
-impl<T, Name, NameClosure> Drop for SpawnIfCanceled<T, Name, NameClosure>
-where
-    Name: AsRef<str>,
-    NameClosure: FnOnce() -> Name + Unpin,
-    T: Send + 'static,
-{
-    fn drop(&mut self) {
-        if let Some(f) = self.inner.take() {
-            task::spawn(
-                || format!("spawn_if_canceled:{}", (self.nc).take().unwrap()().as_ref()),
-                f,
-            );
-        }
-    }
-}
-
-impl<T, Name, NameClosure> fmt::Debug for SpawnIfCanceled<T, Name, NameClosure>
-where
-    Name: AsRef<str>,
-    NameClosure: FnOnce() -> Name + Unpin,
-    T: Send + 'static,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("SpawnIfCanceled")
-            .field(
-                "inner",
-                match &self.inner {
-                    None => &"None",
-                    Some(_) => &"Some(<future>)",
-                },
-            )
-            .finish()
     }
 }
 
