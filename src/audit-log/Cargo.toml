@@ -10,7 +10,6 @@ publish = false
 workspace = true
 
 [dependencies]
-anyhow.workspace = true
 mz-ore = { path = "../ore", features = ["test"] }
 proptest.workspace = true
 proptest-derive.workspace = true
