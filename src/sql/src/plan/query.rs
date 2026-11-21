@@ -6940,7 +6940,7 @@ impl<'a> QueryContext<'a> {
             } => {
                 let item = self.scx.get_item(&id).at_version(version);
                 let desc = match item.relation_desc() {
-                    Some(desc) => desc.clone(),
+                    Some(desc) => desc,
                     None => {
                         return Err(PlanError::InvalidDependency {
                             name: full_name.to_string(),
