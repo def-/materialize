@@ -36,9 +36,5 @@ thiserror.workspace = true
 tracing.workspace = true
 url.workspace = true
 
-[build-dependencies]
-mz-build-tools = { path = "../build-tools", default-features = false, features = ["protobuf-src"] }
-prost-build.workspace = true
-
 [features]
-default = ["mz-build-tools/default"]
+default = []
