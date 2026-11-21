@@ -369,6 +369,17 @@ where
                     Some(Ok(conn)) => conn,
                     Some(Err(err)) => {
                         error!("error accepting connection: {}", err);
+                        // An error that is not about a single connection, like EMFILE, keeps
+                        // the listener ready and recurs until resources free up, so retrying
+                        // at once spins.
+                        if !matches!(
+                            err.kind(),
+                            io::ErrorKind::ConnectionRefused
+                                | io::ErrorKind::ConnectionAborted
+                                | io::ErrorKind::ConnectionReset
+                        ) {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
                         continue;
                     }
                 };
@@ -654,12 +665,57 @@ impl TlsCliArgs {
 // length is only meaningful on Linux.
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
+    use std::io;
     use std::net::SocketAddr;
+    use std::task::Poll;
     use std::time::Duration;
 
     use tokio::net::TcpStream;
+    use tokio_metrics::TaskMetrics;
 
-    use super::{LISTEN_BACKLOG, listen};
+    use super::{
+        Connection, ConnectionHandler, LISTEN_BACKLOG, ServeConfig, Server, listen, serve,
+    };
+
+    #[mz_ore::test(tokio::test(start_paused = true))]
+    async fn serve_backs_off_after_accept_error() {
+        struct NoopServer;
+
+        impl Server for NoopServer {
+            const NAME: &'static str = "noop";
+
+            fn handle_connection(
+                &self,
+                _conn: Connection,
+                _tokio_metrics_intervals: impl Iterator<Item = TaskMetrics> + Send + 'static,
+            ) -> ConnectionHandler {
+                Box::pin(async { Ok(()) })
+            }
+        }
+
+        // A listener whose `accept` fails with EMFILE (os error 24) stays ready. The stream
+        // ends after 1000 errors so that a serve loop that retries at once still returns.
+        let mut polls = 0;
+        let conns = futures::stream::poll_fn(|_cx| -> Poll<Option<io::Result<TcpStream>>> {
+            polls += 1;
+            if polls > 1000 {
+                Poll::Ready(None)
+            } else {
+                Poll::Ready(Some(Err(io::Error::from_raw_os_error(24))))
+            }
+        });
+        let serving = serve(ServeConfig {
+            server: NoopServer,
+            conns,
+            dyncfg: None,
+        });
+        let served = tokio::time::timeout(Duration::from_millis(100), serving).await;
+        assert!(
+            served.is_err(),
+            "serve retried {polls} times without backing off"
+        );
+        assert_eq!(polls, 1);
+    }
 
     #[mz_ore::test(tokio::test)]
     #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `socket`
