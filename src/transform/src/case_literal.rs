@@ -148,7 +148,7 @@ impl CaseLiteralTransform {
         column_types: &[ReprColumnType],
     ) -> Result<(), TransformError> {
         expr.try_visit_mut_post(&mut |node: &mut MirScalarExpr| {
-            try_fold_into_case_literal(node);
+            try_fold_into_case_literal(node, column_types);
             try_create_case_literal(node, column_types);
             Ok(())
         })
@@ -162,7 +162,7 @@ impl CaseLiteralTransform {
 /// Because we traverse bottom-up, the current If is an *earlier* arm than anything
 /// already in the CaseLiteral. For duplicates, the outer/earlier arm wins per SQL
 /// CASE semantics, so we overwrite the existing entry.
-fn try_fold_into_case_literal(expr: &mut MirScalarExpr) {
+fn try_fold_into_case_literal(expr: &mut MirScalarExpr, column_types: &[ReprColumnType]) {
     let MirScalarExpr::If { cond, then, els } = expr else {
         return;
     };
@@ -181,6 +181,13 @@ fn try_fold_into_case_literal(expr: &mut MirScalarExpr) {
     if exprs[0] != *common_candidate {
         return;
     }
+
+    // Widen `return_type` to the type of the replaced If, else a nullable `then` would leave the
+    // CaseLiteral typed as non-nullable.
+    let return_type = ReprColumnType::from(&cl.return_type)
+        .union(&then.typ(column_types))
+        .expect("incompatible branch types");
+    cl.return_type = SqlColumnType::from_repr(&return_type);
 
     if let Some(existing_idx) = cl.get(literal_row) {
         // Duplicate literal: overwrite with the earlier arm's result (this If).
@@ -500,6 +507,40 @@ mod tests {
         assert_eq!(
             result.eval(&[Datum::Int64(999)], &arena).unwrap(),
             Datum::Int64(-1)
+        );
+    }
+
+    #[mz_ore::test]
+    #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `rust_psm_stack_pointer` on OS `linux`
+    fn test_nullable_outer_arm() {
+        // CASE #0 WHEN 1 THEN NULL WHEN 2 THEN 20 WHEN 3 THEN 30 ELSE 0 END
+        // The CaseLiteral is created from the inner arms, and the NULL arm is folded into it.
+        let null_lit = MirScalarExpr::literal(Ok(Datum::Null), ReprScalarType::Int64);
+        let expr = MirScalarExpr::column(0)
+            .call_binary(lit_i64(1), Eq)
+            .if_then_else(
+                null_lit,
+                MirScalarExpr::column(0)
+                    .call_binary(lit_i64(2), Eq)
+                    .if_then_else(
+                        lit_i64(20),
+                        MirScalarExpr::column(0)
+                            .call_binary(lit_i64(3), Eq)
+                            .if_then_else(lit_i64(30), lit_i64(0)),
+                    ),
+            );
+        let result = apply_transform(expr);
+        assert_case_literal(&result, 3);
+
+        let arena = mz_repr::RowArena::new();
+        assert_eq!(
+            result.eval(&[Datum::Int64(1)], &arena).unwrap(),
+            Datum::Null
+        );
+        let typ = result.typ(&[ReprScalarType::Int64.nullable(false)]);
+        assert!(
+            typ.nullable,
+            "a CaseLiteral with a NULL arm must be nullable"
         );
     }
 
