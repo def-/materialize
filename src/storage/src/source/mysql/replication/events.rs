@@ -359,6 +359,7 @@ pub(super) async fn handle_rows_event(
     // to accomodate for updates and deletes (which include a before_row),
     // and updates and inserts (which inclued an after row).
     let mut final_row = Row::default();
+    let gtid_str = format!("{new_gtid:?}");
     let mut rows_iter = event.rows(table_map_event);
     let mut rewind_count = 0;
     let mut additions = 0;
@@ -382,7 +383,6 @@ pub(super) async fn handle_rows_event(
             before_row.map(|r| (r, Diff::MINUS_ONE)),
             after_row.map(|r| (r, Diff::ONE)),
         ];
-        let gtid_str = format!("{new_gtid:?}");
         for (binlog_row, diff) in updates.into_iter().flatten() {
             let row = mysql_async::Row::try_from(binlog_row)?;
             for ((output, row_val), gtid_cap) in outputs.iter().repeat_clone(row).zip_eq(&gtid_caps)
