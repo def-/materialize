@@ -3007,6 +3007,10 @@ fn array_remove<'a>(
         lower_bound: 1,
         length: elems.len(),
     };
+    // An array without elements is zero-dimensional, see `array_fill`.
+    if elems.is_empty() {
+        dims.clear();
+    }
 
     let datum = temp_storage.try_make_datum(|packer| packer.try_push_array(&dims, elems))?;
     Ok(datum.unwrap_array())
@@ -3380,6 +3384,22 @@ mod test {
         assert_eq!(array_upper(arr, 0).unwrap(), None);
         assert_eq!(array_lower(arr, 2).unwrap(), None);
         assert_eq!(array_upper(arr, 2).unwrap(), None);
+    }
+
+    #[mz_ore::test]
+    fn array_remove_of_every_element_is_zero_dimensional() {
+        let arena = RowArena::new();
+        let dims = [ArrayDimension {
+            lower_bound: 1,
+            length: 3,
+        }];
+        let datum = arena.make_datum(|packer| {
+            packer
+                .try_push_array(&dims, vec![Datum::Int32(1); 3])
+                .unwrap()
+        });
+        let removed = array_remove(datum.unwrap_array(), Datum::Int32(1), &arena).unwrap();
+        assert_eq!(Datum::Array(removed), Datum::empty_array());
     }
 
     #[mz_ore::test]
