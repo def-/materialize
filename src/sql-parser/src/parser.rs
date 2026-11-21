@@ -1810,10 +1810,10 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns whether the sequence of keywords is found at any point before
-    /// the end of the unprocessed tokens.
+    /// the end of the current statement.
     fn peek_keywords_lookahead(&self, keywords: &[Keyword]) -> bool {
         let mut index = 0;
-        while index < self.tokens.len() {
+        while !matches!(self.peek_nth_token(index), None | Some(Token::Semicolon)) {
             if self.peek_keywords_from(index, keywords) {
                 return true;
             }

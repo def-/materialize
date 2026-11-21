@@ -316,6 +316,17 @@ fn test_max_statement_batch_size() {
 }
 
 #[mz_ore::test]
+fn test_create_table_from_source_lookahead_stops_at_semicolon() {
+    for sql in [
+        "CREATE TABLE t (a int); CREATE TABLE u FROM SOURCE s (REFERENCE r)",
+        "CREATE TABLE t (a int); CREATE SOURCE w IN CLUSTER c FROM WEBHOOK BODY FORMAT TEXT",
+    ] {
+        let stmts = parse_statements(sql).unwrap_or_else(|e| panic!("{sql}: {e}"));
+        assert_eq!(stmts.len(), 2, "{sql}");
+    }
+}
+
+#[mz_ore::test]
 #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `rust_psm_stack_pointer` on OS `linux`
 fn test_nested_table_factor_recursion_limit() {
     // Deeply nested parens in table-factor position (`FROM ((((…`) recurse
