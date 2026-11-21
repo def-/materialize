@@ -1686,7 +1686,7 @@ fn list_slice_linear<'a>(
 
         // Length index only moves to leq positions
         let length_inner = (end - start) as usize + 1;
-        total_length = std::cmp::min(length_inner, total_length - start_inner);
+        total_length = std::cmp::min(length_inner, total_length.saturating_sub(start_inner));
     }
 
     let iter = list.iter().skip(start_idx).take(total_length);
@@ -1924,5 +1924,33 @@ impl VariadicFunc {
             VariadicFunc::Or(_) => MirScalarExpr::literal_true(),
             _ => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mz_repr::{Datum, RowArena, Variadic};
+
+    use super::list_slice_linear;
+
+    #[mz_ore::test]
+    fn list_slice_linear_starting_past_the_end_is_empty() {
+        let arena = RowArena::new();
+        let list = arena
+            .make_datum(|packer| packer.push_list((1..=5).map(Datum::Int64)))
+            .unwrap_list();
+        let slice = |first: (i64, i64), remainder: Vec<(i64, i64)>| {
+            list_slice_linear(list, first, Variadic(remainder), &arena)
+                .iter()
+                .map(|d| d.unwrap_int64())
+                .collect::<Vec<_>>()
+        };
+        // The end of an open slice like `[4:]`, see `plan_slice_list`.
+        let open = i64::MAX - 1;
+        let empty: Vec<i64> = vec![];
+
+        assert_eq!(slice((2, 4), vec![(2, open)]), vec![3, 4]);
+        assert_eq!(slice((1, 2), vec![(4, open)]), empty);
+        assert_eq!(slice((2, 3), vec![(4, 4)]), empty);
     }
 }
