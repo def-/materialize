@@ -559,8 +559,7 @@ impl FixedSizeCodec<MzAclItem> for PackedMzAclItem {
         let acl_mode: [u8; 8] = self.0[24..]
             .try_into()
             .expect("PackedMzAclItem should roundtrip");
-        let acl_mode = AclMode::from_bits(u64::from_be_bytes(acl_mode))
-            .expect("PackedMzAclItem should roundtrip");
+        let acl_mode = AclMode::from_bits_retain(u64::from_be_bytes(acl_mode));
 
         MzAclItem {
             grantee,
@@ -761,8 +760,7 @@ impl FixedSizeCodec<AclItem> for PackedAclItem {
 
         let mut acl_mode = [0; 8];
         acl_mode.copy_from_slice(&self.0[8..]);
-        let acl_mode = AclMode::from_bits(u64::from_be_bytes(acl_mode))
-            .expect("PackedAclItem should roundtrip");
+        let acl_mode = AclMode::from_bits_retain(u64::from_be_bytes(acl_mode));
 
         AclItem {
             grantee: Oid(u32::from_be_bytes(grantee)),
@@ -1334,4 +1332,26 @@ fn proptest_packed_mz_acl_item_sorts() {
     proptest!(|(acl_items in proptest::collection::vec(any::<MzAclItem>(), 0..64))| {
         sort_mz_acl_items(acl_items);
     });
+}
+
+#[mz_ore::test]
+fn test_packed_acl_items_roundtrip_undefined_bits() {
+    // pgwire decodes binary `mz_aclitem` parameters with `MzAclItem::decode_binary`, which keeps
+    // bits that no privilege defines.
+    let acl_mode = AclMode::from_bits_retain(1 << 40);
+    let mz_acl_item = MzAclItem {
+        grantee: RoleId::User(1),
+        grantor: RoleId::System(1),
+        acl_mode,
+    };
+    assert_eq!(
+        PackedMzAclItem::from_value(mz_acl_item).into_value(),
+        mz_acl_item
+    );
+    let acl_item = AclItem {
+        grantee: Oid(1),
+        grantor: Oid(2),
+        acl_mode,
+    };
+    assert_eq!(PackedAclItem::from_value(acl_item).into_value(), acl_item);
 }
