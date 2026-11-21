@@ -45,7 +45,7 @@ use thiserror::Error;
 
 /// Errors that can occur during unit test validation.
 #[derive(Debug, Error, Serialize)]
-pub enum TestValidationError {
+pub(crate) enum TestValidationError {
     /// A required dependency is not mocked
     #[error("unmocked dependency")]
     UnmockedDependency(UnmockedDependencyError),
@@ -57,19 +57,11 @@ pub enum TestValidationError {
     /// Expected output doesn't match target view schema
     #[error("expected output schema mismatch")]
     ExpectedSchemaMismatch(ExpectedSchemaMismatchError),
-
-    /// The AT TIME value is not a valid timestamp
-    #[error("invalid at_time timestamp")]
-    InvalidAtTime(InvalidAtTimeError),
-
-    /// Types cache is missing or stale
-    #[error("types cache unavailable: {reason}")]
-    TypesCacheUnavailable { reason: String },
 }
 
 /// Error: A dependency of the target view is not mocked.
 #[derive(Debug, Serialize)]
-pub struct UnmockedDependencyError {
+pub(crate) struct UnmockedDependencyError {
     /// Test name
     pub test_name: String,
     /// The target view being tested
@@ -124,7 +116,7 @@ impl std::error::Error for UnmockedDependencyError {}
 
 /// Error: A mock's columns don't match the actual schema.
 #[derive(Debug, Serialize)]
-pub struct MockSchemaMismatchError {
+pub(crate) struct MockSchemaMismatchError {
     /// Test name
     pub test_name: String,
     /// The mock that has mismatched columns
@@ -243,7 +235,7 @@ impl std::error::Error for MockSchemaMismatchError {}
 
 /// Error: Expected output columns don't match the target view schema.
 #[derive(Debug, Serialize)]
-pub struct ExpectedSchemaMismatchError {
+pub(crate) struct ExpectedSchemaMismatchError {
     /// Test name
     pub test_name: String,
     /// The target view being tested
@@ -360,7 +352,7 @@ impl std::error::Error for ExpectedSchemaMismatchError {}
 
 /// Error: The AT TIME value is not a valid timestamp.
 #[derive(Debug, Serialize)]
-pub struct InvalidAtTimeError {
+pub(super) struct InvalidAtTimeError {
     /// Test name
     pub test_name: String,
     /// The invalid AT TIME value
