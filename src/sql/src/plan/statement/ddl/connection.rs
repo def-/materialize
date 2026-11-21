@@ -12,7 +12,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
-use array_concat::concat_arrays;
 use itertools::Itertools;
 use maplit::btreemap;
 use mz_ore::num::NonNeg;
@@ -969,14 +968,11 @@ fn plan_kafka_security(
         ConnectionOptionName::SaslPassword,
     ];
 
-    const ALL_CONFIGS: [ConnectionOptionName; 7] = concat_arrays!(
-        [
-            ConnectionOptionName::SslKey,
-            ConnectionOptionName::SslCertificate,
-            ConnectionOptionName::SslCertificateAuthority,
-        ],
-        SASL_CONFIGS
-    );
+    const TLS_CONFIGS: [ConnectionOptionName; 3] = [
+        ConnectionOptionName::SslKey,
+        ConnectionOptionName::SslCertificate,
+        ConnectionOptionName::SslCertificateAuthority,
+    ];
 
     enum SecurityProtocol {
         Plaintext,
@@ -1000,8 +996,9 @@ fn plan_kafka_security(
         None => SecurityProtocol::Ssl,
     };
 
-    let mut outstanding = ALL_CONFIGS
+    let mut outstanding = TLS_CONFIGS
         .into_iter()
+        .chain(SASL_CONFIGS)
         .filter(|c| v.seen.contains(c))
         .collect::<BTreeSet<ConnectionOptionName>>();
 
