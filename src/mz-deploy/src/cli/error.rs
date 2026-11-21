@@ -12,7 +12,6 @@
 //! This module provides error types for high-level CLI commands that wrap
 //! lower-level errors from the client and project modules.
 
-use crate::cli::commands::test::TestValidationError;
 use crate::client::{
     ConflictRecord, ConnectionError, DatabaseValidationError, ProductionClusterRecord,
 };
@@ -88,23 +87,9 @@ pub enum CliError {
         plural = if conflicts.len() == 1 { "" } else { "s" })]
     DeploymentConflict { conflicts: Vec<ConflictRecord> },
 
-    /// Failed to determine git SHA
-    #[error("failed to determine git SHA for staging environment name")]
-    GitShaFailed,
-
     /// Git repository has uncommitted changes
     #[error("git repository has uncommitted changes")]
     GitDirty,
-
-    /// No schemas to deploy
-    #[error("no schemas found to deploy")]
-    NoSchemas,
-
-    /// Attempting to overwrite production objects without proper safety flags
-    #[error("refusing to overwrite production objects")]
-    ProductionOverwriteNotAllowed {
-        objects: Vec<(String, String, String)>, // (database, schema, object)
-    },
 
     /// `dev` would deploy to a cluster that hosts a promoted deployment.
     #[error("refusing to deploy dev overlay onto production cluster")]
@@ -135,10 +120,6 @@ pub enum CliError {
         reason: String,
     },
 
-    /// Failed to create deployment table
-    #[error("failed to create deployment tracking table: {source}")]
-    DeploymentTableCreationFailed { source: ConnectionError },
-
     /// Failed to execute SQL during deployment
     #[error("failed to execute SQL statement: {source}")]
     SqlExecutionFailed {
@@ -158,10 +139,6 @@ pub enum CliError {
     #[error("invalid staging environment name: '{name}'")]
     InvalidEnvironmentName { name: String },
 
-    /// Schema does not exist in database
-    #[error("schema '{schema}' does not exist in database '{database}'")]
-    SchemaNotFound { database: String, schema: String },
-
     /// Cluster does not exist
     #[error("cluster '{name}' does not exist")]
     ClusterNotFound { name: String },
@@ -174,10 +151,6 @@ pub enum CliError {
     /// Tests filter did not match anythinh
     #[error("no tests matched filter '{filter}'")]
     TestsFilterMissed { filter: String },
-
-    /// Test validation failed (schema mismatch, missing mocks)
-    #[error(transparent)]
-    TestValidationFailed(#[from] TestValidationError),
 
     /// Type check failed
     #[error(transparent)]
@@ -213,10 +186,6 @@ pub enum CliError {
         secret_name: String,
         source: SecretResolveError,
     },
-
-    /// Cluster is not ready for mz-deploy operations
-    #[error("cluster '{cluster}' is not ready: {reason}")]
-    ClusterNotReady { cluster: String, reason: String },
 
     /// Current role has no mz-deploy role membership
     #[error("current role is not a member of any mz-deploy role")]
@@ -318,53 +287,10 @@ impl CliError {
                     "--force".if_supports_color(Stream::Stderr, |t| force_style.style(t))
                 ))
             }
-            Self::GitShaFailed => Some(
-                "either run mz-deploy from inside a git repository, or provide a staging environment name using:\n  \
-                 mz-deploy stage . --deploy-id <environment-name>"
-                    .to_string(),
-            ),
             Self::GitDirty => Some(
                 "commit or stash your changes before deploying, or use the --allow-dirty flag to deploy anyway"
                     .to_string(),
             ),
-            Self::NoSchemas => Some(
-                "create at least one schema directory under your project directory (e.g., materialize/public/)"
-                    .to_string(),
-            ),
-            Self::ProductionOverwriteNotAllowed { objects } => {
-                let object_list = objects
-                    .iter()
-                    .take(5)
-                    .map(|(db, schema, obj)| {
-                        format!(
-                            "  - {}.{}.{}",
-                            db.if_supports_color(Stream::Stderr, |t| t.yellow()),
-                            schema.if_supports_color(Stream::Stderr, |t| t.yellow()),
-                            obj.if_supports_color(Stream::Stderr, |t| t.yellow())
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let more = if objects.len() > 5 {
-                    format!("\n  ... and {} more", objects.len() - 5)
-                } else {
-                    String::new()
-                };
-                Some(format!(
-                    "the following objects already exist in production:\n{}{}\n\n\
-                     To update existing objects, use blue/green deployment:\n  \
-                     {} {} {}\n  \
-                     {} {} {} <staging-env>",
-                    object_list,
-                    more,
-                    "mz-deploy".if_supports_color(Stream::Stderr, |t| t.cyan()),
-                    "stage".if_supports_color(Stream::Stderr, |t| t.cyan()),
-                    ".".if_supports_color(Stream::Stderr, |t| t.cyan()),
-                    "mz-deploy".if_supports_color(Stream::Stderr, |t| t.cyan()),
-                    "apply".if_supports_color(Stream::Stderr, |t| t.cyan()),
-                    "--staging-env".if_supports_color(Stream::Stderr, |t| t.cyan())
-                ))
-            }
             Self::SetupRequired { missing } => {
                 let list = missing
                     .iter()
@@ -455,10 +381,6 @@ impl CliError {
                     promoted_str,
                 ))
             }
-            Self::DeploymentTableCreationFailed { .. } => Some(
-                "ensure your database user has CREATE privileges on the database"
-                    .to_string(),
-            ),
             Self::SqlExecutionFailed { statement, .. } => Some(format!(
                 "SQL statement:\n  {}",
                 statement.lines().take(5).collect::<Vec<_>>().join("\n  ")
@@ -480,12 +402,6 @@ impl CliError {
                 "environment names must contain only alphanumeric characters, hyphens, and underscores"
                     .to_string(),
             ),
-            Self::SchemaNotFound { database, schema } => Some(format!(
-                "create the schema first, or check that you're connected to the correct database.\n  \
-                 CREATE SCHEMA {}.{}",
-                database.if_supports_color(Stream::Stderr, |t| t.cyan()),
-                schema.if_supports_color(Stream::Stderr, |t| t.cyan())
-            )),
             Self::ClusterNotFound { name } => Some(format!(
                 "create the cluster first:\n  \
                  CREATE CLUSTER {} SIZE = '{}' REPLICATION FACTOR = 1",
@@ -493,11 +409,6 @@ impl CliError {
                 "M.1-small".if_supports_color(Stream::Stderr, |t| t.cyan())
             )),
             Self::TestsFailed { .. } => None,
-            Self::TestValidationFailed(_) => Some(
-                "review the validation error above and update your test to match the schema.\n\
-                 Run 'mz-deploy compile' to regenerate the type cache if needed"
-                    .to_string(),
-            ),
             Self::TypeCheckFailed(_) => None,
             Self::ReadyTimeout { .. } => Some(
                 "deployment is taking longer than expected to hydrate. You can:\n  \
@@ -537,22 +448,6 @@ impl CliError {
                     object_list,
                     more,
                 ))
-            }
-            Self::ClusterNotReady { cluster, reason } => {
-                if reason.contains("replication factor") {
-                    Some(format!(
-                        "the cluster '{}' has no replicas running. Ensure the cluster is scaled up:\n  \
-                         ALTER CLUSTER {} SET (REPLICATION FACTOR = 1)",
-                        cluster.if_supports_color(Stream::Stderr, |t| t.yellow()),
-                        cluster.if_supports_color(Stream::Stderr, |t| t.cyan())
-                    ))
-                } else {
-                    Some(format!(
-                        "grant USAGE on the cluster to your role:\n  \
-                         GRANT USAGE ON CLUSTER {} TO <your-role>",
-                        cluster.if_supports_color(Stream::Stderr, |t| t.cyan())
-                    ))
-                }
             }
             Self::NoMzDeployRole => Some(
                 "your role must be a member of one of: materialize_deployer, materialize_developer, or materialize_monitor.\n\

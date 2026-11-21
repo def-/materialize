@@ -707,17 +707,6 @@ fn print_test_validation_error(error: &TestValidationError) {
         TestValidationError::ExpectedSchemaMismatch(inner) => {
             info!("{}", inner)
         }
-        TestValidationError::InvalidAtTime(inner) => {
-            info!("{}", inner)
-        }
-        TestValidationError::TypesCacheUnavailable { reason } => {
-            let style = Style::new().bright_red().bold();
-            info!(
-                "{}: types cache unavailable: {}",
-                "error".if_supports_color(Stream::Stderr, |t| style.style(t)),
-                reason
-            );
-        }
     }
 }
 
