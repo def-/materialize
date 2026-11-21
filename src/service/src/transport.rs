@@ -32,7 +32,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail};
 use bincode::Options;
 use futures::future;
-use mz_ore::cast::CastInto;
+use mz_ore::cast::{CastFrom, CastInto};
 use mz_ore::netio::{Listener, SocketAddr, Stream, TimedReader, TimedWriter};
 use mz_ore::task::{AbortOnDropHandle, JoinHandle};
 use semver::Version;
@@ -543,14 +543,17 @@ where
     W: AsyncWrite + Unpin,
     M: Message,
 {
-    let bytes = match msg {
-        Some(msg) => &*wire_encode(msg)?,
-        None => &[],
-    };
-
-    let len = bytes.len().cast_into();
-    writer.write_u64(len).await?;
-    writer.write_all(bytes).await?;
+    // Write the length prefix and the payload together. The connection's writer is unbuffered
+    // and `mz_ore::netio` sets TCP_NODELAY, so every write is a syscall and can leave as its own
+    // TCP segment.
+    let options = bincode::DefaultOptions::new();
+    let len = msg.map_or(Ok(0), |msg| options.serialized_size(msg))?;
+    let mut frame = Vec::with_capacity(8 + usize::cast_from(len));
+    frame.extend_from_slice(&len.to_be_bytes());
+    if let Some(msg) = msg {
+        options.serialize_into(&mut frame, msg)?;
+    }
+    writer.write_all(&frame).await?;
 
     Ok(())
 }
@@ -571,12 +574,6 @@ where
     reader.read_exact(&mut bytes).await?;
 
     wire_decode(&bytes)
-}
-
-/// Encode a message for wire transport.
-fn wire_encode<M: Message>(msg: &M) -> anyhow::Result<Vec<u8>> {
-    let bytes = bincode::DefaultOptions::new().serialize(msg)?;
-    Ok(bytes)
 }
 
 /// Decode a wire frame back into a message.
