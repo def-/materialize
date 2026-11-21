@@ -181,4 +181,20 @@ mod tests {
 
         Ok(())
     }
+
+    #[mz_ore::test]
+    fn pg_legacy_char_columns_get_valid_schema() {
+        let desc = RelationDesc::builder()
+            .with_column("a", SqlScalarType::PgLegacyChar.nullable(false))
+            .with_column("b", SqlScalarType::PgLegacyChar.nullable(true))
+            .finish();
+        let schema_generator =
+            AvroSchemaGenerator::new(desc, false, Default::default(), "row", false, None, true)
+                .unwrap();
+        let avro_value = encode_datums_as_avro(
+            [Datum::UInt8(b'x'), Datum::Null],
+            schema_generator.columns(),
+        );
+        assert!(avro_value.validate(schema_generator.schema().top_node()));
+    }
 }
