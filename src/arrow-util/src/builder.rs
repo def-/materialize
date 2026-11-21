@@ -1019,8 +1019,9 @@ impl ArrowColumn {
                         )
                     })?;
 
-                    let value = coefficient
-                        .checked_mul(10_i128.pow(scale_diff))
+                    let value = 10_i128
+                        .checked_pow(scale_diff)
+                        .and_then(|factor| coefficient.checked_mul(factor))
                         .ok_or_else(|| {
                             anyhow::anyhow!("Decimal value {} out of range for parquet", dec)
                         })?;
@@ -1185,5 +1186,34 @@ impl ArrowColumn {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mz_repr::adt::numeric;
+
+    use super::*;
+
+    #[mz_ore::test]
+    #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `decContextDefault` on OS `linux`
+    fn numeric_out_of_range_for_column_scale() {
+        let desc = RelationDesc::builder()
+            .with_column(
+                "n",
+                SqlScalarType::Numeric { max_scale: None }.nullable(true),
+            )
+            .finish();
+        let mut builder = ArrowBuilder::new(&desc, 1, 0).unwrap();
+        // Rows store 1e30 as coefficient 1 and exponent 30, so the column's
+        // default scale of 10 needs a factor of 10^40, past `i128::MAX`.
+        let n = numeric::cx_datum().parse("1e30").unwrap();
+        let err = builder
+            .add_row(&Row::pack_slice(&[Datum::from(n)]))
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("out of range for parquet"),
+            "unexpected error: {err:#}"
+        );
     }
 }
