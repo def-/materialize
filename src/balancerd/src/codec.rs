@@ -7,18 +7,16 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0.
 
-use async_trait::async_trait;
 use bytes::{Buf, BufMut, BytesMut};
 use bytesize::ByteSize;
 use futures::{SinkExt, TryStreamExt, sink};
 use mz_ore::cast::CastFrom;
 use mz_ore::future::OreSinkExt;
-use mz_ore::netio::AsyncReady;
 use mz_pgwire_common::{
     Conn, Cursor, DecodeState, ErrorResponse, FrontendMessage, MAX_PREAUTH_FRAME_SIZE,
     MAX_REQUEST_SIZE, Pgbuf, parse_frame_len,
 };
-use tokio::io::{self, AsyncRead, AsyncWrite, Interest, Ready};
+use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
 /// Internal representation of a backend [message].
@@ -121,16 +119,6 @@ where
         let parts = self.inner.into_inner().into_parts();
         debug_assert!(parts.write_buf.is_empty(), "unflushed messages");
         (parts.io, parts.read_buf)
-    }
-}
-
-#[async_trait]
-impl<A> AsyncReady for FramedConn<A>
-where
-    A: AsyncRead + AsyncWrite + AsyncReady + Send + Sync + Unpin,
-{
-    async fn ready(&self, interest: Interest) -> io::Result<Ready> {
-        self.inner.get_ref().get_ref().ready(interest).await
     }
 }
 
