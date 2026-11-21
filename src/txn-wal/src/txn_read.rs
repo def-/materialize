@@ -651,7 +651,7 @@ where
                         entries
                     );
 
-                    self.cache.push_entries(entries.clone(), frontier.clone());
+                    self.cache.push_entries(entries, frontier.clone());
 
                     self.data_subscriptions
                         .retain(|subscription| !subscription.tx.is_closed());
