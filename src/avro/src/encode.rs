@@ -36,15 +36,7 @@ pub fn encode(value: &Value, schema: &Schema, buffer: &mut Vec<u8>) {
 
 fn encode_bytes<B: AsRef<[u8]> + ?Sized>(s: &B, buffer: &mut Vec<u8>) {
     let bytes = s.as_ref();
-    encode(
-        &Value::Long(bytes.len() as i64),
-        &Schema {
-            named: vec![],
-            indices: Default::default(),
-            top: SchemaPiece::Long.into(),
-        },
-        buffer,
-    );
+    encode_long(bytes.len() as i64, buffer);
     buffer.extend_from_slice(bytes);
 }
 
