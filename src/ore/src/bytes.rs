@@ -156,19 +156,19 @@ impl<const N: usize> Buf for SegmentedBytes<N> {
         assert!(cnt <= self.len, "Advance past the end of buffer");
         self.len -= cnt;
 
-        while cnt > 0 {
-            if let Some((seg, _len)) = self.segments.first_mut() {
-                if seg.remaining() > cnt {
-                    seg.advance(cnt);
-                    // We advanced `cnt` bytes, so no more need to advance.
-                    cnt = 0;
-                } else {
-                    // Remove the whole first buffer.
-                    cnt = cnt.saturating_sub(seg.remaining());
-                    self.segments.remove(0);
-                }
+        // Drop the fully consumed segments with one `drain`. A `remove(0)` per
+        // segment shifts the whole tail each time, which makes advancing past
+        // k of n segments cost O(k * n).
+        let mut consumed = 0;
+        for (seg, _len) in self.segments.iter_mut() {
+            if seg.remaining() > cnt {
+                seg.advance(cnt);
+                break;
             }
+            cnt -= seg.remaining();
+            consumed += 1;
         }
+        self.segments.drain(..consumed);
     }
 
     fn copy_to_bytes(&mut self, len: usize) -> Bytes {
