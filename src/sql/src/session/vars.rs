@@ -2422,7 +2422,10 @@ impl SystemVars {
     /// (things that go in `ComputeParameters` and are sent to replicas via `UpdateConfiguration`
     /// commands).
     pub fn is_compute_config_var(&self, name: &str) -> bool {
-        name == MAX_RESULT_SIZE.name() || self.is_dyncfg_var(name) || is_tracing_var(name)
+        name == MAX_RESULT_SIZE.name()
+            || self.is_dyncfg_var(name)
+            || is_tracing_var(name)
+            || is_grpc_client_var(name)
     }
 
     /// Returns whether the named variable is a metrics configuration parameter
@@ -2467,6 +2470,7 @@ impl SystemVars {
             || is_upsert_rocksdb_config_var(name)
             || self.is_dyncfg_var(name)
             || is_tracing_var(name)
+            || is_grpc_client_var(name)
     }
 
     /// Returns whether the named variable is a dyncfg configuration parameter.
@@ -2481,6 +2485,12 @@ pub fn is_tracing_var(name: &str) -> bool {
         || name == OPENTELEMETRY_FILTER.name()
         || name == OPENTELEMETRY_FILTER_DEFAULTS.name()
         || name == SENTRY_FILTERS.name()
+}
+
+fn is_grpc_client_var(name: &str) -> bool {
+    name == grpc_client::CONNECT_TIMEOUT.name()
+        || name == grpc_client::HTTP2_KEEP_ALIVE_INTERVAL.name()
+        || name == grpc_client::HTTP2_KEEP_ALIVE_TIMEOUT.name()
 }
 
 /// Returns whether the named variable is a caching configuration parameter.
@@ -2824,5 +2834,27 @@ mod config_var_tests {
         assert!(is_cluster_scheduling_var(
             cluster_scheduling::CLUSTER_SECURITY_CONTEXT_ENABLED.name()
         ));
+    }
+
+    #[mz_ore::test]
+    fn grpc_client_vars_are_compute_and_storage_config_vars() {
+        let system_vars = SystemVars::new();
+        let mut checked = 0;
+        for var in system_vars.iter() {
+            if var.name().starts_with("grpc_client_") {
+                assert!(
+                    system_vars.is_compute_config_var(var.name()),
+                    "{} is not a compute config var",
+                    var.name(),
+                );
+                assert!(
+                    system_vars.is_storage_config_var(var.name()),
+                    "{} is not a storage config var",
+                    var.name(),
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "no grpc_client vars found");
     }
 }
