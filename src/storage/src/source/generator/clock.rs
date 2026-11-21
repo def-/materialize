@@ -26,7 +26,8 @@ impl Generator for Clock {
         _seed: Option<u64>,
         mut resume_offset: MzOffset,
     ) -> Box<dyn Iterator<Item = (LoadGeneratorOutput, Event<Option<MzOffset>, (Row, Diff)>)>> {
-        let interval_ms = self.tick_ms;
+        // NOTE: `tick_ms` is zero for a zero or sub-millisecond `TICK INTERVAL`.
+        let interval_ms = self.tick_ms.max(1);
         let floor = move |t| t / interval_ms * interval_ms;
         let first_tick = floor(self.as_of_ms);
         resume_offset = resume_offset.max(MzOffset::from(first_tick));
@@ -66,5 +67,32 @@ impl Generator for Clock {
                     .map(|e| (LoadGeneratorOutput::Default, e))
             }),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+    use mz_ore::now::NowFn;
+    use mz_storage_types::sources::MzOffset;
+    use mz_storage_types::sources::load_generator::{Event, Generator};
+
+    use super::Clock;
+
+    #[mz_ore::test]
+    fn zero_tick_interval_ticks_every_millisecond() {
+        let clock = Clock {
+            tick_ms: 0,
+            as_of_ms: 0,
+        };
+        let offsets: Vec<u64> = clock
+            .by_seed(NowFn::from(|| 10), None, MzOffset::from(0))
+            .map_while(|(_, event)| match event {
+                Event::Message(offset, _) => Some(offset.offset),
+                Event::Progress(_) => None,
+            })
+            .dedup()
+            .collect();
+        assert_eq!(offsets, (0..=10u64).collect::<Vec<_>>());
     }
 }
