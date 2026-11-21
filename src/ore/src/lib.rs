@@ -104,7 +104,7 @@ pub mod treat_as_equal;
 pub mod url;
 pub mod vec;
 
-pub use mz_ore_proc::{instrument, static_list, test};
+pub use mz_ore_proc::{instrument, test};
 
 #[cfg_attr(nightly_doc_features, doc(cfg(feature = "overflowing")))]
 #[cfg(feature = "overflowing")]
