@@ -260,10 +260,6 @@ impl PreDelimitedFormat {
 #[derive(Debug)]
 pub(crate) enum DataDecoderInner {
     Avro(AvroDecoderState),
-    DelimitedBytes {
-        delimiter: u8,
-        format: PreDelimitedFormat,
-    },
     Csv(CsvDecoderState),
 
     PreDelimited(PreDelimitedFormat),
@@ -281,16 +277,6 @@ impl DataDecoder {
         bytes: &mut &[u8],
     ) -> Result<Result<Option<Row>, DecodeErrorKind>, CsrConnectError> {
         let result = match &mut self.inner {
-            DataDecoderInner::DelimitedBytes { delimiter, format } => {
-                match bytes.iter().position(|&byte| byte == *delimiter) {
-                    Some(chunk_idx) => {
-                        let data = &bytes[0..chunk_idx];
-                        *bytes = &bytes[chunk_idx + 1..];
-                        format.decode(data)
-                    }
-                    None => Ok(None),
-                }
-            }
             DataDecoderInner::Avro(avro) => avro.decode(bytes).await?,
             DataDecoderInner::Csv(csv) => csv.decode(bytes),
             DataDecoderInner::PreDelimited(format) => {
@@ -316,16 +302,6 @@ impl DataDecoder {
                 csv.reset_for_new_object();
                 result
             }
-            DataDecoderInner::DelimitedBytes { format, .. } => {
-                let data = std::mem::take(bytes);
-                // If we hit EOF with no bytes left in the buffer it means the file had a trailing
-                // \n character that can be ignored. Otherwise, we decode the final bytes as normal
-                if data.is_empty() {
-                    Ok(None)
-                } else {
-                    format.decode(data)
-                }
-            }
             _ => Ok(None),
         };
         Ok(result)
@@ -343,10 +319,6 @@ impl DataDecoder {
 async fn get_decoder(
     encoding: DataEncoding,
     debug_name: &str,
-    // Information about optional transformations that can be eagerly done.
-    // If the decoding elects to perform them, it should replace this with
-    // `None`.
-    is_connection_delimited: bool,
     metrics: DecodeMetricDefs,
     storage_configuration: &StorageConfiguration,
 ) -> Result<DataDecoder, CsrConnectError> {
@@ -428,15 +400,10 @@ async fn get_decoder(
                 DataEncoding::Text => PreDelimitedFormat::Text,
                 _ => unreachable!(),
             };
-            let inner = if is_connection_delimited {
-                DataDecoderInner::PreDelimited(after_delimiting)
-            } else {
-                DataDecoderInner::DelimitedBytes {
-                    delimiter: b'\n',
-                    format: after_delimiting,
-                }
-            };
-            DataDecoder { inner, metrics }
+            DataDecoder {
+                inner: DataDecoderInner::PreDelimited(after_delimiting),
+                metrics,
+            }
         }
         DataEncoding::Csv(enc) => {
             let state = CsvDecoderState::new(enc);
@@ -526,7 +493,6 @@ pub fn render_decode_delimited<'scope, T: Timestamp, FromTime: Timestamp>(
                     get_decoder(
                         encoding,
                         &debug_name,
-                        true,
                         metrics.clone(),
                         &storage_configuration,
                     )
@@ -535,14 +501,8 @@ pub fn render_decode_delimited<'scope, T: Timestamp, FromTime: Timestamp>(
                 None => None,
             };
 
-            let mut value_decoder = get_decoder(
-                value_encoding,
-                &debug_name,
-                true,
-                metrics,
-                &storage_configuration,
-            )
-            .await?;
+            let mut value_decoder =
+                get_decoder(value_encoding, &debug_name, metrics, &storage_configuration).await?;
 
             let mut output_container = Vec::new();
 
