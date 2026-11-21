@@ -1198,10 +1198,14 @@ static VALID_CASTS: LazyLock<BTreeMap<(SqlScalarBaseType, SqlScalarBaseType), Ca
 #[derive(Debug)]
 pub enum CastError {
     /// No cast exists between the given types (or not in this cast context).
+    ///
+    /// The types are rendered only in [`CastError::into_plan_error`], since
+    /// function selection probes every overload with [`can_cast`], which
+    /// discards this error, and rendering a type name searches the catalog.
     InvalidCast {
         ccx: CastContext,
-        from: String,
-        to: String,
+        from: SqlScalarType,
+        to: SqlScalarType,
     },
     /// Cast would apply but is disallowed (e.g. range over an unsupported element type).
     UnsupportedRangeElementType { element_type_name: String },
@@ -1210,14 +1214,14 @@ pub enum CastError {
 }
 
 impl CastError {
-    /// Convert to a [`PlanError`] for use in planning; requires the expression name for context.
-    pub fn into_plan_error(self, name: String) -> PlanError {
+    /// Convert to a [`PlanError`] for use in planning.
+    pub fn into_plan_error(self, ecx: &ExprContext) -> PlanError {
         match self {
             CastError::InvalidCast { ccx, from, to } => PlanError::InvalidCast {
-                name,
+                name: ecx.name.into(),
                 ccx,
-                from,
-                to,
+                from: ecx.humanize_sql_scalar_type(&from, false),
+                to: ecx.humanize_sql_scalar_type(&to, false),
             },
             CastError::UnsupportedRangeElementType { element_type_name } => {
                 PlanError::UnsupportedRangeElementType { element_type_name }
@@ -1259,8 +1263,8 @@ fn get_cast(
         None => {
             return Err(CastError::InvalidCast {
                 ccx,
-                from: ecx.humanize_sql_scalar_type(from, false),
-                to: ecx.humanize_sql_scalar_type(to, false),
+                from: from.clone(),
+                to: to.clone(),
             });
         }
     };
@@ -1285,8 +1289,8 @@ fn get_cast(
         }
         None => Err(CastError::InvalidCast {
             ccx,
-            from: ecx.humanize_sql_scalar_type(from, false),
-            to: ecx.humanize_sql_scalar_type(to, false),
+            from: from.clone(),
+            to: to.clone(),
         }),
     }
 }
@@ -1737,7 +1741,7 @@ pub fn plan_cast_with_failure_mode(
     let cast_inner = |from, to, expr| {
         get_cast(ecx, ccx, mode, from, to)
             .map(|cast| cast(expr))
-            .map_err(|e| e.into_plan_error(ecx.name.into()))
+            .map_err(|e| e.into_plan_error(ecx))
     };
 
     // String-like types get special handling to match PostgreSQL.
