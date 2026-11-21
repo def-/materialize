@@ -511,7 +511,7 @@ impl<'a> DataflowBuilder<'a> {
                     locally_optimized_expr: optimized_expr,
                     ..
                 }) => {
-                    let view_expr = optimized_expr.as_ref().clone().into_inner();
+                    let view_expr = optimized_expr.as_inner();
 
                     // Inspect global ids that occur in the Gets in view_expr, and collect the ids
                     // of monotonic dependees.
@@ -536,8 +536,8 @@ impl<'a> DataflowBuilder<'a> {
                     }
 
                     let mut builder = DerivedBuilder::new(features);
-                    builder.require(Monotonic::new(monotonic_ids.clone()));
-                    let derived = builder.visit(&view_expr);
+                    builder.require(Monotonic::new(monotonic_ids));
+                    let derived = builder.visit(view_expr);
 
                     Ok(*derived
                         .as_view()
