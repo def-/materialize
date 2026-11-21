@@ -44,7 +44,6 @@ pub mod fmt;
 #[cfg_attr(nightly_doc_features, doc(cfg(feature = "async")))]
 #[cfg(feature = "async")]
 pub mod future;
-pub mod graph;
 pub mod hash;
 pub mod hint;
 #[cfg(feature = "id_gen")]
