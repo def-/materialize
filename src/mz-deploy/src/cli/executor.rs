@@ -35,10 +35,10 @@ use crate::cli::CliError;
 use crate::cli::git::get_git_commit;
 use crate::client::{Client, ClusterConfig, quote_identifier};
 use crate::config::Settings;
+use crate::project;
 use crate::project::analysis::deployment_snapshot::DeploymentMetadata;
 use crate::project::ir::graph::Project;
 use crate::project::resolve::normalize;
-use crate::project::{self, ir::compiled};
 use crate::{info, verbose};
 use owo_colors::{OwoColorize, Stream};
 use serde::Serialize;
@@ -433,15 +433,6 @@ pub struct DeploymentExecutor<'a> {
 }
 
 impl<'a> DeploymentExecutor<'a> {
-    /// Create a new deployment executor that executes SQL.
-    pub fn new(client: &'a Client) -> Self {
-        Self {
-            client,
-            dry_run: false,
-            statement_log: RefCell::new(Vec::new()),
-        }
-    }
-
     /// Create a deployment executor that always runs in dry-run mode (for planning).
     pub fn new_dry_run(client: &'a Client) -> Self {
         Self {
@@ -471,35 +462,6 @@ impl<'a> DeploymentExecutor<'a> {
     /// for `ObjectResult`.
     pub fn take_statements(&self) -> Vec<String> {
         self.statement_log.borrow_mut().drain(..).collect()
-    }
-
-    /// Execute all SQL statements for a database object.
-    ///
-    /// This executes the main CREATE statement, followed by any indexes,
-    /// grants, and comments associated with the object.
-    pub async fn execute_object(
-        &self,
-        typed_obj: &compiled::DatabaseObject,
-    ) -> Result<(), CliError> {
-        // Execute main statement
-        self.execute_sql(&typed_obj.stmt).await?;
-
-        // Execute indexes
-        for index in &typed_obj.indexes {
-            self.execute_sql(index).await?;
-        }
-
-        // Execute grants
-        for grant in &typed_obj.grants {
-            self.execute_sql(grant).await?;
-        }
-
-        // Execute comments
-        for comment in &typed_obj.comments {
-            self.execute_sql(comment).await?;
-        }
-
-        Ok(())
     }
 
     /// Create databases and schemas for `schema_set`, then execute filtered mod_statements.
