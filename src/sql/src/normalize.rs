@@ -19,14 +19,12 @@ use std::fmt;
 use itertools::Itertools;
 use mz_repr::{ColumnName, GlobalId, RelationVersion};
 use mz_sql_parser::ast::display::AstDisplay;
-use mz_sql_parser::ast::visit_mut::{self, VisitMut};
 use mz_sql_parser::ast::{
     CreateConnectionStatement, CreateIndexStatement, CreateMaterializedViewStatement,
     CreateMetricSinkStatement, CreateSecretStatement, CreateSinkStatement, CreateSourceStatement,
     CreateSubsourceStatement, CreateTableFromSourceStatement, CreateTableStatement,
-    CreateTypeStatement, CreateViewStatement, CreateWebhookSourceStatement, CteBlock, Function,
-    FunctionArgs, Ident, IfExistsBehavior, MutRecBlock, Op, Query, Statement, TableFactor,
-    TableFromSourceColumns, UnresolvedItemName, UnresolvedSchemaName, Value, Version,
+    CreateTypeStatement, CreateViewStatement, CreateWebhookSourceStatement, Ident,
+    IfExistsBehavior, Op, Statement, UnresolvedItemName, UnresolvedSchemaName, Value, Version,
     ViewDefinition,
 };
 
@@ -201,71 +199,6 @@ pub fn create_statement(
         )))
     };
 
-    struct QueryNormalizer {
-        ctes: Vec<Ident>,
-        err: Option<PlanError>,
-    }
-
-    impl QueryNormalizer {
-        fn new() -> QueryNormalizer {
-            QueryNormalizer {
-                ctes: vec![],
-                err: None,
-            }
-        }
-    }
-
-    impl<'ast> VisitMut<'ast, Aug> for QueryNormalizer {
-        fn visit_query_mut(&mut self, query: &'ast mut Query<Aug>) {
-            let n = self.ctes.len();
-            match &query.ctes {
-                CteBlock::Simple(ctes) => {
-                    for cte in ctes.iter() {
-                        self.ctes.push(cte.alias.name.clone());
-                    }
-                }
-                CteBlock::MutuallyRecursive(MutRecBlock { options: _, ctes }) => {
-                    for cte in ctes.iter() {
-                        self.ctes.push(cte.name.clone());
-                    }
-                }
-            }
-            visit_mut::visit_query_mut(self, query);
-            self.ctes.truncate(n);
-        }
-
-        fn visit_function_mut(&mut self, func: &'ast mut Function<Aug>) {
-            match &mut func.args {
-                FunctionArgs::Star => (),
-                FunctionArgs::Args { args, order_by } => {
-                    for arg in args {
-                        self.visit_expr_mut(arg);
-                    }
-                    for expr in order_by {
-                        self.visit_order_by_expr_mut(expr);
-                    }
-                }
-            }
-            if let Some(over) = &mut func.over {
-                self.visit_window_spec_mut(over);
-            }
-        }
-
-        fn visit_table_factor_mut(&mut self, table_factor: &'ast mut TableFactor<Aug>) {
-            match table_factor {
-                TableFactor::Table { name, alias, .. } => {
-                    self.visit_item_name_mut(name);
-                    if let Some(alias) = alias {
-                        self.visit_table_alias_mut(alias);
-                    }
-                }
-                // We only need special behavior for `TableFactor::Table`.
-                // Just visit the other types of table factors like normal.
-                _ => visit_mut::visit_table_factor_mut(self, table_factor),
-            }
-        }
-    }
-
     // Think very hard before changing any of the branches in this match
     // statement. All identifiers must be quoted. All object names must be
     // allocated or resolved, depending on whether they are the object created
@@ -297,26 +230,19 @@ pub fn create_statement(
 
         Statement::CreateSubsource(CreateSubsourceStatement {
             name,
-            columns,
+            columns: _,
             constraints: _,
             of_source: _,
             if_not_exists,
             with_options: _,
         }) => {
             *name = allocate_name(name)?;
-            let mut normalizer = QueryNormalizer::new();
-            for c in columns {
-                normalizer.visit_column_def_mut(c);
-            }
-            if let Some(err) = normalizer.err {
-                return Err(err);
-            }
             *if_not_exists = false;
         }
 
         Statement::CreateTableFromSource(CreateTableFromSourceStatement {
             name,
-            columns,
+            columns: _,
             constraints: _,
             external_reference: _,
             source: _,
@@ -327,21 +253,12 @@ pub fn create_statement(
             with_options: _,
         }) => {
             *name = allocate_name(name)?;
-            let mut normalizer = QueryNormalizer::new();
-            if let TableFromSourceColumns::Defined(columns) = columns {
-                for c in columns {
-                    normalizer.visit_column_def_mut(c);
-                }
-            }
-            if let Some(err) = normalizer.err {
-                return Err(err);
-            }
             *if_not_exists = false;
         }
 
         Statement::CreateTable(CreateTableStatement {
             name,
-            columns,
+            columns: _,
             constraints: _,
             if_not_exists,
             temporary,
@@ -352,13 +269,6 @@ pub fn create_statement(
             } else {
                 allocate_name(name)?
             };
-            let mut normalizer = QueryNormalizer::new();
-            for c in columns {
-                normalizer.visit_column_def_mut(c);
-            }
-            if let Some(err) = normalizer.err {
-                return Err(err);
-            }
             *if_not_exists = false;
         }
 
@@ -409,7 +319,7 @@ pub fn create_statement(
             definition:
                 ViewDefinition {
                     name,
-                    query,
+                    query: _,
                     columns: _,
                 },
         }) => {
@@ -418,13 +328,6 @@ pub fn create_statement(
             } else {
                 allocate_name(name)?
             };
-            {
-                let mut normalizer = QueryNormalizer::new();
-                normalizer.visit_query_mut(query);
-                if let Some(err) = normalizer.err {
-                    return Err(err);
-                }
-            }
             *if_exists = IfExistsBehavior::Error;
         }
 
@@ -435,18 +338,11 @@ pub fn create_statement(
             replacement_for: _,
             in_cluster: _,
             in_cluster_replica: _,
-            query,
+            query: _,
             with_options: _,
             as_of: _,
         }) => {
             *name = allocate_name(name)?;
-            {
-                let mut normalizer = QueryNormalizer::new();
-                normalizer.visit_query_mut(query);
-                if let Some(err) = normalizer.err {
-                    return Err(err);
-                }
-            }
             *if_exists = IfExistsBehavior::Error;
         }
 
@@ -454,29 +350,15 @@ pub fn create_statement(
             name: _,
             in_cluster: _,
             on_name: _,
-            key_parts,
+            key_parts: _,
             with_options: _,
             if_not_exists,
         }) => {
-            let mut normalizer = QueryNormalizer::new();
-            if let Some(key_parts) = key_parts {
-                for key_part in key_parts {
-                    normalizer.visit_expr_mut(key_part);
-                    if let Some(err) = normalizer.err {
-                        return Err(err);
-                    }
-                }
-            }
             *if_not_exists = false;
         }
 
-        Statement::CreateType(CreateTypeStatement { name, as_type }) => {
+        Statement::CreateType(CreateTypeStatement { name, as_type: _ }) => {
             *name = allocate_name(name)?;
-            let mut normalizer = QueryNormalizer::new();
-            normalizer.visit_create_type_as_mut(as_type);
-            if let Some(err) = normalizer.err {
-                return Err(err);
-            }
         }
         Statement::CreateSecret(CreateSecretStatement {
             name,
