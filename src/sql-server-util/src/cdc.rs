@@ -254,7 +254,7 @@ impl<'a, M: SqlServerCdcMetrics> CdcStream<'a, M> {
             if let Some(starting_lsn) = self.capture_instances.values().filter_map(|x| *x).min() {
                 let db_curr_lsn = crate::inspect::get_max_lsn(self.client).await?;
                 let next_lsn = db_curr_lsn.increment();
-                if starting_lsn >= db_curr_lsn {
+                if starting_lsn > db_curr_lsn {
                     tracing::debug!(
                         %starting_lsn,
                         %db_curr_lsn,
@@ -284,8 +284,9 @@ impl<'a, M: SqlServerCdcMetrics> CdcStream<'a, M> {
                 let db_max_lsn = crate::inspect::get_max_lsn(self.client).await?;
                 tracing::debug!(?db_max_lsn, ?curr_lsn, "got max LSN");
 
-                // If the LSN of the DB has increased then get all of our changes.
-                if db_max_lsn > curr_lsn {
+                // `curr_lsn` is the next LSN to read, so a max LSN equal to it
+                // can still have changes we have not read.
+                if db_max_lsn >= curr_lsn {
                     for (instance, instance_lsn) in &self.capture_instances {
                         let Some(instance_lsn) = instance_lsn.as_ref() else {
                             tracing::error!(?instance, "found uninitialized LSN!");
