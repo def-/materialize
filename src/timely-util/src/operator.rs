@@ -608,7 +608,7 @@ where
     Ba: Batcher<C> + 'static,
     Ba::Time: Timestamp,
     C: Container + Clone + 'static,
-    Ba::Output: Default + Clone + 'static,
+    Ba::Output: Clone + 'static,
     P: ParallelizationContract<Ba::Time, C>,
 {
     let logger = stream
@@ -662,9 +662,12 @@ where
                             batcher_frontier.clear();
                             batcher_frontier.extend(retained.iter().cloned());
 
-                            // send the batch to downstream consumers, empty or not.
-                            let mut session = output.session(&capabilities.elements()[index]);
-                            session.give(chain.unwrap_or_default());
+                            // An extraction that readies nothing sends no message, so every
+                            // message carries updates. The COPY TO S3 error filter relies on
+                            // this, as it forwards only the first message's first error.
+                            if let Some(chain) = chain {
+                                output.session(&capabilities.elements()[index]).give(chain);
+                            }
                         }
                     }
 
@@ -922,12 +925,13 @@ impl<T> ClearContainer for Vec<T> {
 mod tests {
     use timely::container::CapacityContainerBuilder;
     use timely::dataflow::operators::Capture;
-    use timely::dataflow::operators::capture::Extract;
+    use timely::dataflow::operators::capture::{Event, Extract};
     use timely::dataflow::operators::core::to_stream::ToStreamBuilder;
-    use timely::dataflow::operators::vec::ToStream;
+    use timely::dataflow::operators::vec::{ToStream, UnorderedInput};
 
     use crate::columnar::Column;
     use crate::columnar::builder::ColumnBuilder;
+    use crate::columnation::{ColInternalMerger, ColumnationChunker};
 
     use super::*;
 
@@ -991,5 +995,44 @@ mod tests {
         };
         assert_eq!(flatten(matching.extract()), MATCHING);
         assert_eq!(flatten(rest.extract()), REST);
+    }
+
+    /// The update's time is past its capability's, so the input frontier first stops at a time
+    /// that passes the capability but readies nothing.
+    #[mz_ore::test]
+    fn consolidate_pact_sends_no_empty_chain() {
+        type TestBatcher = ConsolidatingBatcher<
+            ColumnationChunker<((u64, ()), u64, i64)>,
+            ColInternalMerger<(u64, ()), u64, i64>,
+        >;
+        let captured = timely::execute_directly(|worker| {
+            let (mut input, mut cap, captured) = worker.dataflow::<u64, _, _>(|scope| {
+                let ((input, cap), stream) = scope.new_unordered_input::<((u64, ()), u64, i64)>();
+                let consolidated = consolidate_pact::<TestBatcher, _, _>(
+                    stream,
+                    Pipeline,
+                    "Test",
+                    TestBatcher::new,
+                );
+                (input, cap, consolidated.capture())
+            });
+            input.activate().session(&cap).give(((1, ()), 5, 1));
+            cap.downgrade(&5);
+            for _ in 0..4 {
+                worker.step();
+            }
+            drop(cap);
+            captured
+        });
+        let mut updates = Vec::new();
+        for event in captured.try_iter() {
+            if let Event::Messages(stamp, chains) = event {
+                for chain in chains {
+                    assert!(!chain.is_empty(), "empty chain sent at {stamp:?}");
+                    updates.extend(chain.iter().flat_map(|chunk| chunk.iter()).cloned());
+                }
+            }
+        }
+        assert_eq!(updates, [((1, ()), 5, 1)]);
     }
 }
