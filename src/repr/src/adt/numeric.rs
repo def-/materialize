@@ -423,8 +423,13 @@ pub fn twos_complement_be_to_numeric(
 ) -> Result<Numeric, anyhow::Error> {
     let mut cx = cx_datum();
     if input.len() <= 17 {
+        // The inner decode negates a negative input in place, so a failed narrow
+        // attempt on `input` would leave the wide retry a positive magnitude.
+        let mut narrow = [0u8; 17];
+        let narrow = &mut narrow[..input.len()];
+        narrow.copy_from_slice(input);
         if let Ok(mut n) =
-            twos_complement_be_to_numeric_inner::<Numeric, NUMERIC_DATUM_WIDTH_USIZE>(input)
+            twos_complement_be_to_numeric_inner::<Numeric, NUMERIC_DATUM_WIDTH_USIZE>(narrow)
         {
             n.set_exponent(-i32::from(scale));
             return Ok(n);
@@ -712,6 +717,25 @@ fn test_wide_twos_complement_roundtrip() {
     inner("-170141183460469231731687303715884105728");
     inner("-12345678901234567890.1234567890123456789");
     inner("-999999999999999999999999999999999999999");
+}
+
+#[mz_ore::test]
+#[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `decNumberFromInt32` on OS `linux`
+fn test_twos_complement_narrow_overflow_roundtrip() {
+    // At scale 39 these values have 40-digit unscaled integers that still fit
+    // in 17 bytes, so the narrow decode fails and the wide retry decodes them.
+    fn inner(s: &str) {
+        let mut cx = cx_datum();
+        let d = cx.parse(s).unwrap();
+        let wide = numeric_to_twos_complement_wide(d.clone());
+        let start = NumericAgg::TWOS_COMPLEMENT_BYTE_WIDTH - Numeric::TWOS_COMPLEMENT_BYTE_WIDTH;
+        let mut b = wide[start..].to_vec();
+        let x = twos_complement_be_to_numeric(&mut b, NUMERIC_DATUM_MAX_PRECISION).unwrap();
+        assert_eq!(d, x);
+    }
+    inner("1");
+    inner("-1");
+    inner("-9.87654321");
 }
 
 /// Returns `n`'s precision, i.e. the total number of digits represented by `n`
