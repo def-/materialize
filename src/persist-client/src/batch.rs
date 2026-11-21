@@ -764,7 +764,6 @@ where
     D: Monoid + Codec64,
 {
     pub(crate) fn new(
-        _cfg: BatchBuilderConfig,
         parts: BatchParts<T>,
         metrics: Arc<Metrics>,
         write_schemas: Schemas<K, V>,

@@ -991,7 +991,6 @@ where
             &metrics.compaction.batch,
         );
         let mut batch = BatchBuilderInternal::<K, V, T, D>::new(
-            cfg.batch.clone(),
             parts,
             Arc::clone(&metrics),
             write_schemas.clone(),
