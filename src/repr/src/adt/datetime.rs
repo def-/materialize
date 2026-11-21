@@ -1784,7 +1784,7 @@ pub(crate) fn tokenize_time_str(value: &str) -> Result<VecDeque<TimeStrToken>, S
             if c == "T" || c == "t" {
                 t.push_back(TimeStrToken::DateTimeDelimiter);
             } else {
-                match c.to_uppercase().parse() {
+                match c.parse() {
                     Ok(u) => t.push_back(TimeStrToken::TimeUnit(u)),
                     Err(_) => t.push_back(TimeStrToken::DateTimeUnit(c.parse()?)),
                 }
