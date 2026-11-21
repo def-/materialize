@@ -583,10 +583,11 @@ pub fn extract<D, T, R, Ch>(
 
     use columnar::Borrow as _;
     let mut owned_t = T::default();
-    while *position < len
-        && !crate::columnar::at_serialized_capacity(&keep_c.borrow())
-        && !crate::columnar::at_serialized_capacity(&ship_c.borrow())
-    {
+    // Only the side that receives a record can reach capacity, so the loop
+    // checks only that side again.
+    let mut full = crate::columnar::at_serialized_capacity(&keep_c.borrow())
+        || crate::columnar::at_serialized_capacity(&ship_c.borrow());
+    while *position < len && !full {
         let (_, time, _) = self_view.get(*position);
         T::copy_from(&mut owned_t, time);
         if upper.less_equal(&owned_t) {
@@ -594,8 +595,10 @@ pub fn extract<D, T, R, Ch>(
             // present in the antichain.
             frontier.insert_with(&owned_t, |t| t.clone());
             keep_c.extend_from_self(self_view, *position..*position + 1);
+            full = crate::columnar::at_serialized_capacity(&keep_c.borrow());
         } else {
             ship_c.extend_from_self(self_view, *position..*position + 1);
+            full = crate::columnar::at_serialized_capacity(&ship_c.borrow());
         }
         *position += 1;
     }
