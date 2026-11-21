@@ -8883,7 +8883,6 @@ dependencies = [
  "mz-rocksdb",
  "mz-row-spine",
  "mz-service",
- "mz-sql-parser",
  "mz-sql-server-util",
  "mz-ssh-util",
  "mz-storage-client",
