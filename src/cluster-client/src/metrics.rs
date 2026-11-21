@@ -119,6 +119,7 @@ pub struct WallclockLagMetrics {
 impl WallclockLagMetrics {
     /// Observe a new wallclock lag measurement.
     pub fn observe(&mut self, lag_secs: u64) {
+        let undefined = lag_secs == u64::MAX;
         let lag_secs = f32::cast_lossy(lag_secs);
 
         self.wallclock_lag_minmax.add_sample(lag_secs);
@@ -130,7 +131,35 @@ impl WallclockLagMetrics {
 
         self.wallclock_lag_seconds_min.set(min.into());
         self.wallclock_lag_seconds_max.set(max.into());
-        self.wallclock_lag_seconds_sum.inc_by(lag_secs.into());
+        // NOTE: Callers pass `u64::MAX` for an undefined lag. Adding that (2^64 as a float) to
+        // the f64 sum would make every later sample below 2048 s round away.
+        if !undefined {
+            self.wallclock_lag_seconds_sum.inc_by(lag_secs.into());
+        }
         self.wallclock_lag_seconds_count.inc();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mz_ore::metrics::MetricsRegistry;
+
+    use super::ControllerMetrics;
+
+    #[mz_ore::test]
+    fn wallclock_lag_sum_skips_undefined_lag() {
+        let registry = MetricsRegistry::new();
+        let metrics = ControllerMetrics::new(&registry);
+        let mut lag = metrics.wallclock_lag_metrics("u1".into(), None, None);
+        lag.observe(u64::MAX);
+        lag.observe(5);
+        lag.observe(7);
+
+        let families = registry.gather();
+        let sum = families
+            .iter()
+            .find(|m| m.name() == "mz_dataflow_wallclock_lag_seconds_sum")
+            .expect("sum metric registered");
+        assert_eq!(sum.get_metric()[0].get_counter().value(), 12.0);
     }
 }
