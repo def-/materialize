@@ -359,12 +359,13 @@ where
             if let Some(trimmed) = s.strip_suffix(".0") {
                 s = trimmed;
             }
-            let mut chars = s.chars().peekable();
-            while let Some(ch) = chars.next() {
-                buf.write_char(ch);
-                if ch == 'e' && chars.peek() != Some(&'-') {
-                    buf.write_char('+');
+            match s.split_once('e') {
+                Some((mantissa, exp)) if !exp.starts_with('-') => {
+                    buf.write_str(mantissa);
+                    buf.write_str("e+");
+                    buf.write_str(exp);
                 }
+                _ => buf.write_str(s),
             }
         }
     }
