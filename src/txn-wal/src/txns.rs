@@ -475,102 +475,6 @@ where
         .await
     }
 
-    /// Forgets, at the given timestamp, every data shard that is registered.
-    /// Returns the ids of the forgotten shards. See [Self::forget].
-    #[instrument(level = "debug", fields(ts = ?forget_ts))]
-    pub async fn forget_all(&mut self, forget_ts: T) -> Result<(Vec<ShardId>, Tidy), T> {
-        let op = &Arc::clone(&self.metrics).forget_all;
-        op.run(async {
-            let mut txns_upper = self
-                .txns_write
-                .shared_upper()
-                .into_option()
-                .expect("txns should not be closed");
-            let registered = loop {
-                txns_upper = self.txns_cache.update_ge(&txns_upper).await.clone();
-
-                let registered = self.txns_cache.all_registered_at_progress(&txns_upper);
-                let data_ids_debug = || {
-                    registered
-                        .iter()
-                        .map(|x| format!("{:.9}", x.to_string()))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                };
-                let updates = registered
-                    .iter()
-                    .map(|data_id| {
-                        C::encode(crate::TxnsEntry::Register(*data_id, T::encode(&forget_ts)))
-                    })
-                    .collect::<Vec<_>>();
-                let updates = updates
-                    .iter()
-                    .map(|(key, val)| ((key, val), &forget_ts, -1))
-                    .collect::<Vec<_>>();
-
-                // If the txns_upper has passed forget_ts, we can no longer write.
-                if forget_ts < txns_upper {
-                    debug!(
-                        "txns forget_all {} at {:?} mismatch current={:?}",
-                        data_ids_debug(),
-                        forget_ts,
-                        txns_upper,
-                    );
-                    return Err(txns_upper);
-                }
-
-                // Ensure the latest write has been applied, so we don't run into
-                // any issues trying to apply it later.
-                //
-                // NB: It's _very_ important for correctness to get this from the
-                // unapplied batches (which compact themselves naturally) and not
-                // from the writes (which are artificially compacted based on when
-                // we need reads for).
-                let data_latest_unapplied = self.txns_cache.unapplied_batches.values().last();
-                if let Some((_, _, latest_write)) = data_latest_unapplied {
-                    debug!(
-                        "txns forget_all {} applying latest write {:?}",
-                        data_ids_debug(),
-                        latest_write,
-                    );
-                    let latest_write = latest_write.clone();
-                    let _tidy = self.apply_le(&latest_write).await;
-                }
-                let res = crate::small_caa(
-                    || format!("txns forget_all {}", data_ids_debug()),
-                    &mut self.txns_write,
-                    &updates,
-                    txns_upper,
-                    forget_ts.step_forward(),
-                )
-                .await;
-                match res {
-                    Ok(()) => {
-                        debug!(
-                            "txns forget_all {} at {:?} success",
-                            data_ids_debug(),
-                            forget_ts
-                        );
-                        break registered;
-                    }
-                    Err(new_txns_upper) => {
-                        self.metrics.forget_all.retry_count.inc();
-                        txns_upper = new_txns_upper;
-                        continue;
-                    }
-                }
-            };
-
-            for data_id in registered.iter() {
-                self.datas.data_write_for_commit.remove(data_id);
-            }
-            let tidy = self.apply_le(&forget_ts).await;
-
-            Ok((registered, tidy))
-        })
-        .await
-    }
-
     /// "Applies" all committed txns <= the given timestamp, ensuring that reads
     /// at that timestamp will not block.
     ///
@@ -1174,9 +1078,7 @@ mod tests {
         txns.register(11, [writer(&client, d0).await])
             .await
             .unwrap();
-        let mut forget_expected = vec![d0, d1];
-        forget_expected.sort();
-        assert_eq!(txns.forget_all(12).await.unwrap().0, forget_expected);
+        txns.forget(12, [d0, d1]).await.unwrap();
 
         // Close shard to writes
         d0_write
