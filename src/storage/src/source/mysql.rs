@@ -273,8 +273,6 @@ pub enum TransientError {
     IoError(#[from] io::Error),
     #[error("sql client error")]
     SQLClient(#[from] mysql_async::Error),
-    #[error("ident decode error")]
-    IdentError(#[from] mz_sql_parser::ast::IdentError),
     #[error(transparent)]
     MySqlError(#[from] MySqlError),
     #[error(transparent)]
