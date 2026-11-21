@@ -286,6 +286,7 @@ pub(crate) fn render<'scope>(
                             );
                         });
 
+                    let mut mz_row = Row::default();
                     let mut snapshot_staged = 0;
                     while let Some(result) = snapshot.next().await {
                         let sql_server_row =
@@ -304,7 +305,6 @@ pub(crate) fn render<'scope>(
 
                         for (partition_idx, _) in partition_indexes {
                             // Decode the SQL Server row into an MZ one.
-                            let mut mz_row = Row::default();
                             let arena = RowArena::default();
 
                             let decoder = decoder_map
