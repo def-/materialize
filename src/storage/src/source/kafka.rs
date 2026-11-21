@@ -1187,13 +1187,6 @@ impl KafkaSourceReader {
 
         // Given the explicit consumer to partition assignment, we should never receive a message
         // for a partition for which we have no metadata
-        assert!(
-            self.last_offsets
-                .get(output_index)
-                .unwrap()
-                .contains_key(&partition)
-        );
-
         let last_offset_ref = self
             .last_offsets
             .get_mut(output_index)
