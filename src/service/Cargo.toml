@@ -28,6 +28,7 @@ tracing.workspace = true
 [dev-dependencies]
 mz-ore = { path = "../ore", features = ["test", "turmoil"] }
 rand.workspace = true
+rlimit.workspace = true
 tracing-subscriber.workspace = true
 turmoil.workspace = true
 
