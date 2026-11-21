@@ -259,7 +259,6 @@ impl<'scope, T: RenderTimestamp> Context<'scope, T> {
                 let validating = !fused_unnest_list;
                 let (output, errs) = self.build_basic_aggregate(
                     collection,
-                    0,
                     &expr,
                     validating,
                     key_arity,
@@ -377,9 +376,15 @@ impl<'scope, T: RenderTimestamp> Context<'scope, T> {
         let mut err_output = None;
         let mut to_collect = Vec::new();
         for (index, aggr) in aggrs.into_iter().enumerate() {
+            // Extract the value we were asked to aggregate over.
+            let partial = input.clone().map(move |(key, row)| {
+                let mut row_builder = SharedRow::get();
+                let value = row.iter().nth(index).unwrap();
+                row_builder.packer().push(value);
+                (key, row_builder.clone())
+            });
             let (result, errs) = self.build_basic_aggregate(
-                input.clone(),
-                index,
+                partial,
                 &aggr,
                 err_output.is_none(),
                 key_arity,
@@ -464,14 +469,14 @@ impl<'scope, T: RenderTimestamp> Context<'scope, T> {
 
     /// Build the dataflow to compute a single basic aggregation.
     ///
-    /// This method also applies distinctness if required.
+    /// This method also applies distinctness if required. Each value row of `input` must hold
+    /// only the datum to aggregate.
     ///
     /// The returned errors are the validation errors, if `validating`, and the errors of
     /// `mfp_after`, if it can error. They are `None` only when there are neither.
     fn build_basic_aggregate<'s>(
         &self,
         input: VecCollection<'s, T, (Row, Row), Diff>,
-        index: usize,
         aggr: &LirAggregateExpr,
         validating: bool,
         key_arity: usize,
@@ -487,14 +492,7 @@ impl<'scope, T: RenderTimestamp> Context<'scope, T> {
             distinct,
         } = aggr.clone();
 
-        // Extract the value we were asked to aggregate over.
-        let mut partial = input.map(move |(key, row)| {
-            let mut row_builder = SharedRow::get();
-            let value = row.iter().nth(index).unwrap();
-            row_builder.packer().push(value);
-            (key, row_builder.clone())
-        });
-
+        let mut partial = input;
         let mut err_output = None;
 
         // If `distinct` is set, we restrict ourselves to the distinct `(key, val)`.
