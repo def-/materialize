@@ -709,70 +709,6 @@ impl SourceStatisticsUpdate {
     }
 }
 
-impl PackableStats for SourceStatisticsUpdate {
-    fn pack(&self, mut packer: mz_repr::RowPacker<'_>) {
-        use mz_repr::Datum;
-        // id
-        packer.push(Datum::from(self.id.to_string().as_str()));
-        // Counters.
-        packer.push(Datum::from(self.messages_received.0));
-        packer.push(Datum::from(self.bytes_received.0));
-        packer.push(Datum::from(self.updates_staged.0));
-        packer.push(Datum::from(self.updates_committed.0));
-        // Resetting gauges.
-        packer.push(Datum::from(self.records_indexed.0.0));
-        packer.push(Datum::from(self.bytes_indexed.0.0));
-        let rehydration_latency = self
-            .rehydration_latency_ms
-            .0
-            .0
-            .map(|ms| mz_repr::adt::interval::Interval::new(0, 0, ms * 1000));
-        packer.push(Datum::from(rehydration_latency));
-        packer.push(Datum::from(self.snapshot_records_known.0.0));
-        packer.push(Datum::from(self.snapshot_records_staged.0.0));
-        // Gauges
-        packer.push(Datum::from(self.snapshot_committed.0.0));
-        packer.push(Datum::from(self.offset_known.0.pack()));
-        packer.push(Datum::from(self.offset_committed.0.pack()));
-    }
-
-    fn unpack(
-        row: Row,
-        metrics: &crate::metrics::StorageControllerMetrics,
-    ) -> (GlobalId, Option<ReplicaId>, Self) {
-        let mut iter = row.iter();
-        let mut s = Self {
-            id: iter.next().unwrap().unwrap_str().parse().unwrap(),
-
-            messages_received: iter.next().unwrap().unwrap_uint64().into(),
-            bytes_received: iter.next().unwrap().unwrap_uint64().into(),
-            updates_staged: iter.next().unwrap().unwrap_uint64().into(),
-            updates_committed: iter.next().unwrap().unwrap_uint64().into(),
-
-            records_indexed: Gauge::gauge(iter.next().unwrap().unwrap_uint64()),
-            bytes_indexed: Gauge::gauge(iter.next().unwrap().unwrap_uint64()),
-            rehydration_latency_ms: Gauge::gauge(
-                <Option<mz_repr::adt::interval::Interval>>::try_from(iter.next().unwrap())
-                    .unwrap()
-                    .map(|int| int.micros / 1000),
-            ),
-            snapshot_records_known: Gauge::gauge(
-                <Option<u64>>::try_from(iter.next().unwrap()).unwrap(),
-            ),
-            snapshot_records_staged: Gauge::gauge(
-                <Option<u64>>::try_from(iter.next().unwrap()).unwrap(),
-            ),
-
-            snapshot_committed: Gauge::gauge(iter.next().unwrap().unwrap_bool()),
-            offset_known: Gauge::gauge(Some(iter.next().unwrap().unwrap_uint64())),
-            offset_committed: Gauge::gauge(Some(iter.next().unwrap().unwrap_uint64())),
-        };
-
-        s.offset_known.0.regressions = Some(metrics.regressed_offset_known(s.id));
-        (s.id, None, s)
-    }
-}
-
 /// Statistics that we keep in the controller about a given collection
 /// (identified by id) on a given replica (identified by replica_id).
 ///
@@ -1192,34 +1128,6 @@ impl SinkStatisticsUpdate {
 
     /// Reset all _resetable_ gauges to their default values.
     pub fn reset_gauges(&self) {}
-}
-
-impl PackableStats for SinkStatisticsUpdate {
-    fn pack(&self, mut packer: mz_repr::RowPacker<'_>) {
-        use mz_repr::Datum;
-        packer.push(Datum::from(self.id.to_string().as_str()));
-        packer.push(Datum::from(self.messages_staged.0));
-        packer.push(Datum::from(self.messages_committed.0));
-        packer.push(Datum::from(self.bytes_staged.0));
-        packer.push(Datum::from(self.bytes_committed.0));
-    }
-
-    fn unpack(
-        row: Row,
-        _metrics: &crate::metrics::StorageControllerMetrics,
-    ) -> (GlobalId, Option<ReplicaId>, Self) {
-        let mut iter = row.iter();
-        let s = Self {
-            // Id
-            id: iter.next().unwrap().unwrap_str().parse().unwrap(),
-            // Counters
-            messages_staged: iter.next().unwrap().unwrap_uint64().into(),
-            messages_committed: iter.next().unwrap().unwrap_uint64().into(),
-            bytes_staged: iter.next().unwrap().unwrap_uint64().into(),
-            bytes_committed: iter.next().unwrap().unwrap_uint64().into(),
-        };
-        (s.id, None, s)
-    }
 }
 
 /// Statistics for webhooks.
