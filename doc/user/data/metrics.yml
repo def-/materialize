@@ -2266,10 +2266,6 @@ metrics:
   help: number of seconds we've spent encoding our structured columnar format
   source: src/persist/src/metrics.rs
   visibility: internal
-- name: mz_persist_columnar_part_concat_bytes
-  help: number of bytes we've copied when concatenating updates
-  source: src/persist/src/metrics.rs
-  visibility: internal
 - name: mz_persist_compaction_admin_count
   help: count of compaction requests that were performed by admin tooling
   source: src/persist-client/src/internal/metrics.rs
