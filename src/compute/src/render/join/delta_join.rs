@@ -480,6 +480,10 @@ where
                       initial,
                       diff1,
                       output| {
+                    if output.is_empty() {
+                        return;
+                    }
+
                     let mut row_builder = SharedRow::get();
                     let temp_storage = RowArena::new();
 
