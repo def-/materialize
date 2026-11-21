@@ -74,9 +74,8 @@ use crate::durable::{
     DATABASE_ID_ALLOC_KEY, DefaultPrivilege, DurableCatalogError, DurableCatalogState,
     EXPRESSION_CACHE_SHARD_KEY, MOCK_AUTHENTICATION_NONCE_KEY, NetworkPolicy, OID_ALLOC_KEY,
     SCHEMA_ID_ALLOC_KEY, SYSTEM_CLUSTER_ID_ALLOC_KEY, SYSTEM_CLUSTER_REPLICA_SIZE_ID_ALLOC_KEY,
-    SYSTEM_ITEM_ALLOC_KEY, SYSTEM_REPLICA_ID_ALLOC_KEY, Snapshot, SystemConfiguration,
-    USER_ITEM_ALLOC_KEY, USER_NETWORK_POLICY_ID_ALLOC_KEY, USER_QUERY_POLICY_ID_ALLOC_KEY,
-    USER_ROLE_ID_ALLOC_KEY,
+    SYSTEM_ITEM_ALLOC_KEY, SYSTEM_REPLICA_ID_ALLOC_KEY, Snapshot, USER_NETWORK_POLICY_ID_ALLOC_KEY,
+    USER_QUERY_POLICY_ID_ALLOC_KEY, USER_ROLE_ID_ALLOC_KEY,
 };
 use crate::memory::objects::{StateDiff, StateUpdate, StateUpdateKind};
 
@@ -388,18 +387,6 @@ impl<'a> Transaction<'a> {
             oid,
         )?;
         Ok((id, oid))
-    }
-
-    pub fn insert_system_schema(
-        &mut self,
-        schema_id: u64,
-        schema_name: &str,
-        owner_id: RoleId,
-        privileges: Vec<MzAclItem>,
-        oid: u32,
-    ) -> Result<(), CatalogError> {
-        let id = SchemaId::System(schema_id);
-        self.insert_schema(id, None, schema_name.to_string(), owner_id, privileges, oid)
     }
 
     pub(crate) fn insert_schema(
@@ -847,44 +834,6 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    /// Updates persisted information about persisted introspection source
-    /// indexes.
-    ///
-    /// Panics if provided id is not a system id.
-    pub fn update_introspection_source_index_gids(
-        &mut self,
-        mappings: impl Iterator<
-            Item = (
-                ClusterId,
-                impl Iterator<Item = (String, CatalogItemId, GlobalId, u32)>,
-            ),
-        >,
-    ) -> Result<(), CatalogError> {
-        for (cluster_id, updates) in mappings {
-            for (name, item_id, index_id, oid) in updates {
-                let introspection_source_index = IntrospectionSourceIndex {
-                    cluster_id,
-                    name,
-                    item_id,
-                    index_id,
-                    oid,
-                };
-                let (key, value) = introspection_source_index.into_key_value();
-
-                let prev = self
-                    .introspection_sources
-                    .set(key, Some(value), self.op_id)?;
-                if prev.is_none() {
-                    return Err(SqlCatalogError::FailedBuiltinSchemaMigration(format!(
-                        "{index_id}"
-                    ))
-                    .into());
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub fn insert_user_item(
         &mut self,
         id: CatalogItemId,
@@ -1220,18 +1169,6 @@ impl<'a> Transaction<'a> {
         )
     }
 
-    pub fn allocate_user_item_ids(
-        &mut self,
-        amount: u64,
-    ) -> Result<Vec<(CatalogItemId, GlobalId)>, CatalogError> {
-        Ok(self
-            .get_and_increment_id_by(USER_ITEM_ALLOC_KEY.to_string(), amount)?
-            .into_iter()
-            // TODO(alter_table): Use separate ID allocators.
-            .map(|x| (CatalogItemId::User(x), GlobalId::User(x)))
-            .collect())
-    }
-
     pub fn allocate_system_replica_id(&mut self) -> Result<ReplicaId, CatalogError> {
         let id = self.get_and_increment_id(SYSTEM_REPLICA_ID_ALLOC_KEY.to_string())?;
         Ok(ReplicaId::System(id))
@@ -1425,23 +1362,6 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    /// Removes the database `id` from the transaction.
-    ///
-    /// Returns an error if `id` is not found.
-    ///
-    /// Runtime is linear with respect to the total number of databases in the catalog.
-    /// DO NOT call this function in a loop, use [`Self::remove_databases`] instead.
-    pub fn remove_database(&mut self, id: &DatabaseId) -> Result<(), CatalogError> {
-        let prev = self
-            .databases
-            .set(DatabaseKey { id: *id }, None, self.op_id)?;
-        if prev.is_some() {
-            Ok(())
-        } else {
-            Err(SqlCatalogError::UnknownDatabase(id.to_string()).into())
-        }
-    }
-
     /// Removes all databases in `databases` from the transaction.
     ///
     /// Returns an error if any id in `databases` is not found.
@@ -1469,31 +1389,6 @@ impl<'a> Transaction<'a> {
         }
 
         Ok(())
-    }
-
-    /// Removes the schema identified by `database_id` and `schema_id` from the transaction.
-    ///
-    /// Returns an error if `(database_id, schema_id)` is not found.
-    ///
-    /// Runtime is linear with respect to the total number of schemas in the catalog.
-    /// DO NOT call this function in a loop, use [`Self::remove_schemas`] instead.
-    pub fn remove_schema(
-        &mut self,
-        database_id: &Option<DatabaseId>,
-        schema_id: &SchemaId,
-    ) -> Result<(), CatalogError> {
-        let prev = self
-            .schemas
-            .set(SchemaKey { id: *schema_id }, None, self.op_id)?;
-        if prev.is_some() {
-            Ok(())
-        } else {
-            let database_name = match database_id {
-                Some(id) => format!("{id}."),
-                None => "".to_string(),
-            };
-            Err(SqlCatalogError::UnknownSchema(format!("{}.{}", database_name, schema_id)).into())
-        }
     }
 
     /// Removes all schemas in `schemas` from the transaction.
@@ -1967,40 +1862,6 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    /// Updates persisted mapping from system objects to global IDs and fingerprints. Each element
-    /// of `mappings` should be (old-global-id, new-system-object-mapping).
-    ///
-    /// Panics if provided id is not a system id.
-    pub fn update_system_object_mappings(
-        &mut self,
-        mappings: BTreeMap<CatalogItemId, SystemObjectMapping>,
-    ) -> Result<(), CatalogError> {
-        if mappings.is_empty() {
-            return Ok(());
-        }
-
-        let n = self.system_gid_mapping.update(
-            |_k, v| {
-                if let Some(mapping) = mappings.get(&CatalogItemId::from(v.catalog_id)) {
-                    let (_, new_value) = mapping.clone().into_key_value();
-                    Some(new_value)
-                } else {
-                    None
-                }
-            },
-            self.op_id,
-        )?;
-
-        if usize::try_from(n.into_inner()).expect("update diff should fit into usize")
-            != mappings.len()
-        {
-            let id_str = mappings.keys().map(|id| id.to_string()).join(",");
-            return Err(SqlCatalogError::FailedBuiltinSchemaMigration(id_str).into());
-        }
-
-        Ok(())
-    }
-
     /// Updates cluster `id` in the transaction to `cluster`.
     ///
     /// Returns an error if `id` is not found.
@@ -2288,21 +2149,6 @@ impl<'a> Transaction<'a> {
             .map(|(k, v)| (k, Some(v)))
             .collect();
         self.system_gid_mapping.set_many(mappings, self.op_id)?;
-        Ok(())
-    }
-
-    /// Set persisted replica.
-    pub fn set_replicas(&mut self, replicas: Vec<ClusterReplica>) -> Result<(), CatalogError> {
-        if replicas.is_empty() {
-            return Ok(());
-        }
-
-        let replicas = replicas
-            .into_iter()
-            .map(DurableType::into_key_value)
-            .map(|(k, v)| (k, Some(v)))
-            .collect();
-        self.cluster_replicas.set_many(replicas, self.op_id)?;
         Ok(())
     }
 
@@ -2713,13 +2559,6 @@ impl<'a> Transaction<'a> {
 
     pub fn get_schemas(&self) -> impl Iterator<Item = Schema> + use<'_> {
         self.schemas
-            .items()
-            .into_iter()
-            .map(|(k, v)| DurableType::from_key_value(k.clone(), v.clone()))
-    }
-
-    pub fn get_system_configurations(&self) -> impl Iterator<Item = SystemConfiguration> + use<'_> {
-        self.system_configurations
             .items()
             .into_iter()
             .map(|(k, v)| DurableType::from_key_value(k.clone(), v.clone()))
@@ -4146,7 +3985,8 @@ mod tests {
     use semver::Version;
 
     use crate::durable::{
-        ReplicaConfig, ReplicaLocation, TestCatalogStateBuilder, test_bootstrap_args,
+        ReplicaConfig, ReplicaLocation, TestCatalogStateBuilder, USER_ITEM_ALLOC_KEY,
+        test_bootstrap_args,
     };
     use crate::memory;
 
