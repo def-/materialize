@@ -723,6 +723,9 @@ impl Connection {
                     while let Some(result) = stream.next().await {
                         if let Err(err) = tx.send(result.err_into()).await {
                             tracing::warn!(?err, "SQL Server row stream receiver went away");
+                            // tiberius discards the unread rest of this result
+                            // before it sends the next request.
+                            break;
                         }
                     }
                     tracing::info!("SQL Server row stream complete");
