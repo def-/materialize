@@ -1048,6 +1048,11 @@ SELECT ''::pg_catalog.bpchar(10485761)
 
 # The largest valid type mods
 
+query T
+SELECT 'abc'::VARCHAR(10485760)
+----
+abc
+
 query B
 SELECT 'abc'::CHAR(10485760) = 'abc'
 ----

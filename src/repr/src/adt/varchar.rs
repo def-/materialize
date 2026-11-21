@@ -62,7 +62,7 @@ impl TryFrom<i64> for VarCharMaxLength {
 
     fn try_from(max_length: i64) -> Result<Self, Self::Error> {
         match u32::try_from(max_length) {
-            Ok(max_length) if max_length > 0 && max_length < MAX_MAX_LENGTH => {
+            Ok(max_length) if max_length > 0 && max_length <= MAX_MAX_LENGTH => {
                 Ok(VarCharMaxLength(max_length))
             }
             _ => Err(InvalidVarCharMaxLengthError),
@@ -147,7 +147,7 @@ pub fn format_str(
 
 #[cfg(test)]
 mod tests {
-    use mz_ore::assert_ok;
+    use mz_ore::{assert_err, assert_ok};
     use mz_proto::protobuf_roundtrip;
     use proptest::prelude::*;
 
@@ -160,5 +160,13 @@ mod tests {
             assert_ok!(actual);
             assert_eq!(actual.unwrap(), expect);
         }
+    }
+
+    #[mz_ore::test]
+    fn var_char_max_length_bounds() {
+        assert_err!(VarCharMaxLength::try_from(0));
+        assert_ok!(VarCharMaxLength::try_from(1));
+        assert_ok!(VarCharMaxLength::try_from(i64::from(MAX_MAX_LENGTH)));
+        assert_err!(VarCharMaxLength::try_from(i64::from(MAX_MAX_LENGTH) + 1));
     }
 }
