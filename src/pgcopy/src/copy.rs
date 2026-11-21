@@ -76,11 +76,11 @@ fn encode_copy_row_text(
 ) -> Result<(), io::Error> {
     let null = null.as_bytes();
     let mut buf = BytesMut::new();
-    for (idx, field) in mz_pgrepr::values_from_row(row, typ).into_iter().enumerate() {
+    for (idx, (datum, col_typ)) in row.iter().zip_eq(&typ.column_types).enumerate() {
         if idx > 0 {
             out.push(*delimiter);
         }
-        match field {
+        match mz_pgrepr::Value::from_datum(datum, &col_typ.scalar_type) {
             None => out.extend(null),
             Some(field) => {
                 buf.clear();
@@ -117,11 +117,11 @@ fn encode_copy_row_csv(
     let null = null.as_bytes();
     let is_special = |c: &u8| *c == *delim || *c == *quote || *c == b'\r' || *c == b'\n';
     let mut buf = BytesMut::new();
-    for (idx, field) in mz_pgrepr::values_from_row(row, typ).into_iter().enumerate() {
+    for (idx, (datum, col_typ)) in row.iter().zip_eq(&typ.column_types).enumerate() {
         if idx > 0 {
             out.push(*delim);
         }
-        match field {
+        match mz_pgrepr::Value::from_datum(datum, &col_typ.scalar_type) {
             None => out.extend(null),
             Some(field) => {
                 buf.clear();
