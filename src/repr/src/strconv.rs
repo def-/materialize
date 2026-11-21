@@ -1537,7 +1537,7 @@ fn lex_unquoted_element<'a>(
     // `Cow::Borrowed` optimization for elements without special characters.
     match buf.peek() {
         Some(',') | Some('}') if !s.is_empty() => {
-            return Ok(if s.to_uppercase() == "NULL" {
+            return Ok(if s.eq_ignore_ascii_case("NULL") {
                 None
             } else {
                 Some(s.into())
@@ -1587,7 +1587,7 @@ fn lex_unquoted_element<'a>(
         }
     }
     s.truncate(trimmed_len);
-    Ok(if s.to_uppercase() == "NULL" && !escaped_char {
+    Ok(if s.eq_ignore_ascii_case("NULL") && !escaped_char {
         None
     } else {
         Some(Cow::Owned(s))
