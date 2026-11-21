@@ -2044,7 +2044,7 @@ impl CatalogState {
             entry.name().item.clone()
         );
 
-        self.entry_by_id.insert(entry.id(), entry.clone());
+        self.entry_by_id.insert(entry.id(), entry);
     }
 
     /// Associates a name, [`CatalogItemId`], and entry.
