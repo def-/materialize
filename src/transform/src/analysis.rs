@@ -1923,7 +1923,9 @@ mod cardinality {
 
                     // maps a column to the index in `inputs` that it belongs to
                     let mut unique_columns = BTreeMap::new();
-                    let mut key_offset = 0;
+                    // The loop visits the inputs from last to first, so the column offsets count
+                    // down from the join's arity.
+                    let mut key_offset = arity[index];
 
                     let mut offset = 1;
                     for idx in 0..inputs.len() {
@@ -1931,13 +1933,13 @@ mod cardinality {
                         input_results.push(input);
 
                         let arity = arity[index - offset];
+                        key_offset -= arity;
                         let keys = &keys[index - offset];
                         for key in keys {
                             if key.len() == 1 {
                                 unique_columns.insert(key_offset + key[0], idx);
                             }
                         }
-                        key_offset += arity;
 
                         offset += &sizes[index - offset];
                     }
@@ -1975,6 +1977,47 @@ mod cardinality {
                 CardinalityEstimate::Estimate(OrderedFloat(estimate)) => write!(f, "{estimate}"),
                 CardinalityEstimate::Unknown => write!(f, "<UNKNOWN>"),
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::collections::BTreeMap;
+
+        use mz_expr::{MirRelationExpr, MirScalarExpr};
+        use mz_repr::optimize::OptimizerFeatures;
+        use mz_repr::{GlobalId, ReprRelationType, ReprScalarType};
+
+        use super::{Cardinality, CardinalityEstimate};
+        use crate::analysis::DerivedBuilder;
+
+        #[mz_ore::test]
+        fn join_on_unique_keys() {
+            // R(a, b) with 100 rows is unique in `a`, S(c) with 10 rows is unique in `c`, and the
+            // join equates `a` and `c`, so it has at most 10 rows.
+            let col = ReprScalarType::Int64.nullable(false);
+            let r = MirRelationExpr::global_get(
+                GlobalId::User(1),
+                ReprRelationType::new(vec![col.clone(), col.clone()]).with_key(vec![0]),
+            );
+            let s = MirRelationExpr::global_get(
+                GlobalId::User(2),
+                ReprRelationType::new(vec![col]).with_key(vec![0]),
+            );
+            let join = MirRelationExpr::join_scalars(
+                vec![r, s],
+                vec![vec![MirScalarExpr::column(0), MirScalarExpr::column(2)]],
+            );
+
+            let features = OptimizerFeatures::default();
+            let mut builder = DerivedBuilder::new(&features);
+            let stats = BTreeMap::from([(GlobalId::User(1), 100), (GlobalId::User(2), 10)]);
+            builder.require(Cardinality::with_stats(stats));
+            let derived = builder.visit(&join);
+            assert_eq!(
+                derived.as_view().value::<Cardinality>(),
+                Some(&CardinalityEstimate::from(10.0))
+            );
         }
     }
 }
