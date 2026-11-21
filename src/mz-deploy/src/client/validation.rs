@@ -22,7 +22,6 @@
 //! | External objects exist | `find_missing_external_dependencies` | Objects outside the project that are referenced exist in the catalog |
 //! | Cluster isolation | `validate_cluster_isolation_impl` | Sources/sinks don't share clusters with MVs/indexes (prevents accidental recreation during swap) |
 //! | Privileges | `validate_privileges_impl` | Current role has USAGE on databases and CREATECLUSTER system privilege |
-//! | Sources exist | `validate_sources_exist_impl` | Sources referenced by `CREATE TABLE FROM SOURCE` exist |
 //! | Sink connections exist | `validate_sink_connections_exist_impl` | Connections referenced by sinks exist |
 //! | Schema ownership | `validate_schema_ownership_impl` | Current role owns all production schemas that will be swapped |
 //! | Cluster ownership | `validate_cluster_ownership_impl` | Current role owns all production clusters that will be swapped |
@@ -459,14 +458,6 @@ impl ValidationClient<'_> {
         validate_privileges_impl(self.client, planned_project).await
     }
 
-    /// Validate that all sources referenced by CREATE TABLE FROM SOURCE statements exist.
-    pub async fn validate_sources_exist(
-        &self,
-        planned_project: &graph::Project,
-    ) -> Result<(), DatabaseValidationError> {
-        validate_sources_exist_impl(self.client, planned_project).await
-    }
-
     /// Validate that all connections referenced by CREATE SINK statements exist.
     pub async fn validate_sink_connections_exist(
         &self,
@@ -741,42 +732,6 @@ pub(crate) async fn validate_privileges_impl(
             missing_database_usage: missing_usage,
             missing_createcluster,
         });
-    }
-
-    Ok(())
-}
-
-/// Internal implementation of validate_sources_exist.
-pub(crate) async fn validate_sources_exist_impl(
-    client: &Client,
-    planned_project: &graph::Project,
-) -> Result<(), DatabaseValidationError> {
-    let defined_sources: BTreeSet<ObjectId> = planned_project
-        .iter_objects()
-        .filter(|obj| matches!(obj.typed_object.stmt, Statement::CreateSource(_)))
-        .map(|obj| obj.id.clone())
-        .collect();
-
-    let mut referenced_sources = BTreeSet::new();
-    for obj in planned_project.iter_objects() {
-        if let Statement::CreateTableFromSource(ref stmt) = obj.typed_object.stmt {
-            let source_id = ObjectId::from_raw_item_name(
-                &stmt.source,
-                obj.id.expect_database(),
-                obj.id.schema(),
-            );
-            if !defined_sources.contains(&source_id) {
-                referenced_sources.insert(source_id);
-            }
-        }
-    }
-
-    let existing =
-        query_existing_object_ids(client, &referenced_sources, CatalogLookup::Sources).await?;
-    let missing_sources: Vec<ObjectId> =
-        referenced_sources.difference(&existing).cloned().collect();
-    if !missing_sources.is_empty() {
-        return Err(DatabaseValidationError::MissingSources(missing_sources));
     }
 
     Ok(())
