@@ -1960,29 +1960,18 @@ impl Coordinator {
         // storage objects that ingest data from external systems) remap
         // data. We "cheat" a little bit and filter out any IDs that aren't
         // user objects because we know they are not a RTR source.
-        let mut to_visit = VecDeque::from_iter(item_ids.into_iter().filter(CatalogItemId::is_user));
+        let to_visit = VecDeque::from_iter(item_ids.into_iter().filter(CatalogItemId::is_user));
         // If none of the sources are user objects, we don't need to provide
         // a RTR timestamp.
         if to_visit.is_empty() {
             return Ok(None);
         }
 
-        let mut timestamp_objects = BTreeSet::new();
-
-        while let Some(id) = to_visit.pop_front() {
-            timestamp_objects.insert(id);
-            to_visit.extend(
-                self.catalog()
-                    .get_entry(&id)
-                    .uses()
-                    .into_iter()
-                    .filter(|id| !timestamp_objects.contains(id) && id.is_user()),
-            );
-        }
-        let timestamp_objects = timestamp_objects
-            .into_iter()
-            .flat_map(|item_id| self.catalog().get_entry(&item_id).global_ids())
-            .collect();
+        let timestamp_objects =
+            transitive_user_uses(to_visit, |id| self.catalog().get_entry(id).uses())
+                .into_iter()
+                .flat_map(|item_id| self.catalog().get_entry(&item_id).global_ids())
+                .collect();
 
         let r = self
             .controller
@@ -3501,5 +3490,63 @@ impl Coordinator {
 
             None
         }
+    }
+}
+
+/// Returns `roots` and the user items they transitively use, where `uses`
+/// returns the items an item uses directly.
+fn transitive_user_uses(
+    roots: impl IntoIterator<Item = CatalogItemId>,
+    mut uses: impl FnMut(&CatalogItemId) -> BTreeSet<CatalogItemId>,
+) -> BTreeSet<CatalogItemId> {
+    let mut to_visit: VecDeque<_> = roots.into_iter().collect();
+    let mut visited = BTreeSet::new();
+    while let Some(id) = to_visit.pop_front() {
+        // `to_visit` holds an item once per path that reaches it before the
+        // item is visited, and expanding every copy is exponential in the
+        // depth of shared dependencies.
+        if !visited.insert(id) {
+            continue;
+        }
+        to_visit.extend(
+            uses(&id)
+                .into_iter()
+                .filter(|id| !visited.contains(id) && id.is_user()),
+        );
+    }
+    visited
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use mz_repr::CatalogItemId;
+
+    use super::transitive_user_uses;
+
+    #[mz_ore::test]
+    fn transitive_user_uses_expands_each_item_once() {
+        // Stacked diamonds: item 3i uses items 3i+1 and 3i+2, which both use
+        // item 3i+3. The bottom item uses a system item.
+        const LAYERS: u64 = 16;
+        let user = CatalogItemId::User;
+        let mut uses = BTreeMap::new();
+        for i in 0..LAYERS {
+            let top = 3 * i;
+            uses.insert(user(top), BTreeSet::from([user(top + 1), user(top + 2)]));
+            uses.insert(user(top + 1), BTreeSet::from([user(top + 3)]));
+            uses.insert(user(top + 2), BTreeSet::from([user(top + 3)]));
+        }
+        uses.insert(user(3 * LAYERS), BTreeSet::from([CatalogItemId::System(1)]));
+
+        let mut expansions = 0;
+        let visited = transitive_user_uses([user(0)], |id| {
+            expansions += 1;
+            uses[id].clone()
+        });
+        let expected: BTreeSet<_> = uses.keys().copied().collect();
+        assert_eq!(visited, expected);
+        assert_eq!(expansions, visited.len(), "each item is expanded once");
     }
 }
