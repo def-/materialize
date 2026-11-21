@@ -64,8 +64,6 @@ pub enum TryFromProtoError {
     InvalidSemverVersion(String),
     /// Failed to parse a serialized URI
     InvalidUri(http::uri::InvalidUri),
-    /// Failed to read back a serialized Glob
-    GlobError(globset::Error),
     /// Failed to parse a serialized URL
     InvalidUrl(url::ParseError),
     /// Failed to parse bitflags.
@@ -133,12 +131,6 @@ impl From<http::uri::InvalidUri> for TryFromProtoError {
     }
 }
 
-impl From<globset::Error> for TryFromProtoError {
-    fn from(error: globset::Error) -> Self {
-        TryFromProtoError::GlobError(error)
-    }
-}
-
 impl From<url::ParseError> for TryFromProtoError {
     fn from(error: url::ParseError) -> Self {
         TryFromProtoError::InvalidUrl(error)
@@ -163,7 +155,6 @@ impl std::fmt::Display for TryFromProtoError {
             InvalidPersistState(error) => error.fmt(f),
             InvalidSemverVersion(error) => error.fmt(f),
             InvalidUri(error) => error.fmt(f),
-            GlobError(error) => error.fmt(f),
             InvalidUrl(error) => error.fmt(f),
             InvalidBitFlags(error) => error.fmt(f),
             LikePatternDeserializationError(inner_error) => write!(
@@ -202,7 +193,6 @@ impl std::error::Error for TryFromProtoError {
             InvalidPersistState(_) => None,
             InvalidSemverVersion(_) => None,
             InvalidUri(error) => Some(error),
-            GlobError(error) => Some(error),
             InvalidUrl(error) => Some(error),
             InvalidBitFlags(_) => None,
             LikePatternDeserializationError(_) => None,
