@@ -821,7 +821,7 @@ where
                         let existing_value = existing_state_cell.take();
 
                         let new_value = match existing_value {
-                            Some(existing_value) => existing_value.clone().into_provisional_value(
+                            Some(existing_value) => existing_value.into_provisional_value(
                                 value.clone(),
                                 ts.clone(),
                                 from_time.0.clone(),
