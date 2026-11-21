@@ -124,7 +124,11 @@ impl NormalizeLets {
 
         // Return to letrec-major form to refresh types.
         let_motion::promote_let_rec(relation);
-        support::refresh_types(relation, features)?;
+        // `promote_let_rec` removes all `Let`s and leaves the plan letrec-major (see the asserts
+        // above), so without a `LetRec` at the root the plan has no local `Get` to refresh.
+        if matches!(relation, MirRelationExpr::LetRec { .. }) {
+            support::refresh_types(relation, features)?;
+        }
 
         // Renumber bindings for good measure.
         // Ideally we could skip when `action` is a no-op, but hard to thread that through at the moment.
