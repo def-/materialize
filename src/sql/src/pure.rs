@@ -2520,7 +2520,7 @@ pub fn generate_progress_subsource_statement(
                 .0
                 .split_last()
                 .ok_or_else(|| sql_err!("source name must have at least one component"))?;
-            let item_name = Ident::try_generate_name(item.to_string(), "_progress", |candidate| {
+            let item_name = Ident::try_generate_name(item.as_str(), "_progress", |candidate| {
                 let mut suggested_name = prefix.to_vec();
                 suggested_name.push(candidate.clone());
 

@@ -39,7 +39,7 @@ INSERT INTO T1 VALUES (1.444889, '12:00:00', '$100.99', 0x1100AB);
   FOR TABLES (dbo."T1");
 
 > SHOW CREATE SOURCE "T1_sql_server";
-materialize.public.T1_sql_server "CREATE SOURCE materialize.public.\"T1_sql_server\"\nIN CLUSTER quickstart\nFROM\n    SQL SERVER CONNECTION materialize.public.sql_server_columns_connection (TEXT COLUMNS = (dbo.\"T1\".\"C1\", dbo.\"T1\".\"C2\", dbo.\"T1\".\"C4\"), EXCLUDE COLUMNS = (dbo.\"T1\".\"C3\"))\nFOR TABLES (test.dbo.\"T1\" AS materialize.public.\"T1\")\nEXPOSE PROGRESS AS materialize.public.\"\"\"T1_sql_server\"\"_progress\";"
+materialize.public.T1_sql_server "CREATE SOURCE materialize.public.\"T1_sql_server\"\nIN CLUSTER quickstart\nFROM\n    SQL SERVER CONNECTION materialize.public.sql_server_columns_connection (TEXT COLUMNS = (dbo.\"T1\".\"C1\", dbo.\"T1\".\"C2\", dbo.\"T1\".\"C4\"), EXCLUDE COLUMNS = (dbo.\"T1\".\"C3\"))\nFOR TABLES (test.dbo.\"T1\" AS materialize.public.\"T1\")\nEXPOSE PROGRESS AS materialize.public.\"T1_sql_server_progress\";"
 
 > SHOW COLUMNS FROM "T1";
 C1 true text ""

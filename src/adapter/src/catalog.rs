@@ -3063,6 +3063,39 @@ mod tests {
         .await;
     }
 
+    #[mz_ore::test(tokio::test)]
+    #[cfg_attr(miri, ignore)] //  unsupported operation: can't call foreign function `TLS_client_method` on OS `linux`
+    async fn test_progress_subsource_name_of_quoted_source() {
+        use mz_ore::collections::CollectionExt;
+        use mz_sql::ast::Statement;
+        Catalog::with_debug(|catalog| async move {
+            let conn_catalog = catalog.for_system_session();
+            let scx = StatementContext::new(None, &conn_catalog);
+
+            let parsed = mz_sql_parser::parser::parse_statements(
+                r#"CREATE SOURCE public."Auction" FROM LOAD GENERATOR AUCTION"#,
+            )
+            .expect("parses")
+            .into_element()
+            .ast;
+            let (Statement::CreateSource(stmt), _) =
+                names::resolve(scx.catalog, parsed).expect("resolves")
+            else {
+                panic!("expected a CREATE SOURCE statement");
+            };
+
+            let progress = mz_sql::pure::generate_progress_subsource_statement(&scx, &stmt)
+                .expect("generates the progress subsource");
+            assert_eq!(
+                progress.name.0.last().map(|ident| ident.as_str()),
+                Some("Auction_progress"),
+                "the generated name must not contain the quoting of the source name",
+            );
+            catalog.expire().await;
+        })
+        .await;
+    }
+
     /// Resolving a statement and resolving its normalized `create_sql` must
     /// yield the same `ResolvedIds`.
     ///
