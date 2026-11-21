@@ -676,17 +676,6 @@ impl timely::order::PartialOrder for Lsn {
 }
 impl timely::order::TotalOrder for Lsn {}
 
-/// Structured format of an [`Lsn`].
-///
-/// Note: The derived impl of [`PartialOrd`] and [`Ord`] relies on the field
-/// ordering so do not change it.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct StructuredLsn {
-    vlf_id: u32,
-    block_id: u32,
-    record_id: u16,
-}
-
 /// When querying CDC functions like `cdc.fn_cdc_get_all_changes_<capture_instance>` this governs
 /// what content is returned.
 ///
