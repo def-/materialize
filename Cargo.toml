@@ -288,7 +288,6 @@ aho-corasick = "1.1.4"
 allocation-counter = "0"
 annotate-snippets = "0.12.15"
 anyhow = "1.0.102"
-array-concat = "0.5.5"
 arrayvec = "0.7.6"
 arrow = { version = "58.4.1", default-features = false }
 arrow-ipc = "58.4.1"
