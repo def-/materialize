@@ -467,6 +467,7 @@ where
             let tidy = self.apply_le(&forget_ts).await;
             for data_id in &data_ids {
                 self.datas.data_write_for_commit.remove(data_id);
+                self.datas.data_write_for_apply.remove(data_id);
             }
 
             Ok(tidy)
@@ -1719,11 +1720,13 @@ mod tests {
         .into_tokio_handle();
         assert!(res.await.is_err());
 
-        // Forgetting the data shard removes it, so we don't leave the schema
-        // sitting around.
+        // Forgetting the data shard removes its write handles, so we don't
+        // leave the schema sitting around.
         assert!(txns0.datas.data_write_for_commit.get(&d0).is_some());
+        assert!(txns0.datas.data_write_for_apply.get(&d0).is_some());
         txns0.forget(3, [d0]).await.unwrap();
         assert_none!(txns0.datas.data_write_for_commit.get(&d0));
+        assert_none!(txns0.datas.data_write_for_apply.get(&d0));
 
         // Forget is idempotent.
         assert_none!(txns0.datas.data_write_for_commit.get(&d0));
