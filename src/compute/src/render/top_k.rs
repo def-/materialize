@@ -1025,6 +1025,7 @@ pub mod monoids {
     use mz_expr::ColumnOrder;
     use mz_repr::{DatumVec, Diff, Row};
     use serde::{Deserialize, Serialize};
+    use smallvec::SmallVec;
 
     /// A monoid containing a row and an ordering.
     #[derive(Eq, PartialEq, Debug, Serialize, Deserialize, Hash, Default)]
@@ -1068,8 +1069,8 @@ pub mod monoids {
 
             // It might be nice to cache this row decoding like the non-monotonic codepath, but we'd
             // have to store the decoded Datums in the same struct as the Row, which gets tricky.
-            let left: Vec<_> = self.row.unpack();
-            let right: Vec<_> = other.row.unpack();
+            let left: SmallVec<[_; 16]> = self.row.iter().collect();
+            let right: SmallVec<[_; 16]> = other.row.iter().collect();
             mz_expr::compare_columns(&self.order_key, &left, &right, || left.cmp(&right))
         }
     }
