@@ -41,39 +41,6 @@ pub struct DependentSink {
     pub dependency_type: String,
 }
 
-/// Check if a schema exists in the specified database.
-pub(super) async fn schema_exists(
-    client: &Client,
-    database: &str,
-    schema: &str,
-) -> Result<bool, ConnectionError> {
-    let query = r#"
-        SELECT EXISTS(
-            SELECT 1
-            FROM mz_catalog.mz_schemas s
-            JOIN mz_catalog.mz_databases d ON s.database_id = d.id
-            WHERE s.name = $1 AND d.name = $2
-        ) AS exists
-    "#;
-
-    let row = client.query_one(query, &[&schema, &database]).await?;
-
-    Ok(row.get("exists"))
-}
-
-/// Check if a cluster exists.
-pub(super) async fn cluster_exists(client: &Client, name: &str) -> Result<bool, ConnectionError> {
-    let query = r#"
-        SELECT EXISTS(
-            SELECT 1 FROM mz_catalog.mz_clusters WHERE name = $1
-        ) AS exists
-    "#;
-
-    let row = client.query_one(query, &[&name]).await?;
-
-    Ok(row.get("exists"))
-}
-
 /// Get a cluster by name.
 pub(super) async fn get_cluster(
     client: &Client,
@@ -117,33 +84,6 @@ pub(super) async fn get_cluster_create_sql(
     let query = format!("SHOW CREATE CLUSTER {}", quote_identifier(name));
     let rows = client.query(&query, &[]).await?;
     Ok(rows.first().map(|row| row.get("create_sql")))
-}
-
-/// List all clusters.
-pub(super) async fn list_clusters(client: &Client) -> Result<Vec<Cluster>, ConnectionError> {
-    let query = r#"
-        SELECT
-            c.id,
-            c.name,
-            c.managed,
-            c.size,
-            c.replication_factor::bigint AS replication_factor
-        FROM mz_catalog.mz_clusters c
-        ORDER BY c.name
-    "#;
-
-    let rows = client.query(query, &[]).await?;
-
-    Ok(rows
-        .iter()
-        .map(|row| Cluster {
-            id: row.get("id"),
-            name: row.get("name"),
-            managed: row.get("managed"),
-            size: row.get("size"),
-            replication_factor: row.get("replication_factor"),
-        })
-        .collect())
 }
 
 /// Get cluster configuration including replicas and grants.
@@ -531,46 +471,6 @@ async fn check_catalog_objects_exist(
     Ok(existing)
 }
 
-/// Check which tables from the given set exist in the database.
-///
-/// Returns a BTreeSet of ObjectIds for tables that already exist.
-pub(super) async fn check_tables_exist(
-    client: &Client,
-    tables: &BTreeSet<ObjectId>,
-) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-    check_catalog_objects_exist(client, tables, "mz_tables").await
-}
-
-/// Check which sources from the given set exist in the database.
-///
-/// Returns a BTreeSet of ObjectIds for sources that already exist.
-pub(super) async fn check_sources_exist(
-    client: &Client,
-    sources: &BTreeSet<ObjectId>,
-) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-    check_catalog_objects_exist(client, sources, "mz_sources").await
-}
-
-/// Check which secrets from the given set exist in the database.
-///
-/// Returns a BTreeSet of ObjectIds for secrets that already exist.
-pub(super) async fn check_secrets_exist(
-    client: &Client,
-    secrets: &BTreeSet<ObjectId>,
-) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-    check_catalog_objects_exist(client, secrets, "mz_secrets").await
-}
-
-/// Check which connections from the given set exist in the database.
-///
-/// Returns a BTreeSet of ObjectIds for connections that already exist.
-pub(super) async fn check_connections_exist(
-    client: &Client,
-    connections: &BTreeSet<ObjectId>,
-) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-    check_catalog_objects_exist(client, connections, "mz_connections").await
-}
-
 /// Check which sinks from the given set exist in the database.
 ///
 /// Returns a BTreeSet of ObjectIds for sinks that already exist.
@@ -657,28 +557,6 @@ pub(super) async fn find_sinks_depending_on_schemas(
         .collect())
 }
 
-/// Check if a connection exists in the specified database and schema.
-pub(super) async fn check_connection_exists(
-    client: &Client,
-    database: &str,
-    schema: &str,
-    name: &str,
-) -> Result<bool, ConnectionError> {
-    let query = r#"
-        SELECT EXISTS(
-            SELECT 1
-            FROM mz_catalog.mz_connections c
-            JOIN mz_catalog.mz_schemas s ON c.schema_id = s.id
-            JOIN mz_catalog.mz_databases d ON s.database_id = d.id
-            WHERE d.name = $1 AND s.name = $2 AND c.name = $3
-        ) AS exists
-    "#;
-    let row = client
-        .query_one(query, &[&database, &schema, &name])
-        .await?;
-    Ok(row.get("exists"))
-}
-
 /// Check if an object (MV, table, source) exists in the specified schema.
 ///
 /// Used to verify that a replacement object exists before repointing a sink.
@@ -747,123 +625,6 @@ pub(super) async fn get_staging_clusters(
     let rows = client.query(query, &[&pattern]).await?;
 
     Ok(rows.iter().map(|row| row.get("name")).collect())
-}
-
-/// Map a Materialize object type string to its DROP keyword.
-fn mz_type_to_drop_keyword(obj_type: &str) -> Option<&'static str> {
-    match obj_type {
-        "table" => Some("TABLE"),
-        "view" => Some("VIEW"),
-        "materialized-view" => Some("MATERIALIZED VIEW"),
-        "source" => Some("SOURCE"),
-        "sink" => Some("SINK"),
-        _ => None,
-    }
-}
-
-/// Drop all objects in a schema.
-///
-/// Returns the fully-qualified names of dropped objects.
-pub(super) async fn drop_schema_objects(
-    client: &Client,
-    database: &str,
-    schema: &str,
-) -> Result<Vec<String>, ConnectionError> {
-    let query = r#"
-        SELECT mo.name, mo.type
-        FROM mz_objects mo
-        JOIN mz_schemas s ON mo.schema_id = s.id
-        JOIN mz_databases d ON s.database_id = d.id
-        WHERE d.name = $1 AND s.name = $2
-        AND mo.type IN ('table', 'view', 'materialized-view', 'source', 'sink')
-        ORDER BY mo.id DESC
-    "#;
-
-    let rows = client.query(query, &[&database, &schema]).await?;
-
-    let mut dropped = Vec::new();
-    for row in rows {
-        let name: String = row.get("name");
-        let obj_type: String = row.get("type");
-
-        let fqn = format!(
-            "{}.{}.{}",
-            quote_identifier(database),
-            quote_identifier(schema),
-            quote_identifier(&name)
-        );
-        let Some(drop_type) = mz_type_to_drop_keyword(obj_type.as_str()) else {
-            continue;
-        };
-
-        let drop_sql = format!("DROP {} IF EXISTS {} CASCADE", drop_type, fqn);
-        client.execute(&drop_sql, &[]).await?;
-
-        dropped.push(fqn);
-    }
-
-    Ok(dropped)
-}
-
-/// Drop specific objects by their ObjectIds.
-///
-/// Returns the fully-qualified names of dropped objects.
-pub(super) async fn drop_objects(
-    client: &Client,
-    objects: &BTreeSet<ObjectId>,
-) -> Result<Vec<String>, ConnectionError> {
-    let mut dropped = Vec::new();
-
-    if objects.is_empty() {
-        return Ok(dropped);
-    }
-
-    let placeholders_str = sql_placeholders(objects.len());
-
-    let query = format!(
-        r#"
-        SELECT mo.name, s.name as schema_name, d.name as database_name, mo.type
-        FROM mz_objects mo
-        JOIN mz_schemas s ON mo.schema_id = s.id
-        JOIN mz_databases d ON s.database_id = d.id
-        WHERE d.name || '.' || s.name || '.' || mo.name IN ({})
-        AND mo.type IN ('table', 'view', 'materialized-view', 'source', 'sink')
-        ORDER BY mo.id DESC
-    "#,
-        placeholders_str
-    );
-
-    let mut params: Vec<&(dyn ToSql + Sync)> = Vec::new();
-    let fqns: Vec<_> = objects.iter().map(|object| object.to_string()).collect();
-    for fqn in &fqns {
-        params.push(fqn);
-    }
-
-    let rows = client.query(&query, &params).await?;
-
-    for row in rows {
-        let name: String = row.get("name");
-        let schema: String = row.get("schema_name");
-        let database: String = row.get("database_name");
-        let obj_type: String = row.get("type");
-
-        let fqn = format!(
-            "{}.{}.{}",
-            quote_identifier(&database),
-            quote_identifier(&schema),
-            quote_identifier(&name)
-        );
-        let Some(drop_type) = mz_type_to_drop_keyword(obj_type.as_str()) else {
-            continue;
-        };
-
-        let drop_sql = format!("DROP {} IF EXISTS {} CASCADE", drop_type, fqn);
-        client.execute(&drop_sql, &[]).await?;
-
-        dropped.push(fqn);
-    }
-
-    Ok(dropped)
 }
 
 /// Drop staging schemas by name.
@@ -1170,38 +931,6 @@ impl IntrospectionClient<'_> {
         check_catalog_objects_exist(self.client, objects, catalog_table).await
     }
 
-    /// Check which tables from the given set exist in the database.
-    pub async fn check_tables_exist(
-        &self,
-        tables: &BTreeSet<ObjectId>,
-    ) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-        check_tables_exist(self.client, tables).await
-    }
-
-    /// Check which sources from the given set exist in the database.
-    pub async fn check_sources_exist(
-        &self,
-        sources: &BTreeSet<ObjectId>,
-    ) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-        check_sources_exist(self.client, sources).await
-    }
-
-    /// Check which secrets from the given set exist in the database.
-    pub async fn check_secrets_exist(
-        &self,
-        secrets: &BTreeSet<ObjectId>,
-    ) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-        check_secrets_exist(self.client, secrets).await
-    }
-
-    /// Check which connections from the given set exist in the database.
-    pub async fn check_connections_exist(
-        &self,
-        connections: &BTreeSet<ObjectId>,
-    ) -> Result<BTreeSet<ObjectId>, ConnectionError> {
-        check_connections_exist(self.client, connections).await
-    }
-
     /// Check which sinks from the given set exist in the database.
     pub async fn check_sinks_exist(
         &self,
@@ -1234,16 +963,6 @@ impl IntrospectionClient<'_> {
         find_sinks_depending_on_schemas(self.client, schemas).await
     }
 
-    /// Check if a connection exists in the specified database and schema.
-    pub async fn check_connection_exists(
-        &self,
-        database: &str,
-        schema: &str,
-        name: &str,
-    ) -> Result<bool, ConnectionError> {
-        check_connection_exists(self.client, database, schema, name).await
-    }
-
     /// Check if an object (MV, table, source) exists in the specified schema.
     pub async fn object_exists(
         &self,
@@ -1270,23 +989,6 @@ impl IntrospectionClient<'_> {
         get_staging_clusters(self.client, deploy_id).await
     }
 
-    /// Drop all objects in a schema.
-    pub async fn drop_schema_objects(
-        &self,
-        database: &str,
-        schema: &str,
-    ) -> Result<Vec<String>, ConnectionError> {
-        drop_schema_objects(self.client, database, schema).await
-    }
-
-    /// Drop specific objects by their ObjectIds.
-    pub async fn drop_objects(
-        &self,
-        objects: &BTreeSet<ObjectId>,
-    ) -> Result<Vec<String>, ConnectionError> {
-        drop_objects(self.client, objects).await
-    }
-
     /// Drop staging schemas by name.
     pub async fn drop_staging_schemas(
         &self,
@@ -1298,15 +1000,6 @@ impl IntrospectionClient<'_> {
     /// Drop staging clusters by name.
     pub async fn drop_staging_clusters(&self, clusters: &[String]) -> Result<(), ConnectionError> {
         drop_staging_clusters(self.client, clusters).await
-    }
-
-    /// Check if a schema exists in the specified database.
-    pub async fn schema_exists(
-        &self,
-        database: &str,
-        schema: &str,
-    ) -> Result<bool, ConnectionError> {
-        schema_exists(self.client, database, schema).await
     }
 
     /// Check if a network policy exists.
@@ -1329,11 +1022,6 @@ impl IntrospectionClient<'_> {
         get_role_parameters(self.client, name).await
     }
 
-    /// Check if a cluster exists.
-    pub async fn cluster_exists(&self, name: &str) -> Result<bool, ConnectionError> {
-        cluster_exists(self.client, name).await
-    }
-
     /// Get a cluster by name.
     pub async fn get_cluster(&self, name: &str) -> Result<Option<Cluster>, ConnectionError> {
         get_cluster(self.client, name).await
@@ -1345,11 +1033,6 @@ impl IntrospectionClient<'_> {
         name: &str,
     ) -> Result<Option<String>, ConnectionError> {
         get_cluster_create_sql(self.client, name).await
-    }
-
-    /// List all clusters.
-    pub async fn list_clusters(&self) -> Result<Vec<Cluster>, ConnectionError> {
-        list_clusters(self.client).await
     }
 
     /// Get cluster configuration including replicas and grants.
