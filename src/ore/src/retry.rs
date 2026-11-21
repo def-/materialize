@@ -60,7 +60,6 @@ use std::{cmp, thread};
 
 use futures::{Stream, StreamExt, ready};
 use pin_project::pin_project;
-use tokio::io::{AsyncRead, ReadBuf};
 use tokio::time::error::Elapsed;
 use tokio::time::{self, Duration, Instant, Sleep};
 
@@ -390,15 +389,6 @@ pub struct RetryStream {
     sleep: Sleep,
 }
 
-impl RetryStream {
-    fn reset(self: Pin<&mut Self>) {
-        let this = self.project();
-        *this.start = Instant::now();
-        *this.i = 0;
-        *this.next_backoff = None;
-    }
-}
-
 impl Stream for RetryStream {
     type Item = RetryState;
 
@@ -433,114 +423,6 @@ impl Stream for RetryStream {
         }
         *this.i += 1;
         Poll::Ready(Some(state))
-    }
-}
-
-/// Wrapper of a `Reader` factory that will automatically retry and resume reading an underlying
-/// resource in the events of errors according to a retry schedule.
-#[pin_project]
-#[derive(Debug)]
-pub struct RetryReader<F, U, R> {
-    factory: F,
-    offset: usize,
-    error: Option<std::io::Error>,
-    #[pin]
-    retry: RetryStream,
-    #[pin]
-    state: RetryReaderState<U, R>,
-}
-
-#[pin_project(project = RetryReaderStateProj)]
-#[derive(Debug)]
-enum RetryReaderState<U, R> {
-    Waiting,
-    Creating(#[pin] U),
-    Reading(#[pin] R),
-}
-
-impl<F, U, R> RetryReader<F, U, R>
-where
-    F: FnMut(RetryState, usize) -> U,
-    U: Future<Output = Result<R, std::io::Error>>,
-    R: AsyncRead,
-{
-    /// Uses the provided `Reader` factory to construct a `RetryReader` with the default `Retry`
-    /// settings.
-    ///
-    /// The factory will be called once at the beginning and subsequently every time a retry
-    /// attempt is made. The factory will be called with a single `usize` argument representing the
-    /// offset at which the returned `Reader` should resume reading from.
-    pub fn new(factory: F) -> Self {
-        Self::with_retry(factory, Retry::default())
-    }
-
-    /// Uses the provided `Reader` factory to construct a `RetryReader` with the passed `Retry`
-    /// settings. See the documentation of [RetryReader::new] for more details.
-    pub fn with_retry(factory: F, retry: Retry) -> Self {
-        Self {
-            factory,
-            offset: 0,
-            error: None,
-            retry: retry.into_retry_stream(),
-            state: RetryReaderState::Waiting,
-        }
-    }
-}
-
-impl<F, U, R> AsyncRead for RetryReader<F, U, R>
-where
-    F: FnMut(RetryState, usize) -> U,
-    U: Future<Output = Result<R, std::io::Error>>,
-    R: AsyncRead,
-{
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<Result<(), std::io::Error>> {
-        loop {
-            let mut this = self.as_mut().project();
-            use RetryReaderState::*;
-            match this.state.as_mut().project() {
-                RetryReaderStateProj::Waiting => match ready!(this.retry.as_mut().poll_next(cx)) {
-                    None => {
-                        return Poll::Ready(Err(this
-                            .error
-                            .take()
-                            .expect("retry produces at least one element")));
-                    }
-                    Some(state) => {
-                        this.state
-                            .set(Creating((*this.factory)(state, *this.offset)));
-                    }
-                },
-                RetryReaderStateProj::Creating(reader_fut) => match ready!(reader_fut.poll(cx)) {
-                    Ok(reader) => {
-                        this.state.set(Reading(reader));
-                    }
-                    Err(err) => {
-                        *this.error = Some(err);
-                        this.state.set(Waiting);
-                    }
-                },
-                RetryReaderStateProj::Reading(reader) => {
-                    let filled_end = buf.filled().len();
-                    match ready!(reader.poll_read(cx, buf)) {
-                        Ok(()) => {
-                            if let Some(_) = this.error.take() {
-                                this.retry.reset();
-                            }
-                            *this.offset += buf.filled().len() - filled_end;
-                            return Poll::Ready(Ok(()));
-                        }
-                        Err(err) => {
-                            *this.error = Some(err);
-                            this.state.set(Waiting);
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -949,48 +831,6 @@ mod tests {
             })
             .await;
         assert_eq!(res.unwrap_err().to_string(), "deadline has elapsed");
-    }
-
-    #[crate::test(tokio::test)]
-    #[cfg_attr(miri, ignore)] // unsupported operation: cannot write to event
-    async fn test_retry_reader() {
-        use tokio::io::AsyncReadExt;
-
-        /// Reader that errors out after the first read
-        struct FlakyReader {
-            offset: usize,
-            should_error: bool,
-        }
-
-        impl AsyncRead for FlakyReader {
-            fn poll_read(
-                mut self: Pin<&mut Self>,
-                _: &mut Context<'_>,
-                buf: &mut ReadBuf<'_>,
-            ) -> Poll<Result<(), std::io::Error>> {
-                if self.should_error {
-                    Poll::Ready(Err(std::io::ErrorKind::ConnectionReset.into()))
-                } else if self.offset < 256 {
-                    buf.put_slice(&[b'A']);
-                    self.should_error = true;
-                    Poll::Ready(Ok(()))
-                } else {
-                    Poll::Ready(Ok(()))
-                }
-            }
-        }
-
-        let reader = RetryReader::new(|_state, offset| async move {
-            Ok(FlakyReader {
-                offset,
-                should_error: false,
-            })
-        });
-        tokio::pin!(reader);
-
-        let mut data = Vec::new();
-        reader.read_to_end(&mut data).await.unwrap();
-        assert_eq!(data, vec![b'A'; 256]);
     }
 
     #[crate::test(tokio::test)]
