@@ -247,16 +247,16 @@ impl<'a> CopyTextFormatParser<'a> {
     }
 
     fn consume_null_string(&mut self) -> bool {
-        if self.null_string.is_empty() {
-            // An empty NULL marker is supported. Look ahead to ensure that is followed by
-            // a column delimiter, an end of line or it is at the end of the data.
-            self.is_column_delimiter()
-                || self.is_end_of_line()
-                || self.is_end_of_copy_marker()
-                || self.is_eof()
-        } else {
-            self.consume_bytes(self.null_string.as_bytes())
+        // As in PostgreSQL, only a raw field equal to the marker is NULL. A
+        // field that merely starts with the marker is data.
+        let start = self.position;
+        if self.consume_bytes(self.null_string.as_bytes())
+            && (self.is_column_delimiter() || self.is_end_of_line() || self.is_end_of_copy_marker())
+        {
+            return true;
         }
+        self.position = start;
+        false
     }
 
     pub fn consume_raw_value(&mut self) -> Result<Option<&[u8]>, io::Error> {
@@ -954,6 +954,28 @@ mod tests {
             }
             parser.expect_end_of_line().expect("expected eol");
         }
+    }
+
+    #[mz_ore::test]
+    fn test_copy_format_text_null_string_prefix() {
+        let params = CopyTextFormatParams {
+            null: Cow::from("NS"),
+            delimiter: b'\t',
+        };
+        let rows = decode_copy_format_text(
+            b"NSX\tNS\nNS\tNSNS\n",
+            &[mz_pgrepr::Type::Text, mz_pgrepr::Type::Text],
+            params,
+        )
+        .expect("decode should succeed");
+        let got: Vec<Vec<Datum>> = rows.iter().map(|r| r.iter().collect()).collect();
+        assert_eq!(
+            got,
+            vec![
+                vec![Datum::String("NSX"), Datum::Null],
+                vec![Datum::Null, Datum::String("NSNS")],
+            ]
+        );
     }
 
     #[mz_ore::test]
