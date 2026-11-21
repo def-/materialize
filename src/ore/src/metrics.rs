@@ -915,7 +915,7 @@ pub fn register_runtime_metrics(
     }
 
     macro_rules! register_per_worker_duration_secs {
-        ($method:ident, $doc:literal) => {
+        ($method:ident, $doc:literal, $reduce:expr) => {
             let metrics = runtime_metrics.clone();
             registry.register_computed_gauge::<prometheus::core::AtomicF64>(
                 crate::metric!(
@@ -924,9 +924,12 @@ pub fn register_runtime_metrics(
                     const_labels: {"runtime" => name},
                 ),
                 move || {
-                    (0..metrics.num_workers())
+                    let reduce: fn(f64, f64) -> f64 = $reduce;
+                    let workers = metrics.num_workers();
+                    let sum = (0..workers)
                         .map(|i| metrics.$method(i).as_secs_f64())
-                        .sum::<f64>()
+                        .sum::<f64>();
+                    reduce(sum, <f64 as crate::cast::CastLossy<_>>::cast_lossy(workers))
                 },
             );
         };
@@ -946,7 +949,8 @@ pub fn register_runtime_metrics(
     );
     register_per_worker_duration_secs!(
         worker_total_busy_duration,
-        "The amount of time the worker threads have been busy, in seconds."
+        "The amount of time the worker threads have been busy, in seconds.",
+        |sum, _workers| sum
     );
     register_per_worker!(
         worker_park_count,
@@ -1011,9 +1015,11 @@ pub fn register_runtime_metrics(
             worker_overflow_count,
             "The number of times the given worker thread saturated its local queue."
         );
+        // Each worker reports its own mean, so this averages them.
         register_per_worker_duration_secs!(
             worker_mean_poll_time,
-            "The mean duration of task polls in seconds."
+            "The mean duration of task polls in seconds.",
+            |sum, workers| sum / workers
         );
     }
 }
@@ -1221,6 +1227,35 @@ mod tests {
         let wall_counter = wall_metric[0].get_counter();
         // We filtered wall time to < 10ms, so our wall time metric should be filtered out.
         assert_eq!(wall_counter.value(), 0.0);
+    }
+
+    #[cfg(all(feature = "async", tokio_unstable))]
+    #[crate::test]
+    #[cfg_attr(miri, ignore)] // too slow
+    fn runtime_worker_mean_poll_time_is_averaged() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .build()
+            .expect("failed to start runtime");
+        let runtime_metrics = runtime.handle().metrics();
+        // A worker publishes its mean poll time when it first parks. Without tasks, the value
+        // does not change afterwards.
+        while (0..4).any(|i| runtime_metrics.worker_mean_poll_time(i).is_zero()) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let expected = (0..4)
+            .map(|i| runtime_metrics.worker_mean_poll_time(i).as_secs_f64())
+            .sum::<f64>()
+            / 4.0;
+
+        let registry = MetricsRegistry::new();
+        super::register_runtime_metrics("test", runtime_metrics, &registry);
+        let reports = registry.gather();
+        let family = reports
+            .iter()
+            .find(|m| m.name() == "mz_tokio_worker_mean_poll_time")
+            .expect("metric not found");
+        assert_eq!(family.get_metric()[0].get_gauge().value(), expected);
     }
 
     #[crate::test]
