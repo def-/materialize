@@ -977,6 +977,12 @@ impl<T: Ord> PartialOrd for HollowBatch<T> {
 
 impl<T: Ord> Ord for HollowBatch<T> {
     fn cmp(&self, other: &Self) -> Ordering {
+        // Versions of state share unchanged batches through `Arc`, so
+        // `StateDiff::from_diff` compares each of them with itself, which
+        // would otherwise walk the metadata of every part.
+        if std::ptr::eq(self, other) {
+            return Ordering::Equal;
+        }
         // Deconstruct self and other so we get a compile failure if new fields
         // are added.
         let HollowBatch {
