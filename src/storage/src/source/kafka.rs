@@ -1230,7 +1230,7 @@ impl KafkaSourceReader {
 }
 
 fn construct_source_message(
-    msg: &BorrowedMessage<'_>,
+    msg: &impl Message,
     metadata_columns: &[KafkaMetadataKind],
 ) -> (
     Result<SourceMessage, KafkaHeaderParseError>,
@@ -1251,19 +1251,22 @@ fn construct_source_message(
             KafkaMetadataKind::Partition => packer.push(Datum::from(pid)),
             KafkaMetadataKind::Offset => packer.push(Datum::UInt64(offset)),
             KafkaMetadataKind::Timestamp => {
-                let ts = msg
+                // NOTE: A record can lack a timestamp, for example one written by a client that
+                // predates message format v1, or carry one that `timestamp` cannot represent.
+                let ts: Option<CheckedTimestamp<NaiveDateTime>> = msg
                     .timestamp()
                     .to_millis()
-                    .expect("kafka sources always have upstream_time");
-
-                let d: Datum = DateTime::from_timestamp_millis(ts)
-                    .and_then(|dt| {
-                        let ct: Option<CheckedTimestamp<NaiveDateTime>> =
-                            dt.naive_utc().try_into().ok();
-                        ct
-                    })
-                    .into();
-                packer.push(d)
+                    .and_then(DateTime::from_timestamp_millis)
+                    .and_then(|dt| dt.naive_utc().try_into().ok());
+                match ts {
+                    Some(ts) => packer.push(Datum::from(ts)),
+                    None => {
+                        let err = KafkaHeaderParseError::InvalidTimestamp {
+                            timestamp: msg.timestamp(),
+                        };
+                        return (Err(err), (pid, offset.into()));
+                    }
+                }
             }
             KafkaMetadataKind::Header { key, use_bytes } => {
                 match msg.headers() {
@@ -1700,9 +1703,13 @@ mod tests {
     use std::time::Duration;
 
     use mz_kafka_util::client::create_new_client_config_simple;
+    use mz_storage_types::sources::kafka::KafkaMetadataKind;
     use rdkafka::consumer::{BaseConsumer, Consumer};
-    use rdkafka::{Message, Offset, TopicPartitionList};
+    use rdkafka::message::OwnedMessage;
+    use rdkafka::{Message, Offset, Timestamp, TopicPartitionList};
     use uuid::Uuid;
+
+    use super::construct_source_message;
 
     // Splitting off a partition queue with an `Offset` that is not `Offset::Beginning` seems to
     // lead to a race condition where sometimes we receive messages from polling the main consumer
@@ -1788,6 +1795,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[mz_ore::test]
+    fn timestamp_metadata_errors_without_a_representable_timestamp() {
+        let message =
+            |timestamp| OwnedMessage::new(None, None, "topic".into(), timestamp, 0, 0, None);
+        let columns = [KafkaMetadataKind::Timestamp];
+
+        let (result, _) =
+            construct_source_message(&message(Timestamp::CreateTime(1_000)), &columns);
+        let ts = result
+            .expect("timestamp is representable")
+            .metadata
+            .unpack_first()
+            .unwrap_timestamp();
+        assert_eq!(ts.and_utc().timestamp_millis(), 1_000);
+
+        for timestamp in [Timestamp::NotAvailable, Timestamp::CreateTime(i64::MAX)] {
+            let (result, _) = construct_source_message(&message(timestamp), &columns);
+            assert!(result.is_err(), "{timestamp:?} produced {result:?}");
+        }
+    }
 }
 
 /// Fetches the list of partitions and their corresponding high watermark.
@@ -1872,6 +1900,8 @@ pub enum KafkaHeaderParseError {
         "Found ill-formed byte sequence in header '{key}' that cannot be decoded as valid utf-8 (original bytes: {raw:x?})"
     )]
     Utf8Error { key: String, raw: Vec<u8> },
+    #[error("The message timestamp is missing or out of range: {timestamp:?}")]
+    InvalidTimestamp { timestamp: rdkafka::Timestamp },
 }
 
 /// Render the metadata fetcher of a Kafka source.
