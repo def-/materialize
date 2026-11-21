@@ -3705,10 +3705,14 @@ where
                 .filter_map(|key| self.get(key).map(|value| (key, value)))
                 .collect();
             // Compare each value in `entries` to each value in `self` and ensure they are unique.
-            for (ki, vi) in self.items() {
-                for (kj, vj) in &entries {
-                    if ki != *kj && (check.violation)(vi, vj) {
-                        return Err(DurableCatalogError::UniquenessViolation);
+            // `self.items()` builds a map of the whole collection, so skip it when no key needs
+            // checking.
+            if !entries.is_empty() {
+                for (ki, vi) in self.items() {
+                    for (kj, vj) in &entries {
+                        if ki != *kj && (check.violation)(vi, vj) {
+                            return Err(DurableCatalogError::UniquenessViolation);
+                        }
                     }
                 }
             }
