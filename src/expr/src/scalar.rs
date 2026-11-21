@@ -795,6 +795,16 @@ impl MirScalarExpr {
         // can't ensure this, because the application itself might create a 1-arg AND/OR.
         let mut old_self = MirScalarExpr::column(0);
         while old_self != *self {
+            // Only an AND/OR changes below, so anything else needs no clone to compare against.
+            if !matches!(
+                self,
+                MirScalarExpr::CallVariadic {
+                    func: VariadicFunc::And(_) | VariadicFunc::Or(_),
+                    ..
+                }
+            ) {
+                return;
+            }
             old_self = self.clone();
             match self {
                 MirScalarExpr::CallVariadic {
