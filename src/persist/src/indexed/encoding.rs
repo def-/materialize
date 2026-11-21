@@ -16,21 +16,17 @@
 use std::fmt::{self, Debug};
 use std::sync::Arc;
 
-use arrow::array::{Array, ArrayRef, AsArray, BinaryArray, Int64Array};
+use arrow::array::{ArrayRef, BinaryArray, Int64Array};
 use arrow::buffer::OffsetBuffer;
-use arrow::datatypes::{DataType, Int64Type, ToByteSlice};
+use arrow::datatypes::{DataType, ToByteSlice};
 use base64::Engine;
 use bytes::{BufMut, Bytes};
 use differential_dataflow::difference::Monoid;
 use differential_dataflow::trace::Description;
 use mz_ore::bytes::SegmentedBytes;
-use mz_ore::cast::CastFrom;
-use mz_ore::collections::CollectionExt;
 use mz_ore::soft_panic_or_log;
 use mz_persist_types::arrow::{ArrayBound, ArrayOrd};
-use mz_persist_types::columnar::{
-    ColumnEncoder, Schema, codec_to_schema, data_type, schema_to_codec,
-};
+use mz_persist_types::columnar::{codec_to_schema, data_type, schema_to_codec};
 use mz_persist_types::parquet::EncodingConfig;
 use mz_persist_types::part::Part;
 use mz_persist_types::schema::backward_compatible;
@@ -405,74 +401,6 @@ impl BlobTraceUpdates {
             time: self.timestamps().clone(),
             diff: self.diffs().clone(),
         }
-    }
-
-    /// Concatenate the given records together, column-by-column.
-    ///
-    /// If `ensure_codec` is true, then we'll ensure the returned [`BlobTraceUpdates`] includes
-    /// [`Codec`] data, re-encoding structured data if necessary.
-    pub fn concat<K: Codec, V: Codec>(
-        mut updates: Vec<BlobTraceUpdates>,
-        key_schema: &K::Schema,
-        val_schema: &V::Schema,
-        metrics: &ColumnarMetrics,
-    ) -> anyhow::Result<BlobTraceUpdates> {
-        match updates.len() {
-            0 => {
-                return Ok(BlobTraceUpdates::Structured {
-                    key_values: ColumnarRecordsStructuredExt {
-                        key: Arc::new(key_schema.encoder().expect("valid schema").finish()),
-                        val: Arc::new(val_schema.encoder().expect("valid schema").finish()),
-                    },
-                    timestamps: Int64Array::from_iter_values(vec![]),
-                    diffs: Int64Array::from_iter_values(vec![]),
-                });
-            }
-            1 => return Ok(updates.into_iter().into_element()),
-            _ => {}
-        }
-
-        // Always get or make our structured format.
-        let mut keys = Vec::with_capacity(updates.len());
-        let mut vals = Vec::with_capacity(updates.len());
-        for updates in &mut updates {
-            let structured = updates.get_or_make_structured::<K, V>(key_schema, val_schema);
-            keys.push(structured.key.as_ref());
-            vals.push(structured.val.as_ref());
-        }
-        let key_values = ColumnarRecordsStructuredExt {
-            key: ::arrow::compute::concat(&keys)?,
-            val: ::arrow::compute::concat(&vals)?,
-        };
-
-        // If necessary, ensure we have `Codec` data, which internally includes
-        // timestamps and diffs, otherwise get the timestamps and diffs separately.
-        let mut timestamps: Vec<&dyn Array> = Vec::with_capacity(updates.len());
-        let mut diffs: Vec<&dyn Array> = Vec::with_capacity(updates.len());
-
-        for update in &updates {
-            timestamps.push(update.timestamps());
-            diffs.push(update.diffs());
-        }
-        let timestamps = ::arrow::compute::concat(&timestamps)?
-            .as_primitive_opt::<Int64Type>()
-            .ok_or_else(|| anyhow::anyhow!("timestamps changed Array type"))?
-            .clone();
-        let diffs = ::arrow::compute::concat(&diffs)?
-            .as_primitive_opt::<Int64Type>()
-            .ok_or_else(|| anyhow::anyhow!("diffs changed Array type"))?
-            .clone();
-
-        let out = Self::Structured {
-            key_values,
-            timestamps,
-            diffs,
-        };
-        metrics
-            .arrow
-            .concat_bytes
-            .inc_by(u64::cast_from(out.goodbytes()));
-        Ok(out)
     }
 
     /// See [RustType::from_proto].
