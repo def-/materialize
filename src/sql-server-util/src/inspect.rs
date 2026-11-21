@@ -994,14 +994,14 @@ pub async fn snapshot_size(
     table: &str,
 ) -> Result<usize, SqlServerError> {
     let query = format!(
-        "SELECT COUNT(*) FROM {schema_name}.{table_name};",
+        "SELECT COUNT_BIG(*) FROM {schema_name}.{table_name};",
         schema_name = quote_identifier(schema),
         table_name = quote_identifier(table)
     );
     let result = client.query(query, &[]).await?;
 
     match &result[..] {
-        [row] => match row.try_get::<i32, _>(0)? {
+        [row] => match row.try_get::<i64, _>(0)? {
             Some(count @ 0..) => Ok(usize::try_from(count).expect("known to fit")),
             Some(negative) => Err(SqlServerError::InvalidData {
                 column_name: "count".to_string(),
