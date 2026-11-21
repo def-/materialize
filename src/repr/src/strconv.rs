@@ -474,7 +474,7 @@ where
 {
     let d: NaiveDate = d.into();
     let (year_ad, year) = d.year_ce();
-    write!(buf, "{:04}-{}", year, d.format("%m-%d"));
+    write!(buf, "{:04}-{:02}-{:02}", year, d.month(), d.day());
     if !year_ad {
         write!(buf, " BC");
         // The ` BC` suffix carries whitespace, which every element escaper
@@ -557,7 +557,7 @@ where
             (_, _wrapped) => (t, MICROS_PER_SECOND - 1),
         },
     };
-    write!(buf, "{}", t.format("%H:%M:%S"));
+    format_hms(buf, t);
     format_micros(buf, micros);
     Nestable::Yes
 }
@@ -640,7 +640,8 @@ where
 {
     let (ts, micros) = round_to_micros(*ts);
     let (year_ad, year) = ts.year_ce();
-    write!(buf, "{:04}-{}", year, ts.format("%m-%d %H:%M:%S"));
+    write!(buf, "{:04}-{:02}-{:02} ", year, ts.month(), ts.day());
+    format_hms(buf, ts.time());
     format_micros(buf, micros);
     if !year_ad {
         write!(buf, " BC");
@@ -716,7 +717,8 @@ where
 {
     let (ts, micros) = round_to_micros(ts.naive_utc());
     let (year_ad, year) = ts.year_ce();
-    write!(buf, "{:04}-{}", year, ts.format("%m-%d %H:%M:%S"));
+    write!(buf, "{:04}-{:02}-{:02} ", year, ts.month(), ts.day());
+    format_hms(buf, ts.time());
     format_micros(buf, micros);
     write!(buf, "+00");
     if !year_ad {
@@ -960,11 +962,8 @@ const MICROS_PER_SECOND: u32 = 1_000_000;
 /// as a fractional field of more than six digits. Only a nanosecond count of
 /// `.9999995` or more produces a carry.
 ///
-/// chrono spells a leap second as a nanosecond count of one second or more, and
-/// its `%S` already accounts for that, rendering `60` on a second-of-minute of
-/// 59 and folding into the next second elsewhere. The leap second is therefore
-/// already in the seconds field and only the part below one second is ours to
-/// write.
+/// A leap second is already in the seconds field that [`format_hms`] writes, so
+/// only the part below one second is ours to write.
 fn split_nanos_to_micros(nanos: u32) -> (bool, u32) {
     let micros = (nanos % NANOS_PER_SECOND + 500) / 1_000;
     if micros >= MICROS_PER_SECOND {
@@ -1023,6 +1022,19 @@ where
         micros /= 10;
     }
     write!(buf, ".{:0width$}", micros, width = width);
+}
+
+/// Writes `t` as `HH:MM:SS`, without the fraction.
+///
+/// chrono spells a leap second as a nanosecond count of one second or more.
+/// That whole second goes into the seconds field, rendering `60` on a
+/// second-of-minute of 59 and folding into the next second elsewhere.
+fn format_hms<F>(buf: &mut F, t: NaiveTime)
+where
+    F: FormatBuffer,
+{
+    let second = t.second() + t.nanosecond() / NANOS_PER_SECOND;
+    write!(buf, "{:02}:{:02}:{:02}", t.hour(), t.minute(), second);
 }
 
 #[derive(Debug, thiserror::Error)]

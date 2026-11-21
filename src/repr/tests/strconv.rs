@@ -832,9 +832,8 @@ fn test_format_subsecond_carry() {
     // The renderer takes a bare `NaiveDateTime`, so it also has to hold up on
     // chrono's leap-second representation, which the SQL parser no longer
     // produces but persisted data and the frozen storage source casts still
-    // do. A whole-second leap renders as `:60` via chrono's `%S`; a fractional
-    // one carries, and the second after `23:59:60` is `00:00:00` of the next
-    // minute.
+    // do. A whole-second leap renders as `:60`; a fractional one carries, and
+    // the second after `23:59:60` is `00:00:00` of the next minute.
     for (nanos, expected) in [
         (1_000_000_000, "2020-01-01 23:59:60"),
         (1_500_000_000, "2020-01-01 23:59:60.5"),
