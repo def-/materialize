@@ -2956,6 +2956,8 @@ pub fn convert_v1_to_v1alpha1(
 }
 
 fn parse_image_ref(image_ref: &str) -> Option<Version> {
+    // An `@sha256:...` digest contains a `:` that is not the tag separator.
+    let image_ref = image_ref.split('@').next().unwrap_or(image_ref);
     image_ref
         .rsplit_once(':')
         .and_then(|(_repo, tag)| tag.strip_prefix('v'))
@@ -3229,6 +3231,8 @@ mod tests {
         assert!(!mz.meets_minimum_version(&Version::parse("1.0.0").unwrap()));
         mz.spec.environmentd_image_ref = "my.private.registry:5000:v0.33.3".to_owned();
         assert!(!mz.meets_minimum_version(&Version::parse("0.34.0").unwrap()));
+        mz.spec.environmentd_image_ref = "materialize/environmentd:v0.33.0@sha256:41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3".to_owned();
+        assert!(!mz.meets_minimum_version(&Version::parse("0.34.0").unwrap()));
     }
 
     #[mz_ore::test]
@@ -3259,6 +3263,10 @@ mod tests {
 
         // Fail: upgrading from 26.0.0 to 28.0.1 (more than 1 major version)
         mz.spec.environmentd_image_ref = "materialize/environmentd:v28.0.1".to_owned();
+        assert!(!mz.within_upgrade_window());
+
+        // Fail: upgrading from 26.0.0 to a digest-pinned 28.0.1
+        mz.spec.environmentd_image_ref = "materialize/environmentd:v28.0.1@sha256:41af286dc0b172ed2f1ca934fd2278de4a1192302ffa07087cea2682e7d372e3".to_owned();
         assert!(!mz.within_upgrade_window());
 
         // Pass: upgrading from 26.0.0 to 28.0.1.not_a_valid_version (invalid version, defaults to true)
