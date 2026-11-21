@@ -2501,6 +2501,11 @@ fn is_upsert_rocksdb_config_var(name: &str) -> bool {
         || name == upsert_rocksdb::UPSERT_ROCKSDB_STATS_PERSIST_INTERVAL_SECONDS.name()
         || name == upsert_rocksdb::UPSERT_ROCKSDB_POINT_LOOKUP_BLOCK_CACHE_SIZE_MB.name()
         || name == upsert_rocksdb::UPSERT_ROCKSDB_SHRINK_ALLOCATED_BUFFERS_BY_RATIO.name()
+        || name == upsert_rocksdb::UPSERT_ROCKSDB_RETRY_DURATION.name()
+        || name
+            == upsert_rocksdb::UPSERT_ROCKSDB_WRITE_BUFFER_MANAGER_CLUSTER_MEMORY_FRACTION.name()
+        || name == upsert_rocksdb::UPSERT_ROCKSDB_WRITE_BUFFER_MANAGER_MEMORY_BYTES.name()
+        || name == upsert_rocksdb::UPSERT_ROCKSDB_WRITE_BUFFER_MANAGER_ALLOW_STALL.name()
 }
 
 /// Returns whether the named variable is a (Postgres/CRDB) timestamp oracle
@@ -2789,5 +2794,27 @@ mod reset_all_tests {
                 .inspect_session_value(),
             None
         );
+    }
+}
+
+#[cfg(test)]
+mod config_var_tests {
+    use super::*;
+
+    #[mz_ore::test]
+    fn upsert_rocksdb_vars_are_storage_config_vars() {
+        let system_vars = SystemVars::new();
+        let mut checked = 0;
+        for var in system_vars.iter() {
+            if var.name().starts_with("upsert_rocksdb_") {
+                assert!(
+                    system_vars.is_storage_config_var(var.name()),
+                    "{} is not a storage config var",
+                    var.name(),
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "no upsert_rocksdb vars found");
     }
 }
