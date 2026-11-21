@@ -1279,10 +1279,9 @@ impl RelationDesc {
     /// n.b. The only constraint MZ currently supports in NOT NULL, but this
     /// structure will be simple to extend.
     pub fn constraints_met(&self, i: usize, d: &Datum) -> Result<(), NotNullViolation> {
-        let name = self.get_name(i);
         let typ = &self.typ.column_types[i];
         if d == &Datum::Null && !typ.nullable {
-            Err(NotNullViolation(name.clone()))
+            Err(NotNullViolation(self.get_name(i).clone()))
         } else {
             Ok(())
         }
