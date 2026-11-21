@@ -1173,7 +1173,7 @@ fn last_value_inner<'a>(
                     let start_offset = usize::cast_from(*start_offset);
 
                     // If the frame starts after the last row of the window, return null
-                    if idx + start_offset > length - 1 {
+                    if idx.saturating_add(start_offset) > length - 1 {
                         Datum::Null
                     } else {
                         args[length - 1]
@@ -4268,10 +4268,11 @@ pub const REPEAT_ROW_NAME: &str = "repeat_row";
 
 #[cfg(test)]
 mod tests {
-    use mz_repr::{Datum, RowArena, SqlScalarType};
+    use mz_repr::{Datum, Row, RowArena, SqlScalarType};
 
-    use super::TableFunc;
+    use super::{TableFunc, last_value_inner};
     use crate::EvalError;
+    use crate::relation::{WindowFrame, WindowFrameBound, WindowFrameUnits};
 
     /// 0 and 1 are valid (no guard rows), >1 errors with
     /// `MultipleRowsFromSubquery`, <0 with `NegativeRowsFromSubquery`. Zero is
@@ -4301,6 +4302,21 @@ mod tests {
         assert_eq!(
             func.eval(&[Datum::Int64(-1)], &temp_storage).err(),
             Some(EvalError::NegativeRowsFromSubquery),
+        );
+    }
+
+    #[mz_ore::test]
+    fn last_value_frame_starting_past_the_end_is_null() {
+        let window_frame = WindowFrame {
+            units: WindowFrameUnits::Rows,
+            start_bound: WindowFrameBound::OffsetFollowing(u64::MAX),
+            end_bound: WindowFrameBound::UnboundedFollowing,
+        };
+        let args = vec![Datum::Int32(1), Datum::Int32(2), Datum::Int32(3)];
+        let order_by_rows = vec![Row::default(); args.len()];
+        assert_eq!(
+            last_value_inner(args, &order_by_rows, &window_frame),
+            vec![Datum::Null; 3],
         );
     }
 }
