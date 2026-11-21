@@ -515,16 +515,16 @@ impl<D, T: Timestamp, R> ChainBatch<D, T, R> {
     ) -> impl Iterator<Item = (D, T, R)> + 'a {
         self.chains.retain(|chain| !chain.is_empty());
         self.chains.iter_mut().flat_map(move |chain| {
-            // A chain is a sorted list of mutually comparable elements so we keep extracting
-            // elements that are not beyond upper.
-            std::iter::from_fn(move || {
-                let (_, into, _) = chain.front()?;
-                if !upper.less_equal(into) {
-                    chain.pop_front()
-                } else {
-                    None
-                }
-            })
+            // A chain is a sorted list of mutually comparable elements, so the elements not
+            // beyond upper form a prefix. Testing the front first keeps a chain that lies
+            // entirely beyond upper at one test.
+            let beyond = |(_, into, _): &(D, T, R)| upper.less_equal(into);
+            let len = if chain.front().is_none_or(beyond) {
+                0
+            } else {
+                chain.partition_point(|update| !beyond(update))
+            };
+            chain.drain(..len)
         })
     }
 
