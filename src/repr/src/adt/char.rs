@@ -69,7 +69,7 @@ impl TryFrom<i64> for CharLength {
 
     fn try_from(length: i64) -> Result<Self, Self::Error> {
         match u32::try_from(length) {
-            Ok(length) if length > 0 && length < MAX_LENGTH => Ok(CharLength(length)),
+            Ok(length) if length > 0 && length <= MAX_LENGTH => Ok(CharLength(length)),
             _ => Err(InvalidCharLengthError),
         }
     }
@@ -220,7 +220,7 @@ impl RustType<ProtoCharLength> for CharLength {
 
 #[cfg(test)]
 mod tests {
-    use mz_ore::assert_ok;
+    use mz_ore::{assert_err, assert_ok};
     use mz_proto::protobuf_roundtrip;
     use proptest::prelude::*;
 
@@ -233,5 +233,13 @@ mod tests {
             assert_ok!(actual);
             assert_eq!(actual.unwrap(), expect);
         }
+    }
+
+    #[mz_ore::test]
+    fn char_length_bounds() {
+        assert_err!(CharLength::try_from(0));
+        assert_ok!(CharLength::try_from(1));
+        assert_ok!(CharLength::try_from(i64::from(MAX_LENGTH)));
+        assert_err!(CharLength::try_from(i64::from(MAX_LENGTH) + 1));
     }
 }

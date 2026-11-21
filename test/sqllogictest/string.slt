@@ -1046,6 +1046,13 @@ SELECT ''::pg_catalog.bpchar(0)
 query error length for type character must be between 1 and 10485760
 SELECT ''::pg_catalog.bpchar(10485761)
 
+# The largest valid type mods
+
+query B
+SELECT 'abc'::CHAR(10485760) = 'abc'
+----
+true
+
 ### position ###
 statement ok
 CREATE TABLE positiontest (strcol1 char(15), strcol2 char(15), vccol1 varchar(15), vccol2 varchar(15))
