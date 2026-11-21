@@ -79,10 +79,16 @@ pub enum Nestable {
 /// "0", or any unambiguous prefix of one of those values. Leading or trailing
 /// whitespace is permissible.
 pub fn parse_bool(s: &str) -> Result<bool, ParseError> {
-    match s.trim().to_lowercase().as_str() {
-        "t" | "tr" | "tru" | "true" | "y" | "ye" | "yes" | "on" | "1" => Ok(true),
-        "f" | "fa" | "fal" | "fals" | "false" | "n" | "no" | "of" | "off" | "0" => Ok(false),
-        _ => Err(ParseError::invalid_input_syntax("boolean", s)),
+    let trimmed = s.trim();
+    let is_any = |words: &[&str]| words.iter().any(|w| trimmed.eq_ignore_ascii_case(w));
+    if is_any(&["t", "tr", "tru", "true", "y", "ye", "yes", "on", "1"]) {
+        Ok(true)
+    } else if is_any(&[
+        "f", "fa", "fal", "fals", "false", "n", "no", "of", "off", "0",
+    ]) {
+        Ok(false)
+    } else {
+        Err(ParseError::invalid_input_syntax("boolean", s))
     }
 }
 
