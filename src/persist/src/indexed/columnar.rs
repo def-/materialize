@@ -11,7 +11,6 @@
 //! reads and persistent storage.
 
 use std::fmt;
-use std::mem::size_of;
 
 use ::arrow::array::{
     Array, ArrayRef, AsArray, BinaryArray, BinaryBuilder, Int64Array, make_array,
@@ -44,8 +43,6 @@ pub mod parquet;
 // TODO(benesch): find a way to express this without `as`.
 #[allow(clippy::as_conversions)]
 pub const KEY_VAL_DATA_MAX_LEN: usize = i32::MAX as usize;
-
-const BYTES_PER_KEY_VAL_OFFSET: usize = 4;
 
 /// A set of ((Key, Val), Time, Diff) records stored in a columnar
 /// representation.
@@ -266,17 +263,6 @@ impl ColumnarRecordsBuilder {
         key_data_size <= limit && val_data_size <= limit
     }
 
-    /// The current size of the columnar records data, useful for bounding batches at a
-    /// target size.
-    pub fn total_bytes(&self) -> usize {
-        self.key_data.values_slice().len()
-            + self.key_data.offsets_slice().to_byte_slice().len()
-            + self.val_data.values_slice().len()
-            + self.val_data.offsets_slice().to_byte_slice().len()
-            + self.timestamps.to_byte_slice().len()
-            + self.diffs.to_byte_slice().len()
-    }
-
     /// Add a record to Self.
     ///
     /// Returns whether the record was successfully added. A record will not a
@@ -315,13 +301,6 @@ impl ColumnarRecordsBuilder {
         };
         debug_assert_eq!(ret.validate(), Ok(()));
         ret
-    }
-
-    /// Size of an update record as stored in the columnar representation
-    pub fn columnar_record_size(key_bytes_len: usize, value_bytes_len: usize) -> usize {
-        (key_bytes_len + BYTES_PER_KEY_VAL_OFFSET)
-            + (value_bytes_len + BYTES_PER_KEY_VAL_OFFSET)
-            + (2 * size_of::<u64>()) // T and D
     }
 }
 

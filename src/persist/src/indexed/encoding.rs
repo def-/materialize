@@ -24,9 +24,8 @@ use bytes::{BufMut, Bytes};
 use differential_dataflow::difference::Monoid;
 use differential_dataflow::trace::Description;
 use mz_ore::bytes::SegmentedBytes;
-use mz_ore::soft_panic_or_log;
 use mz_persist_types::arrow::{ArrayBound, ArrayOrd};
-use mz_persist_types::columnar::{codec_to_schema, data_type, schema_to_codec};
+use mz_persist_types::columnar::{codec_to_schema, data_type};
 use mz_persist_types::parquet::EncodingConfig;
 use mz_persist_types::part::Part;
 use mz_persist_types::schema::backward_compatible;
@@ -68,27 +67,6 @@ pub enum BatchColumnarFormat {
 }
 
 impl BatchColumnarFormat {
-    /// Returns a default value for [`BatchColumnarFormat`].
-    pub const fn default() -> Self {
-        BatchColumnarFormat::Both(2)
-    }
-
-    /// Returns a [`BatchColumnarFormat`] for a given `&str`, falling back to a default value if
-    /// provided `&str` is invalid.
-    pub fn from_str(s: &str) -> Self {
-        match s {
-            "row" => BatchColumnarFormat::Row,
-            "both" => BatchColumnarFormat::Both(0),
-            "both_v2" => BatchColumnarFormat::Both(2),
-            "structured" => BatchColumnarFormat::Structured,
-            x => {
-                let default = BatchColumnarFormat::default();
-                soft_panic_or_log!("Invalid batch columnar type: {x}, falling back to {default}");
-                default
-            }
-        }
-    }
-
     /// Returns a string representation for the [`BatchColumnarFormat`].
     pub const fn as_str(&self) -> &'static str {
         match self {
@@ -97,17 +75,6 @@ impl BatchColumnarFormat {
             BatchColumnarFormat::Both(2) => "both_v2",
             BatchColumnarFormat::Structured => "structured",
             BatchColumnarFormat::Both(_) => panic!("unknown batch columnar format"),
-        }
-    }
-
-    /// Returns if we should encode a Batch in a structured format.
-    pub const fn is_structured(&self) -> bool {
-        match self {
-            BatchColumnarFormat::Row => false,
-            // The V0 format has been deprecated and we ignore its structured columns.
-            BatchColumnarFormat::Both(0 | 1) => false,
-            BatchColumnarFormat::Both(_) => true,
-            BatchColumnarFormat::Structured => true,
         }
     }
 }
@@ -281,33 +248,6 @@ impl BlobTraceUpdates {
                 key_values.goodbytes()
                     + timestamps.values().to_byte_slice().len()
                     + diffs.values().to_byte_slice().len()
-            }
-        }
-    }
-
-    /// Return the [ColumnarRecords] of the blob, generating it if it does not exist.
-    pub fn get_or_make_codec<K: Codec, V: Codec>(
-        &mut self,
-        key_schema: &K::Schema,
-        val_schema: &V::Schema,
-    ) -> &ColumnarRecords {
-        match self {
-            BlobTraceUpdates::Row(records) => records,
-            BlobTraceUpdates::Both(records, _) => records,
-            BlobTraceUpdates::Structured {
-                key_values,
-                timestamps,
-                diffs,
-            } => {
-                let key = schema_to_codec::<K>(key_schema, &*key_values.key).expect("valid keys");
-                let val = schema_to_codec::<V>(val_schema, &*key_values.val).expect("valid values");
-                let records = ColumnarRecords::new(key, val, timestamps.clone(), diffs.clone());
-
-                *self = BlobTraceUpdates::Both(records, key_values.clone());
-                let BlobTraceUpdates::Both(records, _) = self else {
-                    unreachable!("set to BlobTraceUpdates::Both in previous line")
-                };
-                records
             }
         }
     }
@@ -523,14 +463,6 @@ impl<T: Timestamp + Codec64> BlobTraceBatchPart<T> {
     /// Decodes a BlobTraceBatchPart from the Parquet format.
     pub fn decode(buf: &SegmentedBytes, metrics: &ColumnarMetrics) -> Result<Self, Error> {
         decode_trace_parquet(buf.clone(), metrics)
-    }
-
-    /// Scans the part and returns a lower bound on the contained keys.
-    pub fn key_lower(&self) -> &[u8] {
-        self.updates
-            .records()
-            .and_then(|r| r.keys().iter().flatten().min())
-            .unwrap_or(&[])
     }
 
     /// Scans the part and returns a lower bound on the contained keys.
