@@ -2570,7 +2570,7 @@ impl CatalogState {
                     &SchemaSpecifier::Temporary,
                     conn_id,
                 )
-                .and_then(|schema| schema.items.get(&name.item))
+                .and_then(|schema| get_schema_entries(schema).get(&name.item))
             {
                 Some(id) => return Ok(self.get_entry(id)),
                 None => search_path.to_vec(),
@@ -3414,6 +3414,57 @@ mod tests {
                     max_rw_dependencies
                 } if max_rw_dependencies == OBJECTS - 1
             ));
+
+            catalog.expire().await;
+        })
+        .await
+    }
+
+    #[mz_ore::test(tokio::test)]
+    #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `TLS_client_method`
+    async fn temporary_relation_does_not_shadow_function_or_type() {
+        Catalog::with_debug(|mut catalog| async move {
+            let session = Session::dummy();
+            // Name resolution only reads the temporary schema's maps, so a
+            // builtin view stands in for `CREATE TEMPORARY VIEW lower` and
+            // `CREATE TEMPORARY TABLE int4`.
+            let view = catalog
+                .state
+                .entry_by_id
+                .values()
+                .find(|entry| matches!(entry.item(), CatalogItem::View(_)))
+                .expect("debug catalog has builtin views")
+                .id();
+            catalog
+                .state
+                .temporary_namespaces
+                .register(session.conn_id().clone(), session.uuid());
+            let temp_schema = catalog
+                .state
+                .temporary_namespaces
+                .ensure_schema(session.conn_id(), MZ_SYSTEM_ROLE_ID);
+            for name in ["lower", "int4"] {
+                temp_schema.items.insert(name.to_string(), view);
+            }
+
+            let conn_catalog = catalog.for_session(&session);
+            let name = |item: &str| PartialItemName {
+                database: None,
+                schema: None,
+                item: item.to_string(),
+            };
+            let func = conn_catalog
+                .resolve_function(&name("lower"))
+                .expect("lower resolves");
+            assert_eq!(func.item_type(), CatalogItemType::Func);
+            let typ = conn_catalog
+                .resolve_type(&name("int4"))
+                .expect("int4 resolves");
+            assert_eq!(typ.item_type(), CatalogItemType::Type);
+            let relation = conn_catalog
+                .resolve_item(&name("lower"))
+                .expect("lower resolves");
+            assert_eq!(relation.id(), view);
 
             catalog.expire().await;
         })
