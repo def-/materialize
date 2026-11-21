@@ -24,7 +24,6 @@ use mz_repr::query_policy_id::QueryPolicyId;
 use mz_repr::role_id::RoleId;
 use mz_repr::{CatalogItemId, GlobalId};
 use mz_repr::{ColumnName, RelationVersionSelector};
-use mz_sql_parser::ast::visit_mut::VisitMutNode;
 use mz_sql_parser::ast::{Expr, RawNetworkPolicyName, Version};
 use mz_sql_parser::ident;
 use proptest_derive::Arbitrary;
@@ -1043,36 +1042,6 @@ pub enum ObjectId {
 }
 
 impl ObjectId {
-    pub fn unwrap_cluster_id(self) -> ClusterId {
-        match self {
-            ObjectId::Cluster(id) => id,
-            _ => panic!("ObjectId::unwrap_cluster_id called on {self:?}"),
-        }
-    }
-    pub fn unwrap_cluster_replica_id(self) -> (ClusterId, ReplicaId) {
-        match self {
-            ObjectId::ClusterReplica(id) => id,
-            _ => panic!("ObjectId::unwrap_cluster_replica_id called on {self:?}"),
-        }
-    }
-    pub fn unwrap_database_id(self) -> DatabaseId {
-        match self {
-            ObjectId::Database(id) => id,
-            _ => panic!("ObjectId::unwrap_database_id called on {self:?}"),
-        }
-    }
-    pub fn unwrap_schema_id(self) -> (ResolvedDatabaseSpecifier, SchemaSpecifier) {
-        match self {
-            ObjectId::Schema(id) => id,
-            _ => panic!("ObjectId::unwrap_schema_id called on {self:?}"),
-        }
-    }
-    pub fn unwrap_role_id(self) -> RoleId {
-        match self {
-            ObjectId::Role(id) => id,
-            _ => panic!("ObjectId::unwrap_role_id called on {self:?}"),
-        }
-    }
     pub fn unwrap_item_id(self) -> CatalogItemId {
         match self {
             ObjectId::Item(id) => id,
@@ -2525,44 +2494,6 @@ where
     let mut visitor = DependencyVisitor::new(catalog);
     node.visit(&mut visitor);
     ResolvedIds::new(visitor.ids)
-}
-
-#[derive(Debug)]
-pub struct ItemDependencyModifier<'a> {
-    pub modified: bool,
-    pub id_map: &'a BTreeMap<CatalogItemId, CatalogItemId>,
-}
-
-impl<'ast, 'a> VisitMut<'ast, Raw> for ItemDependencyModifier<'a> {
-    fn visit_item_name_mut(&mut self, item_name: &mut RawItemName) {
-        if let RawItemName::Id(id, _, _) = item_name {
-            let parsed_id = id.parse::<CatalogItemId>().unwrap();
-            if let Some(new_id) = self.id_map.get(&parsed_id) {
-                *id = new_id.to_string();
-                self.modified = true;
-            }
-        }
-    }
-}
-
-/// Updates any references in the provided AST node that are keys in `id_map`.
-/// If an id is found it will be updated to the value of the key in `id_map`.
-/// This assumes the names of the reference(s) are unmodified (e.g. each pair of
-/// ids refer to an item of the same name, whose id has changed).
-pub fn modify_dependency_item_ids<'ast, N>(
-    node: &'ast mut N,
-    id_map: &BTreeMap<CatalogItemId, CatalogItemId>,
-) -> bool
-where
-    N: VisitMutNode<'ast, Raw>,
-{
-    let mut modifier = ItemDependencyModifier {
-        id_map,
-        modified: false,
-    };
-    node.visit_mut(&mut modifier);
-
-    modifier.modified
 }
 
 // Used when displaying a view's source for human creation. If the name
