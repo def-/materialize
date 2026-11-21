@@ -78,16 +78,6 @@ impl VersionedEvent {
         ))
     }
 
-    // Implement deserialize and serialize so writers and readers don't have to
-    // coordinate about which Serializer to use.
-    pub fn deserialize(data: &[u8]) -> Result<Self, anyhow::Error> {
-        Ok(serde_json::from_slice(data)?)
-    }
-
-    pub fn serialize(&self) -> Vec<u8> {
-        serde_json::to_vec(self).expect("must serialize")
-    }
-
     /// Returns a globally sortable event order. All event versions must have this
     /// field.
     pub fn sortable_id(&self) -> u64 {
@@ -907,15 +897,6 @@ pub enum SchedulingDecisionV1 {
     Off,
 }
 
-impl From<bool> for SchedulingDecisionV1 {
-    fn from(value: bool) -> Self {
-        match value {
-            true => SchedulingDecisionV1::On,
-            false => SchedulingDecisionV1::Off,
-        }
-    }
-}
-
 #[derive(
     Clone,
     Debug,
@@ -1580,33 +1561,6 @@ impl VersionedStorageUsage {
             collection_timestamp,
         ))
     }
-
-    // Implement deserialize and serialize so writers and readers don't have to
-    // coordinate about which Serializer to use.
-    pub fn deserialize(data: &[u8]) -> Result<Self, anyhow::Error> {
-        Ok(serde_json::from_slice(data)?)
-    }
-
-    pub fn serialize(&self) -> Vec<u8> {
-        serde_json::to_vec(self).expect("must serialize")
-    }
-
-    pub fn timestamp(&self) -> EpochMillis {
-        match self {
-            VersionedStorageUsage::V1(StorageUsageV1 {
-                collection_timestamp,
-                ..
-            }) => *collection_timestamp,
-        }
-    }
-
-    /// Returns a globally sortable event order. All event versions must have this
-    /// field.
-    pub fn sortable_id(&self) -> u64 {
-        match self {
-            VersionedStorageUsage::V1(usage) => usage.id,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1617,7 +1571,7 @@ mod tests {
     // programmers are not able to change data structures here without this test
     // failing. Instead of changing data structures, add new variants.
     #[mz_ore::test]
-    fn test_audit_log() -> Result<(), anyhow::Error> {
+    fn test_audit_log() {
         let cases: Vec<(VersionedEvent, &'static str)> = vec![(
             VersionedEvent::V1(EventV1::new(
                 2,
@@ -1643,7 +1597,5 @@ mod tests {
                 std::str::from_utf8(&event_bytes).unwrap(),
             );
         }
-
-        Ok(())
     }
 }
