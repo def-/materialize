@@ -21,8 +21,6 @@ mz-source-schema-change = { path = "../source-schema-change", optional = true }
 mz-ssh-util = { path = "../ssh-util", optional = true }
 mz-tls-util = { path = "../tls-util", default-features = false }
 openssl.workspace = true
-openssh = { workspace = true, optional = true }
-postgres_array = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 proptest-derive.workspace = true
 prost = { workspace = true, optional = true }
@@ -43,7 +41,6 @@ tunnel = [
     "serde",
     "mz-ssh-util",
     "mz-repr",
-    "openssh",
     "mz-ore/async",
 ]
 
