@@ -994,6 +994,10 @@ impl<E: OptimizableExpr> MapFilterProject<E> {
     /// );
     /// ```
     pub fn optimize(&mut self) {
+        // Every pass below leaves an MFP without expressions or predicates unchanged.
+        if self.expressions.is_empty() && self.predicates.is_empty() {
+            return;
+        }
         // Track sizes and iterate as long as they decrease.
         let mut prev_size = None;
         let mut self_size = usize::MAX;
