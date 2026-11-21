@@ -33,7 +33,7 @@
 use std::collections::VecDeque;
 
 use columnar::bytes::indexed;
-use columnar::{Borrow, Columnar, Push};
+use columnar::{Borrow, Clear, Columnar, Push};
 use differential_dataflow::Data;
 use differential_dataflow::consolidation::consolidate_updates;
 use differential_dataflow::difference::Semigroup;
@@ -177,16 +177,18 @@ where
         if self.cur_len == 0 {
             return;
         }
-        let cur: <(D, T, R) as Columnar>::Container = (
-            std::mem::take(&mut self.cur_d),
-            std::mem::take(&mut self.cur_t),
-            std::mem::take(&mut self.cur_r),
+        let view = (
+            self.cur_d.borrow(),
+            self.cur_t.borrow(),
+            self.cur_r.borrow(),
         );
-        self.cur_len = 0;
-
-        let mut buf: Vec<u64> = Vec::with_capacity(indexed::length_in_words(&cur.borrow()));
-        indexed::encode(&mut buf, &cur.borrow());
+        let mut buf: Vec<u64> = Vec::with_capacity(indexed::length_in_words(&view));
+        indexed::encode(&mut buf, &view);
         self.pending.push_back(Column::Align(buf));
+        self.cur_d.clear();
+        self.cur_t.clear();
+        self.cur_r.clear();
+        self.cur_len = 0;
     }
 }
 
