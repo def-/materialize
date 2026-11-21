@@ -61,11 +61,6 @@ impl std::error::Error for ValidationError {
 }
 
 impl ValidationError {
-    /// Create a new validation error with context
-    pub fn with_context(kind: ValidationErrorKind, context: ErrorContext) -> Self {
-        Self { kind, context }
-    }
-
     /// Create a new validation error with just a file path
     pub fn with_file(kind: ValidationErrorKind, file: PathBuf) -> Self {
         Self {
@@ -181,8 +176,6 @@ pub enum ValidationErrorKind {
         object_name: String,
         statement_type: String,
     },
-    /// Unsupported grant type
-    ClusterGrantUnsupported,
     /// Grant doesn't target specific object
     GrantMustTargetObject,
     /// System grant not supported
@@ -191,10 +184,6 @@ pub enum ValidationErrorKind {
     UnsupportedCommentType,
     /// No object type could be determined
     NoObjectType,
-    /// Failed to extract schema name from file path
-    SchemaExtractionFailed,
-    /// Failed to extract database name from file path
-    DatabaseExtractionFailed,
     /// Invalid identifier name (contains invalid characters or format)
     InvalidIdentifier { name: String, reason: String },
     /// Index missing required IN CLUSTER clause
@@ -438,17 +427,10 @@ impl ValidationErrorKind {
                     object_name, statement_type
                 )
             }
-            Self::ClusterGrantUnsupported => "CLUSTER grants are not supported".to_string(),
             Self::GrantMustTargetObject => "GRANT must target a specific object".to_string(),
             Self::SystemGrantUnsupported => "SYSTEM grants are not supported".to_string(),
             Self::UnsupportedCommentType => "unsupported COMMENT object type".to_string(),
             Self::NoObjectType => "could not determine object type".to_string(),
-            Self::SchemaExtractionFailed => {
-                "failed to extract schema name from file path".to_string()
-            }
-            Self::DatabaseExtractionFailed => {
-                "failed to extract database name from file path".to_string()
-            }
             Self::InvalidIdentifier { name, reason } => {
                 format!("invalid identifier '{}': {}", name, reason)
             }
@@ -813,9 +795,6 @@ impl ValidationErrorKind {
             Self::UnsupportedStatement { .. } => {
                 Some("only CREATE, INDEX, GRANT, and COMMENT statements are supported in object files".to_string())
             }
-            Self::ClusterGrantUnsupported => {
-                Some("use GRANT ON specific objects instead of CLUSTER".to_string())
-            }
             Self::GrantMustTargetObject => {
                 Some("use GRANT ON objectname instead of GRANT ON ALL TABLES or similar".to_string())
             }
@@ -825,7 +804,7 @@ impl ValidationErrorKind {
             Self::UnsupportedCommentType => {
                 Some("only comments on tables, views, sources, sinks, connections, secrets, and columns are supported".to_string())
             }
-            Self::NoObjectType | Self::SchemaExtractionFailed | Self::DatabaseExtractionFailed => {
+            Self::NoObjectType => {
                 Some("this is an internal error, please report this issue".to_string())
             }
             Self::InvalidIdentifier { .. } => {
@@ -985,11 +964,6 @@ impl ValidationErrors {
     /// Get the number of errors
     pub fn len(&self) -> usize {
         self.errors.len()
-    }
-
-    /// Convert into a Result, returning Err if there are any errors
-    pub fn into_result(self) -> Result<(), Self> {
-        if self.is_empty() { Ok(()) } else { Err(self) }
     }
 }
 

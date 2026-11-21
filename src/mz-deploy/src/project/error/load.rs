@@ -72,38 +72,10 @@ pub enum LoadError {
         source: std::io::Error,
     },
 
-    #[error("Failed to write cache file: {path}")]
-    CacheWriteFailed {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
-    #[error("Failed to create directory: {path}")]
-    DirectoryCreationFailed {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
     /// Invalid file name (couldn't extract stem)
     #[error("Invalid file name: {path}")]
     InvalidFileName {
         /// The file with the invalid name
-        path: PathBuf,
-    },
-
-    /// Failed to extract schema name from path
-    #[error("Failed to extract schema from path: {path}")]
-    SchemaExtractionFailed {
-        /// The path where extraction failed
-        path: PathBuf,
-    },
-
-    /// Failed to extract database name from path
-    #[error("Failed to extract database from path: {path}")]
-    DatabaseExtractionFailed {
-        /// The path where extraction failed
         path: PathBuf,
     },
 

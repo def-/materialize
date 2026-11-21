@@ -69,22 +69,12 @@ impl FullyQualifiedName {
         self.id.object()
     }
 
-    /// Get the ObjectId.
-    pub fn object_id(&self) -> &ObjectId {
-        &self.id
-    }
-
     /// Get the UnresolvedItemName for updating statement names.
     pub fn to_item_name(&self) -> UnresolvedItemName {
         self.item_name.clone()
     }
 
     /// Create a FullyQualifiedName with explicit database and schema names.
-    ///
-    /// Unlike `TryFrom<(&Path, &str)>` which derives names from the file path,
-    /// this constructor accepts the names directly. This is needed when a suffix
-    /// has been applied to the database name, so the path-derived name no longer
-    /// matches the desired database name.
     pub fn with_names(
         path: &std::path::Path,
         object_name: &str,
@@ -153,90 +143,6 @@ impl TryFrom<UnresolvedItemName> for FullyQualifiedName {
             id,
             path: PathBuf::new(),
             item_name: value,
-        })
-    }
-}
-
-impl TryFrom<(&std::path::Path, &str)> for FullyQualifiedName {
-    type Error = ValidationError;
-
-    /// Extract fully qualified name from file path.
-    ///
-    /// Path format: `<root>/<database>/<schema>/<object>.sql`
-    /// Returns error if path structure is invalid.
-    fn try_from(value: (&std::path::Path, &str)) -> Result<Self, Self::Error> {
-        let (path, object_name) = value;
-
-        // Extract schema (parent directory)
-        let schema = path
-            .parent()
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| {
-                ValidationError::with_file(
-                    ValidationErrorKind::SchemaExtractionFailed,
-                    path.to_path_buf(),
-                )
-            })?;
-
-        // Extract database (parent of schema directory)
-        let database = path
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| {
-                ValidationError::with_file(
-                    ValidationErrorKind::DatabaseExtractionFailed,
-                    path.to_path_buf(),
-                )
-            })?;
-
-        // Create Ident instances for each component
-        let database_ident = Ident::new(database).map_err(|e| {
-            ValidationError::with_file(
-                ValidationErrorKind::InvalidIdentifier {
-                    name: database.to_string(),
-                    reason: e.to_string(),
-                },
-                path.to_path_buf(),
-            )
-        })?;
-
-        let schema_ident = Ident::new(schema).map_err(|e| {
-            ValidationError::with_file(
-                ValidationErrorKind::InvalidIdentifier {
-                    name: schema.to_string(),
-                    reason: e.to_string(),
-                },
-                path.to_path_buf(),
-            )
-        })?;
-
-        let object_ident = Ident::new(object_name).map_err(|e| {
-            ValidationError::with_file(
-                ValidationErrorKind::InvalidIdentifier {
-                    name: object_name.to_string(),
-                    reason: e.to_string(),
-                },
-                path.to_path_buf(),
-            )
-        })?;
-
-        // Create the UnresolvedItemName
-        let item_name = UnresolvedItemName(vec![database_ident, schema_ident, object_ident]);
-
-        // Create ObjectId
-        let id = ObjectId::new(
-            database.to_string(),
-            schema.to_string(),
-            object_name.to_string(),
-        );
-
-        Ok(FullyQualifiedName {
-            id,
-            path: path.to_path_buf(),
-            item_name,
         })
     }
 }
@@ -452,20 +358,6 @@ impl DatabaseObject {
             }
         }
         cluster_set
-    }
-
-    /// Convert the statement to a `Query<Raw>` for type checking purposes.
-    pub fn to_query(&self) -> Option<Query<Raw>> {
-        match &self.stmt {
-            Statement::CreateView(stmt) => Some(stmt.definition.query.clone()),
-            Statement::CreateMaterializedView(stmt) => Some(stmt.query.clone()),
-            Statement::CreateTable(_)
-            | Statement::CreateSecret(_)
-            | Statement::CreateConnection(_)
-            | Statement::CreateTableFromSource(_)
-            | Statement::CreateSink(_)
-            | Statement::CreateSource(_) => None,
-        }
     }
 
     /// Rewrite cluster references using the given cluster name map.
