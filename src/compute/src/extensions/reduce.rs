@@ -119,9 +119,14 @@ where
              key: KC::ReadItem<'_>,
              updates: &mut Vec<(BatchValOwn<T2>, T2::Time, BatchDiff<T2>)>| {
                 buf.clear();
-                let key_owned = KC::into_owned(key);
-                for (val, time, diff) in updates.drain(..) {
-                    buf.push_into(((key_owned.clone(), val), time, diff));
+                // The reduce also calls this for keys whose output did not change, with no
+                // updates, so own the key only when there is an update to stage.
+                if let Some((last_val, last_time, last_diff)) = updates.pop() {
+                    let key_owned = KC::into_owned(key);
+                    for (val, time, diff) in updates.drain(..) {
+                        buf.push_into(((key_owned.clone(), val), time, diff));
+                    }
+                    buf.push_into(((key_owned, last_val), last_time, last_diff));
                 }
             };
 
