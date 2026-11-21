@@ -119,19 +119,11 @@ impl<'a> NameTransformer for OverlayTransformer<'a> {
         let final_db = Ident::new(&final_db_str).expect("valid database identifier");
         UnresolvedItemName(vec![final_db, schema, object])
     }
-
-    fn database_name(&self) -> &str {
-        self.fqn.database()
-    }
 }
 
 impl<'a> ClusterTransformer for OverlayTransformer<'a> {
     fn transform_cluster(&self, _: &Ident) -> Ident {
         Ident::new(self.target_cluster).expect("valid cluster identifier")
-    }
-
-    fn get_original_cluster_name(&self, name: &str) -> String {
-        name.to_string()
     }
 }
 

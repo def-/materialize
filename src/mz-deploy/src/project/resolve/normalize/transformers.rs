@@ -64,9 +64,6 @@ pub trait NameTransformer {
     fn transform_own_name(&self, name: &UnresolvedItemName) -> UnresolvedItemName {
         self.transform_name(name)
     }
-
-    /// Get the database name from the transformer's FQN context.
-    fn database_name(&self) -> &str;
 }
 
 /// Transforms names to be fully qualified (`database.schema.object`).
@@ -124,10 +121,6 @@ impl<'a> NameTransformer for FullyQualifyingTransformer<'a> {
             }
         }
     }
-
-    fn database_name(&self) -> &str {
-        self.fqn.database()
-    }
 }
 
 /// Transforms names to be flattened (`database_schema_object`).
@@ -183,10 +176,6 @@ impl<'a> NameTransformer for FlatteningTransformer<'a> {
         let flattened = fully_qualified.join(".");
         let flattened_ident = Ident::new(&flattened).expect("valid flattened identifier");
         UnresolvedItemName(vec![flattened_ident])
-    }
-
-    fn database_name(&self) -> &str {
-        self.fqn.database()
     }
 }
 
@@ -336,10 +325,6 @@ impl<'a> NameTransformer for StagingTransformer<'a> {
             _ => name.clone(),
         }
     }
-
-    fn database_name(&self) -> &str {
-        self.fqn.database()
-    }
 }
 
 /// Extension trait for transformers that also transform cluster names.
@@ -350,12 +335,6 @@ impl<'a> NameTransformer for StagingTransformer<'a> {
 pub trait ClusterTransformer: NameTransformer {
     /// Transform a cluster name according to the strategy.
     fn transform_cluster(&self, cluster_name: &Ident) -> Ident;
-
-    /// Get the original cluster name from a transformed name.
-    ///
-    /// This is used to look up production cluster configurations when creating
-    /// staging clusters.
-    fn get_original_cluster_name(&self, staged_name: &str) -> String;
 }
 
 impl<'a> ClusterTransformer for StagingTransformer<'a> {
@@ -363,14 +342,6 @@ impl<'a> ClusterTransformer for StagingTransformer<'a> {
         // Transform: quickstart → quickstart_staging
         let staging_name = format!("{}{}", cluster_name, self.staging_suffix);
         Ident::new(&staging_name).expect("valid cluster identifier")
-    }
-
-    fn get_original_cluster_name(&self, staged_name: &str) -> String {
-        // Reverse transform: quickstart_staging → quickstart
-        staged_name
-            .strip_suffix(&self.staging_suffix)
-            .unwrap_or(staged_name)
-            .to_string()
     }
 }
 
@@ -448,18 +419,10 @@ impl<'a> NameTransformer for ExplainTransformer<'a> {
         };
         self.flatten(&parts)
     }
-
-    fn database_name(&self) -> &str {
-        self.fqn.database()
-    }
 }
 
 impl<'a> ClusterTransformer for ExplainTransformer<'a> {
     fn transform_cluster(&self, _cluster_name: &Ident) -> Ident {
         Ident::new("quickstart").expect("valid cluster identifier")
-    }
-
-    fn get_original_cluster_name(&self, staged_name: &str) -> String {
-        staged_name.to_string()
     }
 }
