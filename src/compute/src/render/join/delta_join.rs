@@ -687,7 +687,6 @@ where
                                                     &temp_storage,
                                                     &mut row_builder,
                                                 )
-                                                .map(|row| row.cloned())
                                                 .transpose()
                                             {
                                                 Some(Ok(row)) => {
@@ -703,12 +702,9 @@ where
                                                 None => {}
                                             }
                                         } else {
-                                            let row = {
-                                                row_builder.packer().extend(&*datums_local);
-                                                row_builder.clone()
-                                            };
+                                            row_builder.packer().extend(&*datums_local);
                                             for (time, diff) in times_diffs.drain(..) {
-                                                ok_session.give((row.clone(), time, diff));
+                                                ok_session.give((row_builder.clone(), time, diff));
                                             }
                                         }
                                     }
