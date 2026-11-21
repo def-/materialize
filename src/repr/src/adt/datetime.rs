@@ -1740,8 +1740,8 @@ impl std::fmt::Display for TimeStrToken {
 /// - Any non-alpha numeric character cannot be cast into a TimeStrToken, e.g. `%`.
 pub(crate) fn tokenize_time_str(value: &str) -> Result<VecDeque<TimeStrToken>, String> {
     let mut toks = VecDeque::new();
-    let mut num_buf = String::with_capacity(4);
-    let mut char_buf = String::with_capacity(7);
+    let mut num_buf = String::new();
+    let mut char_buf = String::new();
     fn parse_num(n: &str, idx: usize) -> Result<TimeStrToken, String> {
         Ok(TimeStrToken::Num(
             n.parse().map_err(|e| {
