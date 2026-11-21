@@ -17,7 +17,7 @@ use std::{fmt, iter};
 
 use chrono::{DateTime, NaiveDateTime, NaiveTime, Utc};
 use dec::OrderedDecimal;
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use mz_ore::cast::CastFrom;
 
 use mz_ore::str::separated;
@@ -3113,13 +3113,11 @@ fn regexp_matches<'a>(
     // Vec before we can yield them, because we can't return a iter with a
     // reference to the local `regex` variable.
     // We attempt to minimize the cost of this by using a SmallVec.
-    let out = iter.collect::<SmallVec<[_; 3]>>();
+    // Without the `g` flag only the first match is returned, so stop searching after it.
+    let limit = if opts.global { usize::MAX } else { 1 };
+    let out = iter.take(limit).collect::<SmallVec<[_; 3]>>();
 
-    if opts.global {
-        Ok(Either::Left(out.into_iter()))
-    } else {
-        Ok(Either::Right(out.into_iter().take(1)))
-    }
+    Ok(out.into_iter())
 }
 
 fn generate_series<N>(
