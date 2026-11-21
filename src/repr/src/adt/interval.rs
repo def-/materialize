@@ -396,7 +396,7 @@ impl Interval {
     where
         T: DecimalLike,
     {
-        T::lossy_from(self.micros % 60_000_000) / T::from(1e6)
+        T::lossy_from(self.micros % 60_000_000) / T::from(1_000_000u32)
     }
 
     /// Computes the second part of the interval displayed in milliseconds.
@@ -407,7 +407,7 @@ impl Interval {
     where
         T: DecimalLike,
     {
-        T::lossy_from(self.micros % 60_000_000) / T::from(1e3)
+        T::lossy_from(self.micros % 60_000_000) / T::from(1_000u32)
     }
 
     /// Computes the second part of the interval displayed in microseconds.
