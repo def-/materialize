@@ -728,7 +728,7 @@ impl Connection {
                             break;
                         }
                     }
-                    tracing::info!("SQL Server row stream complete");
+                    tracing::debug!("SQL Server row stream complete");
                 });
 
                 Ok((Response::RowStream { stream: rx }, Some(work)))
