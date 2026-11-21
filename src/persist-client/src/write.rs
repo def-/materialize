@@ -946,7 +946,6 @@ where
             )
         };
         let builder = BatchBuilderInternal::new(
-            BatchBuilderConfig::new(persist_cfg, shard_id),
             parts,
             metrics,
             schemas,

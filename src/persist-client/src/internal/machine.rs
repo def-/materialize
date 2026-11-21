@@ -1779,7 +1779,6 @@ pub mod datadriven {
             &datadriven.client.metrics.user,
         );
         let builder = BatchBuilderInternal::new(
-            cfg.clone(),
             parts,
             Arc::clone(&datadriven.client.metrics),
             SCHEMAS.clone(),
