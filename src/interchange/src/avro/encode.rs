@@ -9,7 +9,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::LazyLock;
 
 use anyhow::Ok;
 use byteorder::{NetworkEndian, WriteBytesExt};
@@ -21,67 +20,11 @@ use mz_ore::cast::CastFrom;
 use mz_repr::adt::jsonb::JsonbRef;
 use mz_repr::adt::numeric::{self, NUMERIC_AGG_MAX_PRECISION, NUMERIC_DATUM_MAX_PRECISION};
 use mz_repr::{CatalogItemId, ColumnName, Datum, RelationDesc, Row, SqlColumnType, SqlScalarType};
-use serde_json::json;
 use uuid::Uuid;
 
 use crate::encode::{Encode, TypedDatum, column_names_and_types};
 use crate::envelopes::{self, DBZ_ROW_TYPE_ID, ENVELOPE_CUSTOM_NAMES};
 use crate::json::{SchemaOptions, build_row_schema_json};
-
-// TODO(rkhaitan): this schema intentionally omits the data_collections field
-// that is typically present in Debezium transaction metadata topics. See
-// https://debezium.io/documentation/reference/connectors/postgresql.html#postgresql-transaction-metadata
-// for more information. We chose to omit this field because it is redundant
-// for sinks where each consistency topic corresponds to exactly one sink.
-// We will need to add it in order to be able to reingest sinked topics.
-static DEBEZIUM_TRANSACTION_SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
-    Schema::parse(&json!({
-        "type": "record",
-        "name": "envelope",
-        "fields": [
-            {
-                "name": "id",
-                "type": "string"
-            },
-            {
-                "name": "status",
-                "type": "string"
-            },
-            {
-                "name": "event_count",
-                "type": [
-                  "null",
-                  "long"
-                ]
-            },
-            {
-                "name": "data_collections",
-                "type": [
-                    "null",
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "record",
-                            "name": "data_collection",
-                            "fields": [
-                                {
-                                    "name": "data_collection",
-                                    "type": "string"
-                                },
-                                {
-                                    "name": "event_count",
-                                    "type": "long"
-                                },
-                            ]
-                        }
-                    }
-                ],
-                "default": null,
-            },
-        ]
-    }))
-    .expect("valid schema constructed")
-});
 
 /// Identifies the schema-registry wire framing an [`AvroEncoder`] prepends to
 /// each record, carrying the registry-specific schema id.
@@ -480,69 +423,6 @@ impl<'a> mz_avro::types::ToAvro for TypedDatum<'a> {
             val
         }
     }
-}
-
-pub fn get_debezium_transaction_schema() -> &'static Schema {
-    &DEBEZIUM_TRANSACTION_SCHEMA
-}
-
-pub fn encode_debezium_transaction_unchecked(
-    schema_id: i32,
-    collection: &str,
-    id: &str,
-    status: &str,
-    message_count: Option<i64>,
-) -> Vec<u8> {
-    let mut buf = Vec::new();
-    encode_confluent_header(&mut buf, schema_id);
-
-    let transaction_id = Value::String(id.to_owned());
-    let status = Value::String(status.to_owned());
-    let event_count = match message_count {
-        None => Value::Union {
-            index: 0,
-            inner: Box::new(Value::Null),
-            n_variants: 2,
-            null_variant: Some(0),
-        },
-        Some(count) => Value::Union {
-            index: 1,
-            inner: Box::new(Value::Long(count)),
-            n_variants: 2,
-            null_variant: Some(0),
-        },
-    };
-
-    let data_collections = if let Some(message_count) = message_count {
-        let collection = Value::Record(vec![
-            ("data_collection".into(), Value::String(collection.into())),
-            ("event_count".into(), Value::Long(message_count)),
-        ]);
-        Value::Union {
-            index: 1,
-            inner: Box::new(Value::Array(vec![collection])),
-            n_variants: 2,
-            null_variant: Some(0),
-        }
-    } else {
-        Value::Union {
-            index: 0,
-            inner: Box::new(Value::Null),
-            n_variants: 2,
-            null_variant: Some(0),
-        }
-    };
-
-    let record_contents = vec![
-        ("id".into(), transaction_id),
-        ("status".into(), status),
-        ("event_count".into(), event_count),
-        ("data_collections".into(), data_collections),
-    ];
-    let avro = Value::Record(record_contents);
-    debug_assert!(avro.validate(DEBEZIUM_TRANSACTION_SCHEMA.top_node()));
-    mz_avro::encode_unchecked(&avro, &DEBEZIUM_TRANSACTION_SCHEMA, &mut buf);
-    buf
 }
 
 #[cfg(test)]
