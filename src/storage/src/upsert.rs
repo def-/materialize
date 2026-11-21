@@ -355,7 +355,8 @@ impl UpsertKey {
         }
         VALUE_DATUMS.with(|value_datums| {
             let mut value_datums = value_datums.borrow_mut();
-            let value = value.map(|v| value_datums.borrow_with(v));
+            let limit = key_indices.iter().max().map_or(0, |max| max + 1);
+            let value = value.map(|v| value_datums.borrow_with_limit(v, limit));
             let key = match value {
                 Ok(ref datums) => Ok(key_indices.iter().map(|&idx| datums[idx])),
                 Err(err) => Err(err),
