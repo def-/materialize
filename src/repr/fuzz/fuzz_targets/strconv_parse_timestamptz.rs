@@ -45,7 +45,7 @@ fuzz_target!(|input: (u8, &str)| {
     // chrono's range it has no error channel and saturates the fraction instead.
     //
     // A leap second needs no carve-out here. chrono stores a parsed `:60` as a
-    // sub-second of one second or more, which its `%S` renders back as `60`, and
+    // sub-second of one second or more, which renders back as `60`, and
     // an offset that would move it off `:59` (where the representation is
     // unconstructable) is folded during parsing.
     let mut buf = String::new();
