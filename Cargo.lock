@@ -8342,7 +8342,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "chrono-tz",
- "globset",
  "http 1.5.0",
  "mz-build-tools",
  "mz-ore",

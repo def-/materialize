@@ -14,7 +14,6 @@ workspace = true
 anyhow.workspace = true
 chrono = { workspace = true, optional = true }
 chrono-tz = { workspace = true, optional = true }
-globset.workspace = true
 http.workspace = true
 mz-ore = { path = "../ore", default-features = false, features = ["proptest", "test", "overflowing"] }
 num.workspace = true
