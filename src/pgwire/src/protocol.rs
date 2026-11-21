@@ -1649,14 +1649,7 @@ where
             params.push((datum, mz_typ.clone()))
         }
 
-        let result_formats = match pad_formats(
-            result_formats,
-            stmt.desc()
-                .relation_desc
-                .clone()
-                .map(|desc| desc.typ().column_types.len())
-                .unwrap_or(0),
-        ) {
+        let result_formats = match pad_formats(result_formats, stmt.desc().arity()) {
             Ok(result_formats) => result_formats,
             Err(msg) => {
                 return self
@@ -1685,8 +1678,8 @@ where
             }) => true,
             _ => false,
         }) {
-            if let Some(desc) = stmt.desc().relation_desc.clone() {
-                for (format, ty) in result_formats.iter().zip_eq(desc.iter_types()) {
+            if let Some(desc) = &stmt.desc().relation_desc {
+                for (format, ty) in result_formats.iter().zip_eq(&desc.typ().column_types) {
                     if let Format::Binary = format {
                         if let Err(msg) = mz_pgrepr::Value::binary_encoding_error(&ty.scalar_type) {
                             return self
