@@ -1278,6 +1278,34 @@ mod tests {
         assert_eq!(&null_row, &rnd_row);
     }
 
+    /// Mirrors the Iceberg sink, whose schema keeps our extension metadata but
+    /// types jsonb columns as `Utf8`.
+    #[mz_ore::test]
+    #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `decContextDefault` on OS `linux`
+    fn jsonb_string_roundtrips_through_utf8() {
+        let desc = RelationDesc::builder()
+            .with_column("json", SqlScalarType::Jsonb.nullable(true))
+            .finish();
+        let schema = crate::builder::desc_to_schema(&desc).unwrap();
+        let field = Field::new("json", DataType::Utf8, true)
+            .with_metadata(schema.field(0).metadata().clone());
+        let schema = Arc::new(arrow::datatypes::Schema::new(vec![field]));
+
+        let mut og_row = Row::default();
+        JsonbPacker::new(&mut og_row.packer())
+            .pack_str(r#""hello""#)
+            .unwrap();
+
+        let mut builder = crate::builder::ArrowBuilder::new_with_schema(schema, 1, 16).unwrap();
+        builder.add_row(&og_row).unwrap();
+        let record_batch = builder.to_record_batch().unwrap();
+
+        let reader = ArrowReader::new(&desc, StructArray::from(record_batch)).unwrap();
+        let mut rnd_row = Row::default();
+        reader.read(0, &mut rnd_row).unwrap();
+        assert_eq!(og_row, rnd_row, "jsonb string did not round-trip");
+    }
+
     /// Regression for SS-341: `COPY TO PARQUET` can write these scalar types,
     /// so `COPY FROM PARQUET` must read them back. Each must survive a
     /// builder -> reader round-trip.
