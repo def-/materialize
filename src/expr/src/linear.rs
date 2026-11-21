@@ -1040,14 +1040,8 @@ impl<E: OptimizableExpr> MapFilterProject<E> {
             self.predicates.sort();
             self.predicates.dedup();
             self.inline_expressions();
+            // Rebuilds `self` from parts, which restores evaluation order invariants.
             self.remove_undemanded();
-
-            // Re-build `self` from parts to restore evaluation order invariants.
-            let (map, filter, project) = self.as_map_filter_project();
-            *self = Self::new(self.input_arity)
-                .map(map)
-                .filter(filter)
-                .project(project);
 
             self_size = self.size();
         }
