@@ -1018,6 +1018,24 @@ where
         ty.force_coerced_if_record();
     }
 
+    // 2. Check for a function accepting exactly the input argument types.
+    // Every exact match also passes the 4.a filter below (`can_cast` takes the
+    // identity path and the parameters are not polymorphic), so a unique one
+    // is selected without probing casts for every implementation.
+    if types.iter().all(|t| t.is_coerced()) {
+        let known_types: Vec<_> = types.iter().filter_map(|t| t.as_coerced()).collect();
+        let exact = impls.iter().filter(|i| {
+            i.params.validate_arg_len(known_types.len()) && i.params.exact_match(&known_types)
+        });
+        if let Ok(f) = exact.exactly_one() {
+            mz_ore::soft_assert_no_log!(
+                f.params.matches_argtypes(ecx, &types),
+                "an exact match must pass the 4.a filter"
+            );
+            return (f.op.0)(ecx, args, &f.params, order_by);
+        }
+    }
+
     // 4.a. Discard candidate functions for which the input types do not
     // match and cannot be converted (using an implicit conversion) to
     // match. unknown literals are assumed to be convertible to anything for
@@ -1076,9 +1094,9 @@ where
     (f.op.0)(ecx, args, &f.params, order_by)
 }
 
-/// Finds an exact match based on the arguments, or, if no exact match, finds
-/// the best match available. Patterned after [PostgreSQL's type conversion
-/// matching algorithm][pgparser].
+/// Finds the best match available based on the arguments, once `select_impl`
+/// has found no unique exact match. Patterned after [PostgreSQL's type
+/// conversion matching algorithm][pgparser].
 ///
 /// [pgparser]: https://www.postgresql.org/docs/current/typeconv-func.html
 fn find_match<'a, R: std::fmt::Debug>(
@@ -1087,20 +1105,6 @@ fn find_match<'a, R: std::fmt::Debug>(
     impls: Vec<&'a FuncImpl<R>>,
 ) -> Result<&'a FuncImpl<R>, usize> {
     let all_types_known = types.iter().all(|t| t.is_coerced());
-
-    // Check for exact match.
-    if all_types_known {
-        let known_types: Vec<_> = types.iter().filter_map(|t| t.as_coerced()).collect();
-        let matching_impls: Vec<&FuncImpl<_>> = impls
-            .iter()
-            .filter(|i| i.params.exact_match(&known_types))
-            .cloned()
-            .collect();
-
-        if matching_impls.len() == 1 {
-            return Ok(matching_impls[0]);
-        }
-    }
 
     // No exact match. Apply PostgreSQL's best match algorithm. Generate
     // candidates by assessing their compatibility with each implementation's
