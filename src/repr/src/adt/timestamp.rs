@@ -163,7 +163,7 @@ pub trait TimeLike: chrono::Timelike {
         T: DecimalLike,
     {
         let s = T::from(self.second());
-        let ns = T::from(self.nanosecond()) / T::from(1e9);
+        let ns = T::from(self.nanosecond()) / T::from(1_000_000_000u32);
         s + ns
     }
 
@@ -172,7 +172,7 @@ pub trait TimeLike: chrono::Timelike {
         T: DecimalLike,
     {
         let s = T::from(self.second() * 1_000);
-        let ns = T::from(self.nanosecond()) / T::from(1e6);
+        let ns = T::from(self.nanosecond()) / T::from(1_000_000u32);
         s + ns
     }
 
@@ -181,7 +181,7 @@ pub trait TimeLike: chrono::Timelike {
         T: DecimalLike,
     {
         let s = T::from(self.second() * 1_000_000);
-        let ns = T::from(self.nanosecond()) / T::from(1e3);
+        let ns = T::from(self.nanosecond()) / T::from(1_000u32);
         s + ns
     }
 }
@@ -276,7 +276,8 @@ pub trait TimestampLike:
     where
         T: DecimalLike,
     {
-        T::lossy_from(self.timestamp()) + T::from(self.timestamp_subsec_micros()) / T::from(1e6)
+        T::lossy_from(self.timestamp())
+            + T::from(self.timestamp_subsec_micros()) / T::from(1_000_000u32)
     }
 
     fn truncate_microseconds(&self) -> Self {
