@@ -76,7 +76,7 @@ SELECT pg_column_size(1::int)
 query I
 SELECT pg_column_size((1, 1))
 ----
-13
+6
 
 query I
 SELECT pg_column_size('{}'::json)
@@ -96,7 +96,7 @@ SELECT pg_column_size('a')
 query I
 SELECT pg_column_size((1,'a'))
 ----
-14
+7
 
 query I
 SELECT pg_column_size(true)

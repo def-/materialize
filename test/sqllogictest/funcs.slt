@@ -1563,7 +1563,7 @@ SELECT pg_column_size(1::int4), pg_column_size(2::int8), pg_column_size('a'), pg
 query I
 SELECT pg_column_size((1, 2))
 ----
-13
+6
 
 statement ok
 CREATE TABLE col_size (a INT, b INT, c TEXT)
@@ -1574,8 +1574,8 @@ INSERT INTO col_size VALUES (1, 2, 'some string longer than 32 chars.'), (NULL, 
 query IIIIII
 SELECT a, b, pg_column_size(col_size.*), pg_column_size(col_size.a), pg_column_size(col_size.b), pg_column_size(col_size.c) FROM col_size ORDER BY a
 ----
-1  2  48  2  2  35
-NULL  NULL  12  NULL  NULL  NULL
+1  2  41  2  2  35
+NULL  NULL  5  NULL  NULL  NULL
 
 statement error mz_row_size requires a record type
 SELECT mz_row_size(NULL)

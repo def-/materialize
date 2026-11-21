@@ -2248,7 +2248,15 @@ pub fn datum_size(datum: &Datum) -> usize {
                 + size_of::<u64>()
                 + array.elements.data.len()
         }
-        Datum::List(list) => 1 + size_of::<u64>() + list.data.len(),
+        Datum::List(list) => {
+            let bytes_for_length = match list.data.len() {
+                0..TINY => 1,
+                TINY..SHORT => 2,
+                SHORT..LONG => 4,
+                _ => 8,
+            };
+            1 + bytes_for_length + list.data.len()
+        }
         Datum::Map(dict) => 1 + size_of::<u64>() + dict.data.len(),
         Datum::JsonNull => 1,
         Datum::MzTimestamp(_) => 1 + size_of::<Timestamp>(),
@@ -4436,6 +4444,8 @@ mod tests {
     #[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `decNumberFromInt32` on OS `linux`
     fn test_datum_sizes() {
         let arena = RowArena::new();
+        let short_list_payload = "a".repeat(TINY);
+        let long_list_payload = "a".repeat(SHORT);
 
         // Test the claims about various datum sizes.
         let values_of_interest = vec![
@@ -4497,6 +4507,9 @@ mod tests {
                     ))))
                     .unwrap();
             }),
+            arena.make_datum(|packer| packer.push_list([Datum::Int32(1), Datum::Int32(2)])),
+            arena.make_datum(|packer| packer.push_list([Datum::String(&short_list_payload)])),
+            arena.make_datum(|packer| packer.push_list([Datum::String(&long_list_payload)])),
         ];
         for value in values_of_interest {
             if datum_size(&value) != Row::pack_slice(&[value]).data.len() {
