@@ -497,13 +497,10 @@ impl DatumColumnEncoder {
                 },
                 Datum::List(records),
             ) => {
-                let mut count = 0;
                 // `zip_eq` will panic if the number of records != number of fields.
                 for (datum, encoder) in records.into_iter().zip_eq(fields.iter_mut()) {
-                    count += 1;
                     encoder.push(datum);
                 }
-                assert_eq!(count, fields.len());
 
                 length.add_assign(1);
                 if let Some(nulls) = nulls.as_mut() {
@@ -1472,17 +1469,9 @@ impl ColumnEncoder<Row> for RowColumnarEncoder {
     }
 
     fn append(&mut self, val: &Row) {
-        let mut num_datums = 0;
         for (datum, encoder) in val.iter().zip_eq(self.encoders.iter_mut()) {
             encoder.push(datum);
-            num_datums += 1;
         }
-        assert_eq!(
-            num_datums,
-            self.encoders.len(),
-            "tried to encode {val:?}, but only have {:?}",
-            self.encoders
-        );
 
         self.nullability.append(true);
     }
