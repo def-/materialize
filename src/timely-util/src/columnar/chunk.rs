@@ -47,12 +47,10 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use columnar::bytes::indexed;
 use columnar::{Borrow, BorrowedOf, Columnar, Container as _, Index, Len, Push as _};
 use differential_dataflow::difference::Semigroup;
 use differential_dataflow::lattice::Lattice;
 use differential_dataflow::trace::chunk::Chunk;
-use mz_ore::cast::CastFrom;
 use mz_ore::pool::{ChunkHandle, ChunkHints, ExtentCodec, IDENTITY_CODEC, Pool, TypedBody};
 use smallvec::SmallVec;
 use timely::Accountable;
@@ -1174,7 +1172,9 @@ where
         // in the sorted sequence, so bounding by records keeps the largest
         // possible output chunk within one check period of the target. It
         // must not outgrow the pool's largest size class, past which a body
-        // degrades to a permanently resident heap chunk.
+        // degrades to a permanently resident heap chunk. Settle cuts a chunk
+        // past `COMMIT_BYTES` again, a full copy, so the test fires at the
+        // bottom of the commit window.
         const CUT_CHECK_RECORDS: usize = 1024;
         let mut records_since_check = 0usize;
         // TODO: the output leaves are addressed independently, so a group
@@ -1207,9 +1207,7 @@ where
                     records_since_check += 1;
                     if records_since_check >= CUT_CHECK_RECORDS {
                         records_since_check = 0;
-                        if u64::cast_from(indexed::length_in_words(&result.borrow()))
-                            >= u64::cast_from(COMMIT_BYTES / 8)
-                        {
+                        if at_serialized_capacity(&result.borrow()) {
                             out.push_back(ColumnChunk::Resident(
                                 Rc::new(ColumnBody::Typed(std::mem::take(&mut result))),
                                 depth,
@@ -1848,6 +1846,7 @@ mod tests {
 
     use differential_dataflow::batcher::Extract;
     use differential_dataflow::trace::chunk::ChunkBatch;
+    use mz_ore::cast::CastFrom;
     use mz_ore::pool::Pool;
     use proptest::prelude::*;
     use timely::container::PushInto;
@@ -2503,7 +2502,8 @@ mod tests {
     }
 
     /// Advancing a large input cuts the output into several chunks near the
-    /// ship threshold, and their concatenation is the reference result.
+    /// ship threshold, none past `COMMIT_BYTES`, and their concatenation is
+    /// the reference result.
     #[mz_ore::test]
     #[cfg_attr(miri, ignore)]
     fn advance_cuts_large_output() {
@@ -2518,7 +2518,7 @@ mod tests {
             "expected a cut output, got {} chunk(s)",
             out.len()
         );
-        assert_eq!(collect_bounded(out, 2 * COMMIT_BYTES), records);
+        assert_eq!(collect_bounded(out, COMMIT_BYTES), records);
     }
 
     /// An input that is entirely one `D` group is withheld whole as the
