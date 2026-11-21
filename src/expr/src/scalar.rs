@@ -931,6 +931,21 @@ impl MirScalarExpr {
             {
                 let inner_func = outer_func.switch_and_or();
 
+                // Without an AND/OR operand, the wrapping below makes every inner operand list a
+                // singleton. The canonicalization above deduplicated the operands, so no two lists
+                // share an operand and the unwrapping restores `self`.
+                if !outer_operands.iter().any(|o| {
+                    matches!(
+                        o,
+                        MirScalarExpr::CallVariadic {
+                            func: VariadicFunc::And(_) | VariadicFunc::Or(_),
+                            ..
+                        }
+                    )
+                }) {
+                    continue;
+                }
+
                 // Make sure that each outer operand is a call to inner_func, by wrapping in a 1-arg
                 // call if necessary.
                 outer_operands.iter_mut().for_each(|o| {
