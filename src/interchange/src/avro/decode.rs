@@ -272,13 +272,16 @@ impl<'a, 'row> AvroDecode for AvroFlatDecoder<'a, 'row> {
         scale: usize,
         r: ValueOrReader<'b, &'b [u8], R>,
     ) -> Result<Self::Out, AvroError> {
-        let mut buf = match r {
-            ValueOrReader::Value(val) => val.to_vec(),
+        let buf: &mut [u8] = match r {
+            ValueOrReader::Value(val) => {
+                self.buf.clear();
+                self.buf.extend_from_slice(val);
+                self.buf
+            }
             ValueOrReader::Reader { len, r } => {
                 self.buf.resize_with(len, Default::default);
                 r.read_exact(self.buf)?;
-                let v = self.buf.clone();
-                v
+                self.buf
             }
         };
 
@@ -289,7 +292,7 @@ impl<'a, 'row> AvroDecode for AvroFlatDecoder<'a, 'row> {
             ))
         })?;
 
-        let n = numeric::twos_complement_be_to_numeric(&mut buf, scale)
+        let n = numeric::twos_complement_be_to_numeric(buf, scale)
             .map_err(|e| e.to_string_with_causes())
             .map_err(DecodeError::Custom)?;
 
