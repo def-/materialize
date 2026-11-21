@@ -863,28 +863,6 @@ pub(super) async fn list_production_clusters(
     Ok(records)
 }
 
-/// Check if the deployment tracking table exists.
-pub(super) async fn deployment_table_exists(client: &Client) -> Result<bool, ConnectionError> {
-    let query = r#"
-        SELECT EXISTS(
-            SELECT 1
-            FROM mz_catalog.mz_tables t
-            JOIN mz_catalog.mz_schemas s ON t.schema_id = s.id
-            JOIN mz_catalog.mz_databases d ON s.database_id = d.id
-            WHERE t.name = 'deployments'
-                AND s.name = 'public'
-                AND d.name = '_mz_deploy'
-        )
-    "#;
-
-    let row = client.query_one(query, &[]).await?;
-
-    Ok(row.get(0))
-}
-
-/// Default allowed lag threshold in seconds (5 minutes).
-pub const DEFAULT_ALLOWED_LAG_SECS: i64 = 300;
-
 /// Build the shared hydration-status SQL query.
 ///
 /// Both `get_deployment_hydration_status` (one-shot SELECT) and
@@ -1373,13 +1351,6 @@ impl DeploymentsClient<'_> {
         list_production_clusters(self.client).await
     }
 
-    pub async fn get_deployment_hydration_status(
-        &self,
-        deploy_id: &str,
-    ) -> Result<Vec<ClusterStatusContext>, ConnectionError> {
-        get_deployment_hydration_status(self.client, deploy_id, DEFAULT_ALLOWED_LAG_SECS).await
-    }
-
     pub async fn get_deployment_hydration_status_with_lag(
         &self,
         deploy_id: &str,
@@ -1462,10 +1433,6 @@ impl DeploymentsClient<'_> {
         deploy_id: &str,
     ) -> Result<Vec<ConflictRecord>, ConnectionError> {
         check_deployment_conflicts(self.client, deploy_id).await
-    }
-
-    pub async fn deployment_table_exists(&self) -> Result<bool, ConnectionError> {
-        deployment_table_exists(self.client).await
     }
 
     pub async fn create_apply_state_schemas(&self, deploy_id: &str) -> Result<(), ConnectionError> {

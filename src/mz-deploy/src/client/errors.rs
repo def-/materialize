@@ -110,20 +110,11 @@ pub enum ConnectionError {
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
-    #[error("cluster '{name}' not found")]
-    ClusterNotFound { name: String },
-
-    #[error("deployment '{deploy_id}' already exists")]
-    DeploymentAlreadyExists { deploy_id: String },
-
     #[error("deployment '{deploy_id}' not found")]
     DeploymentNotFound { deploy_id: String },
 
     #[error("deployment '{deploy_id}' has already been promoted to production")]
     DeploymentAlreadyPromoted { deploy_id: String },
-
-    #[error("unsupported statement type: {0}")]
-    UnsupportedStatementType(String),
 
     #[error("{0}")]
     Message(String),
@@ -198,12 +189,6 @@ pub struct SourceReferenceMismatch {
 /// Errors that can occur during project validation against the database.
 #[derive(Debug)]
 pub enum DatabaseValidationError {
-    /// One or more databases referenced by the project do not exist.
-    MissingDatabases(Vec<String>),
-    /// One or more schemas referenced by the project do not exist.
-    MissingSchemas(Vec<SchemaQualifier>),
-    /// One or more clusters referenced by the project do not exist.
-    MissingClusters(Vec<String>),
     /// A single object failed to compile due to missing external dependencies.
     CompilationFailed {
         file_path: PathBuf,
@@ -239,8 +224,6 @@ pub enum DatabaseValidationError {
         unowned_clusters: Vec<String>,
         current_user: String,
     },
-    /// Sources referenced by the project do not exist in the database.
-    MissingSources(Vec<ObjectId>),
     /// Connections referenced by the project do not exist in the database.
     MissingConnections(Vec<ObjectId>),
     /// Tables reference upstream objects their source does not expose.
@@ -256,19 +239,6 @@ pub enum DatabaseValidationError {
 impl fmt::Display for DatabaseValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DatabaseValidationError::MissingDatabases(dbs) => {
-                write!(f, "Missing databases: {}", dbs.join(", "))
-            }
-            DatabaseValidationError::MissingSchemas(schemas) => {
-                let schema_list: Vec<String> = schemas
-                    .iter()
-                    .map(|sq| format!("{}.{}", sq.database, sq.schema))
-                    .collect();
-                write!(f, "Missing schemas: {}", schema_list.join(", "))
-            }
-            DatabaseValidationError::MissingClusters(clusters) => {
-                write!(f, "Missing clusters: {}", clusters.join(", "))
-            }
             DatabaseValidationError::CompilationFailed {
                 file_path,
                 object_name,
@@ -477,23 +447,6 @@ impl fmt::Display for DatabaseValidationError {
                         cluster, current_user
                     )?;
                 }
-                Ok(())
-            }
-            DatabaseValidationError::MissingSources(sources) => {
-                let error_style = Style::new().bright_red().bold();
-                writeln!(
-                    f,
-                    "{}: The following sources are referenced but do not exist:",
-                    "error".if_supports_color(Stream::Stderr, |t| error_style.style(t))
-                )?;
-                for source in sources {
-                    writeln!(f, "  - {}", source)?;
-                }
-                writeln!(f)?;
-                writeln!(
-                    f,
-                    "Please ensure all sources are created before running this command."
-                )?;
                 Ok(())
             }
             DatabaseValidationError::MissingConnections(connections) => {
@@ -802,40 +755,6 @@ mod tests {
     }
 
     #[mz_ore::test]
-    fn test_missing_databases_error_display() {
-        let error =
-            DatabaseValidationError::MissingDatabases(vec!["db1".to_string(), "db2".to_string()]);
-        let error_string = format!("{}", error);
-        assert!(error_string.contains("Missing databases"));
-        assert!(error_string.contains("db1"));
-        assert!(error_string.contains("db2"));
-    }
-
-    #[mz_ore::test]
-    fn test_missing_schemas_error_display() {
-        let error = DatabaseValidationError::MissingSchemas(vec![
-            SchemaQualifier::new("db1".to_string(), "schema1".to_string()),
-            SchemaQualifier::new("db2".to_string(), "schema2".to_string()),
-        ]);
-        let error_string = format!("{}", error);
-        assert!(error_string.contains("Missing schemas"));
-        assert!(error_string.contains("db1.schema1"));
-        assert!(error_string.contains("db2.schema2"));
-    }
-
-    #[mz_ore::test]
-    fn test_missing_clusters_error_display() {
-        let error = DatabaseValidationError::MissingClusters(vec![
-            "cluster1".to_string(),
-            "cluster2".to_string(),
-        ]);
-        let error_string = format!("{}", error);
-        assert!(error_string.contains("Missing clusters"));
-        assert!(error_string.contains("cluster1"));
-        assert!(error_string.contains("cluster2"));
-    }
-
-    #[mz_ore::test]
     fn test_cluster_conflict_error_display() {
         let error = DatabaseValidationError::ClusterConflict {
             cluster_name: "shared_cluster".to_string(),
@@ -877,18 +796,6 @@ mod tests {
     }
 
     #[mz_ore::test]
-    fn test_missing_sources_error_display() {
-        let error = DatabaseValidationError::MissingSources(vec![ObjectId::new(
-            "materialize".to_string(),
-            "public".to_string(),
-            "kafka_source".to_string(),
-        )]);
-        let error_string = format!("{}", error);
-        assert!(error_string.contains("sources are referenced but do not exist"));
-        assert!(error_string.contains("materialize.public.kafka_source"));
-    }
-
-    #[mz_ore::test]
     fn test_multiple_validation_errors_display() {
         let error = DatabaseValidationError::Multiple {
             databases: vec!["missing_db".to_string()],
@@ -910,26 +817,6 @@ mod tests {
         let error = ConnectionError::Message("test error message".to_string());
         let error_string = format!("{}", error);
         assert_eq!(error_string, "test error message");
-    }
-
-    #[mz_ore::test]
-    fn test_connection_error_cluster_not_found() {
-        let error = ConnectionError::ClusterNotFound {
-            name: "missing_cluster".to_string(),
-        };
-        let error_string = format!("{}", error);
-        assert!(error_string.contains("missing_cluster"));
-        assert!(error_string.contains("not found"));
-    }
-
-    #[mz_ore::test]
-    fn test_connection_error_deployment_already_exists() {
-        let error = ConnectionError::DeploymentAlreadyExists {
-            deploy_id: "staging_123".to_string(),
-        };
-        let error_string = format!("{}", error);
-        assert!(error_string.contains("staging_123"));
-        assert!(error_string.contains("already exists"));
     }
 
     #[mz_ore::test]
@@ -956,7 +843,7 @@ mod tests {
     fn test_database_validation_error_is_error_trait() {
         // Verify that DatabaseValidationError implements std::error::Error
         let error: Box<dyn std::error::Error> =
-            Box::new(DatabaseValidationError::MissingDatabases(vec![]));
-        assert!(error.to_string().contains("Missing databases"));
+            Box::new(DatabaseValidationError::MissingConnections(vec![]));
+        assert!(error.to_string().contains("connections are referenced"));
     }
 }
