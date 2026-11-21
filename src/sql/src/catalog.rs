@@ -849,7 +849,8 @@ pub trait CatalogItem {
     /// Returns the [`CatalogItemId`] for the item.
     fn id(&self) -> CatalogItemId;
 
-    /// Returns the [`GlobalId`]s associated with this item.
+    /// Returns the [`GlobalId`]s associated with this item, in version order,
+    /// so the last one is that of the latest version.
     fn global_ids(&self) -> Box<dyn Iterator<Item = GlobalId> + '_>;
 
     /// Returns the catalog item's OID.

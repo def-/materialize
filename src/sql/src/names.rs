@@ -1543,12 +1543,10 @@ impl<'a> NameResolver<'a> {
 
         match r {
             Ok(item) => {
-                // Record the item at its current version.
-                let item = item.at_version(RelationVersionSelector::Latest);
-                self.ids
-                    .entry(item.id())
-                    .or_default()
-                    .insert(item.global_id());
+                // Record the item at its current version. `at_version(Latest)`
+                // would give the same `GlobalId` but clones the whole item.
+                let latest_gid = item.global_ids().last().expect("item has a GlobalId");
+                self.ids.entry(item.id()).or_default().insert(latest_gid);
                 let print_id = !matches!(
                     item.item_type(),
                     CatalogItemType::Func | CatalogItemType::Type
