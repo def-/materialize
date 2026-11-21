@@ -270,28 +270,47 @@ impl CatalogState {
             }
         }
 
+        // Counting user items scans every catalog entry, and
+        // `validate_resource_limit` ignores the current amount unless the
+        // transaction adds instances. So count only the kinds it adds.
+        let count_if_added =
+            |new: i64, count: &dyn Fn() -> usize| if new > 0 { count() } else { 0 };
+        let adds_connections = [
+            new_kafka_connections,
+            new_postgres_connections,
+            new_mysql_connections,
+            new_sql_server_connections,
+            new_aws_privatelink_connections,
+        ]
+        .iter()
+        .any(|new| *new > 0);
+
         let mut current_aws_privatelink_connections = 0;
         let mut current_postgres_connections = 0;
         let mut current_mysql_connections = 0;
         let mut current_sql_server_connections = 0;
         let mut current_kafka_connections = 0;
-        for c in self.user_connections() {
-            let connection = c
-                .connection()
-                .expect("`user_connections()` only returns connection objects");
+        if adds_connections {
+            for c in self.user_connections() {
+                let connection = c
+                    .connection()
+                    .expect("`user_connections()` only returns connection objects");
 
-            match connection.details {
-                ConnectionDetails::AwsPrivatelink(_) => current_aws_privatelink_connections += 1,
-                ConnectionDetails::Postgres(_) => current_postgres_connections += 1,
-                ConnectionDetails::MySql(_) => current_mysql_connections += 1,
-                ConnectionDetails::SqlServer(_) => current_sql_server_connections += 1,
-                ConnectionDetails::Kafka(_) => current_kafka_connections += 1,
-                ConnectionDetails::Csr(_)
-                | ConnectionDetails::GlueSchemaRegistry(_)
-                | ConnectionDetails::Ssh { .. }
-                | ConnectionDetails::Aws(_)
-                | ConnectionDetails::Gcp(_)
-                | ConnectionDetails::IcebergCatalog(_) => {}
+                match connection.details {
+                    ConnectionDetails::AwsPrivatelink(_) => {
+                        current_aws_privatelink_connections += 1
+                    }
+                    ConnectionDetails::Postgres(_) => current_postgres_connections += 1,
+                    ConnectionDetails::MySql(_) => current_mysql_connections += 1,
+                    ConnectionDetails::SqlServer(_) => current_sql_server_connections += 1,
+                    ConnectionDetails::Kafka(_) => current_kafka_connections += 1,
+                    ConnectionDetails::Csr(_)
+                    | ConnectionDetails::GlueSchemaRegistry(_)
+                    | ConnectionDetails::Ssh { .. }
+                    | ConnectionDetails::Aws(_)
+                    | ConnectionDetails::Gcp(_)
+                    | ConnectionDetails::IcebergCatalog(_) => {}
+                }
             }
         }
         self.validate_resource_limit(
@@ -330,20 +349,21 @@ impl CatalogState {
             MAX_AWS_PRIVATELINK_CONNECTIONS.name(),
         )?;
         self.validate_resource_limit(
-            self.user_tables().count(),
+            count_if_added(new_tables, &|| self.user_tables().count()),
             new_tables,
             SystemVars::max_tables,
             "table",
             MAX_TABLES.name(),
         )?;
 
-        let current_sources: usize = self
-            .user_sources()
-            .filter_map(|source| source.source())
-            .map(|source| source.user_controllable_persist_shard_count())
-            .sum::<i64>()
-            .try_into()
-            .expect("non-negative sum of sources");
+        let current_sources = count_if_added(new_sources, &|| {
+            self.user_sources()
+                .filter_map(|source| source.source())
+                .map(|source| source.user_controllable_persist_shard_count())
+                .sum::<i64>()
+                .try_into()
+                .expect("non-negative sum of sources")
+        });
 
         self.validate_resource_limit(
             current_sources,
@@ -353,14 +373,16 @@ impl CatalogState {
             MAX_SOURCES.name(),
         )?;
         self.validate_resource_limit(
-            self.user_sinks().count(),
+            count_if_added(new_sinks, &|| self.user_sinks().count()),
             new_sinks,
             SystemVars::max_sinks,
             "sink",
             MAX_SINKS.name(),
         )?;
         self.validate_resource_limit(
-            self.user_materialized_views().count(),
+            count_if_added(new_materialized_views, &|| {
+                self.user_materialized_views().count()
+            }),
             new_materialized_views,
             SystemVars::max_materialized_views,
             "materialized view",
@@ -435,7 +457,7 @@ impl CatalogState {
             )?;
         }
         self.validate_resource_limit(
-            self.user_secrets().count(),
+            count_if_added(new_secrets, &|| self.user_secrets().count()),
             new_secrets,
             SystemVars::max_secrets,
             "secret",
