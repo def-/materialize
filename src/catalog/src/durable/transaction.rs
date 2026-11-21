@@ -1860,7 +1860,6 @@ impl<'a> Transaction<'a> {
 
         let update_ids: BTreeSet<_> = items.keys().cloned().collect();
         let kvs: Vec<_> = items
-            .clone()
             .into_iter()
             .map(|(id, item)| (ItemKey { id }, item.into_key_value().1))
             .collect();
