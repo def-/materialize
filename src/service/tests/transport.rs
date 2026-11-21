@@ -554,6 +554,60 @@ fn test_connection_cancelation() {
     sim.run().unwrap();
 }
 
+/// Tests that the server keeps accepting connections after `accept` fails.
+#[test] // allow(test-attribute)
+#[cfg(target_os = "linux")]
+#[cfg_attr(miri, ignore)] // unsupported operation: can't call foreign function `setrlimit`
+fn test_accept_error() {
+    use std::os::fd::AsRawFd;
+
+    use rlimit::Resource;
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let path = std::env::temp_dir().join(format!("ctp-accept-error-{}", std::process::id()));
+        let address = path.to_str().unwrap();
+        mz_ore::task::spawn(
+            || "serve",
+            transport::serve(
+                address.parse().unwrap(),
+                VERSION,
+                None,
+                TIMEOUT,
+                OneOutputHandler::new,
+                NoopMetrics,
+            ),
+        );
+        // Keep this connection open, so that it does not free file descriptors below.
+        let _client = connect_ctp::<i32, i32>(address, VERSION, TIMEOUT, NoopMetrics).await;
+
+        // Leave a single free file descriptor, so that the next client's socket takes it and the
+        // server's `accept` fails with EMFILE.
+        //
+        // NOTE: The limit applies to the whole process, so tests running concurrently in this
+        // process cannot open files until it is restored.
+        let (soft, hard) = Resource::NOFILE.get().unwrap();
+        let free_fd = std::fs::File::open("/dev/null").unwrap().as_raw_fd();
+        Resource::NOFILE
+            .set(u64::try_from(free_fd).unwrap() + 1, hard)
+            .unwrap();
+        let (client, ()) = tokio::join!(
+            transport::Client::<i32, i32>::connect(address, VERSION, TIMEOUT, TIMEOUT, NoopMetrics),
+            async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                Resource::NOFILE.set(soft, hard).unwrap();
+            },
+        );
+
+        let mut client = client.expect("server accepts connections after an accept error");
+        assert_eq!(client.recv().await.unwrap(), Some(123));
+        let _ = std::fs::remove_file(&path);
+    });
+}
+
 #[test] // allow(test-attribute)
 #[cfg_attr(miri, ignore)] // too slow
 fn test_metrics() {

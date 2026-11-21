@@ -163,7 +163,16 @@ where
     info!(%address, "ctp: listening for client connections");
 
     loop {
-        let (stream, peer) = listener.accept().await?;
+        let (stream, peer) = match listener.accept().await {
+            Ok(accepted) => accepted,
+            Err(error) => {
+                // Returning would drop the listener and cancel the current connection. Back off
+                // instead, so that a persistent error like EMFILE does not spin this loop.
+                warn!("ctp: accept error: {error}");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        };
         info!(%peer, "ctp: accepted client connection");
 
         // Cancel any existing connection before starting to serve the new one.

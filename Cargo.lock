@@ -8573,6 +8573,7 @@ dependencies = [
  "pin-project",
  "prometheus",
  "rand 0.10.3",
+ "rlimit",
  "semver",
  "serde",
  "sysinfo",
