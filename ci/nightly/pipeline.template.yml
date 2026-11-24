@@ -76,7 +76,6 @@ steps:
           CI_ANTITHESIS_DURATION: 60
         coverage: skip
         sanitizer: skip
-        branches: "main"
 
       - id: build-rust-latest-beta
         label: "Build with Latest Rust Beta"
