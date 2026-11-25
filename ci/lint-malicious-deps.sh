@@ -24,13 +24,19 @@ trap 'rm -f "$out"' EXIT
 # curl, docker and jq. Lockfiles go in on stdin rather than a mount, so the
 # scanner can't touch the checkout. osv-scanner exits 1 for any vulnerability,
 # so only 2+ is an error.
+#
+# NOTE: Resolving the transitive dependencies of requirements files against
+# PyPI took 45 of the scan's 50 s, so it is disabled. Each requirements.txt is
+# compiled from a requirements.in and pins every transitive dependency itself.
+# An uncompiled one gets only its listed pins checked. pom.xml files are still
+# resolved, against Maven Central directly, since deps.dev added up to 13 s.
 status=0
 git ls-files -z -- '*Cargo.lock' '*package-lock.json' '*yarn.lock' \
     '*requirements*.txt' '*uv.lock' '*pom.xml' '*Gemfile.lock' \
 | tar --null -cf - -T - \
 | docker run --rm -i --user 65534 --cap-drop ALL \
     --security-opt no-new-privileges --pids-limit 256 --entrypoint sh "$image" \
-    -c 'mkdir /tmp/src && tar -xf - -C /tmp/src && exec /osv-scanner scan source -r --format json /tmp/src' \
+    -c 'mkdir /tmp/src && tar -xf - -C /tmp/src && exec /osv-scanner scan source -r --x-disable-plugins=transitivedependency/requirements --data-source=native --format json /tmp/src' \
     > "$out" || status=$?
 if [ "$status" -gt 1 ]; then
     # Fail open only when osv.dev itself is down. Any other scanner error,
