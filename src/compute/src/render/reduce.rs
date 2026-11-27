@@ -1199,24 +1199,10 @@ impl<'scope, T: RenderTimestamp> Context<'scope, T> {
         RowRowArrangement<'s, T>,
         VecCollection<'s, T, DataflowErrorSer, Diff>,
     ) {
-        let aggregations = aggr_funcs.len();
-        // Gather the relevant values into a vec of rows ordered by aggregation_index
-        let collection = collection
-            .map(move |(key, row)| {
-                let mut row_builder = SharedRow::get();
-                let mut values = Vec::with_capacity(aggregations);
-                values.extend(
-                    row.iter()
-                        .take(aggregations)
-                        .map(|v| row_builder.pack_using(std::iter::once(v))),
-                );
-
-                (key, values)
-            })
-            .consolidate_named_if::<ConsolidateBatcher<_, _, _>>(
-                must_consolidate,
-                "Consolidated ReduceMonotonic input",
-            );
+        let collection = collection.consolidate_named_if::<ConsolidateBatcher<_, _, _>>(
+            must_consolidate,
+            "Consolidated ReduceMonotonic input",
+        );
 
         // It should be now possible to ensure that we have a monotonic collection.
         let error_logger = self.error_logger();
@@ -1233,8 +1219,8 @@ impl<'scope, T: RenderTimestamp> Context<'scope, T> {
         // aggregate, instead of having to do a hierarchical reduction.
         let partial = partial.explode_one(move |(key, values)| {
             let mut output = Vec::new();
-            for (row, func) in values.into_iter().zip_eq(aggr_funcs.iter()) {
-                output.push(monoids::get_monoid(row, func).expect(
+            for (datum, func) in values.iter().zip_eq(aggr_funcs.iter()) {
+                output.push(monoids::get_monoid(Row::pack([datum]), func).expect(
                     "hierarchical aggregations are expected to have monoid implementations",
                 ));
             }
